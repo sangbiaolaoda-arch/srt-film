@@ -2,7 +2,7 @@
 // 导演覆写是一等公民：覆写存在时，覆写优先于自动推断。
 
 import type { Beat } from "./beats";
-import { extractNumbers } from "./trace";
+import { extractNumbers, isTraceable } from "./trace";
 
 export type Layout =
   | "statement" // 大字陈述：整拍只有一句话
@@ -58,8 +58,7 @@ export function composeScene(beat: Beat): BeatScene {
 // 门禁：场景数字必须可溯源；headline 超长给出警告
 export function validateScene(scene: BeatScene, overrideSource?: string): string[] {
   const errors: string[] = [];
-  if (scene.bigNumber && !scene.beat.text.includes(scene.bigNumber.raw) &&
-      !(overrideSource && overrideSource.includes(scene.bigNumber.raw))) {
+  if (scene.bigNumber && !isTraceable(scene.bigNumber.raw, scene.beat.text, overrideSource)) {
     errors.push(`拍 ${scene.beat.index}：画面数字「${scene.bigNumber.raw}」在旁白中不存在（不可溯源）`);
   }
   const h = displayHeadline(scene.headline);

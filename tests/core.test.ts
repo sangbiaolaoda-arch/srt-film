@@ -53,6 +53,18 @@ describe("trace", () => {
   it("提取带单位数字", () => {
     expect(extractNumbers("耗时120毫秒")[0]!.raw).toBe("120毫秒");
   });
+  it("同一句里的量纲数字要全部提取到（只取一层会让后半句消失）", () => {
+    expect(extractNumbers("转化率提升了85%，耗时120毫秒").map((n) => n.raw)).toEqual(["85%", "120毫秒"]);
+  });
+  it("百分数排首位（主视觉取它），与出现顺序无关", () => {
+    expect(extractNumbers("耗时120毫秒，转化率提升了85%")[0]!.raw).toBe("85%");
+  });
+  it("数字密度信号准确（下游据此决定能不能上图表版式）", () => {
+    expect(extractNumbers("增长85%，耗时120毫秒，成本降了3倍")).toHaveLength(3);
+  });
+  it("没有量纲数字时才回退到裸数字", () => {
+    expect(extractNumbers("第3步").map((n) => n.raw)).toEqual(["3"]);
+  });
   it("溯源判定", () => {
     expect(isTraceable("85%", "转化率提升了85%！")).toBe(true);
     expect(isTraceable("90%", "转化率提升了85%！")).toBe(false);
