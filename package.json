@@ -18,6 +18,9 @@
     "check": "tsc --noEmit && node --experimental-vm-modules --no-warnings tools/check-html-syntax.mjs && node tools/test-all.mjs",
     "lint:html": "node --experimental-vm-modules --no-warnings tools/check-html-syntax.mjs",
     "qa:frames": "node tools/qa-frames.mjs",
+    "qa:still": "node tools/qa-frames.mjs --fail-on-still --sheet",
+    "qa:det": "node tools/qa-frames.mjs --determinism --fail-on-nondeterministic --sheet",
+    "qa:roi": "node tools/qa-frames.mjs --roi",
     "dupes": "node tools/run-ts.mjs tools/dupes.ts",
     "sweep": "node tools/run-ts.mjs tools/style-sweep.ts"
   },
