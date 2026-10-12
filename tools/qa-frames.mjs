@@ -39,11 +39,19 @@
 //        [--determinism] [--determinism-tol 0.5]   同一 t 渲染两次比像素，抓非确定性
 //        [--seek "<表达式>"] [--prepare "<表达式>"] [--cleanup "<表达式>"]
 //        [--sheet] [--allow-err] [--fail-on-blank] [--fail-on-still]
-//        [--fail-on-nondeterministic] [--dry-run]
+//        [--fail-on-nondeterministic] [--fail-on-drift] [--dry-run]
+//
+// 改完工具怎么证明行为没变（改动本文件的固定手法）
+// -------------------------------------------------
+//   改前：node tools/qa-frames.mjs --url <url> [其余参数] --out .tmp/qa-frames/baseline --sheet
+//   改后：node tools/qa-frames.mjs --url <url> [完全相同的其余参数] \
+//           --baseline .tmp/qa-frames/baseline/report.json --fail-on-drift
+//   判据是「判定结果是否相同」，不是「数值逐位相同」—— 见 compareBaseline 的注释。
 //
 // 退出码：页面报错（除非 --allow-err）→ 1；--fail-on-blank 且检出黑屏/爆白 → 1；
 //        --fail-on-still 且存在无主运动的镜头 → 1；
-//        --fail-on-nondeterministic 且同一时刻两次渲染不一致 → 1。
+//        --fail-on-nondeterministic 且同一时刻两次渲染不一致 → 1；
+//        --fail-on-drift 且与基线判定不一致 → 1；参数非法（含 --baseline 读不到）→ 2。
 
 import { spawn } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
@@ -146,6 +154,26 @@ const DETERMINISM = flags.has("determinism");
 // 允许的差异（0–255 尺度）。JPEG/PNG 编码本身是确定的，所以真确定就是 0；
 // 留一点余量给字体抗锯齿。
 const DET_TOL = Number(opt["determinism-tol"] ?? 0.5);
+
+// 基线对比：--baseline <report.json>，用同一份命令的两次运行证明「行为没变」。
+// 改这份文件之后再跑一遍验收，人眼看不出 Δ 是 6.021 还是 6.019，这个参数负责回答
+// 「判定变了没有」。文件在这里就读进来 —— 路径写错要立刻退出，不能等浏览器
+// 跑完两分钟才发现。
+const BASELINE = (() => {
+  if (!opt.baseline) return null;
+  const p = resolve(ROOT, opt.baseline);
+  if (!existsSync(p)) {
+    console.error(`✗ --baseline 找不到文件：${p}`);
+    process.exit(2);
+  }
+  try {
+    return { path: p, data: JSON.parse(readFileSync(p, "utf8")) };
+  } catch (e) {
+    console.error(`✗ --baseline 不是合法 JSON：${e.message}`);
+    process.exit(2);
+  }
+})();
+const FAIL_ON_DRIFT = flags.has("fail-on-drift");
 
 /* ------------------------------- 跑子进程 ------------------------------- */
 // 两条本机硬约束（都不是设计选择，是踩出来的）：
@@ -366,6 +394,90 @@ async function pixelDiff(ff, a, b) {
     "-f", "null", "-",
   ]);
   return parseYavg(r.out + r.err);
+}
+
+/* ------------------------------- 基线对比 ------------------------------- */
+
+/**
+ * 与基线报告逐字段比 —— 回答「改完这份工具，判定结果变了没有」。
+ *
+ * ⚠ 判据是**判定结果是否相同**，不是「数值逐位相同」。截图来自浏览器，子像素渲染
+ *   抖动会让亮度与 Δ 在末位漂：实测同一份代码连跑三次，同一帧的亮度是
+ *   28.6005 / 28.6007 / 28.6004，Δ 是 6.0208 / 6.0191。要求逐位相同会让人去追一个
+ *   根本不存在的 bug。所以分两层：
+ *     · 离散层（判定字段）：全黑 / 爆白 / 无主运动 / 场景归属 / 报错 / 契约 —— 零容忍
+ *     · 数值层（亮度、Δ、重复渲染差）：超过 BASE_TOL 才算实质漂移，之内记为「末位抖动」
+ *   BASE_TOL 的取法：同一对命令反复比，实测最大抖动 0.0035（Δ）、0.0013（亮度），
+ *   取 0.01 留约 3 倍余量 —— 既能盖住噪声，又远小于任何真实回归的量级。
+ */
+const BASE_TOL = 0.01;
+
+function compareBaseline(base, cur) {
+  const drift = []; // 判定层变化，或数值层超出容差 —— 有它就说明行为真的变了
+  const noise = []; // 末位抖动，只看不当判据
+
+  const show = (v) => JSON.stringify(v ?? null);
+  const disc = (label, a, b) => {
+    if (show(a) !== show(b)) drift.push(`${label}：${show(a)} → ${show(b)}`);
+  };
+  const val = (label, a, b) => {
+    if (a === b) return;
+    if (typeof a !== "number" || typeof b !== "number") {
+      drift.push(`${label}：${show(a)} → ${show(b)}`);
+      return;
+    }
+    const d = Math.abs(b - a);
+    const txt = `${label}：${a} → ${b}（${b > a ? "+" : "−"}${d.toFixed(4)}）`;
+    (d > BASE_TOL ? drift : noise).push(txt);
+  };
+
+  // 顶层
+  disc("页面", base.url, cur.url);
+  disc("契约", base.contract, cur.contract);
+  disc("时长", base.duration, cur.duration);
+  disc("视口", base.viewport, cur.viewport);
+  disc("运动门槛", base.motionThreshold, cur.motionThreshold);
+  disc("主图 ROI", base.roi, cur.roi);
+  disc("重复渲染容差", base.determinism?.tolerance, cur.determinism?.tolerance);
+  disc("重复渲染违规", (base.determinism?.violations || []).map((v) => v.t), (cur.determinism?.violations || []).map((v) => v.t));
+  disc("印相", base.contactSheet, cur.contactSheet);
+  disc("页面报错", base.pageErrors, cur.pageErrors);
+
+  // 逐帧：按 t 配对（换了采样点数量会配不上，那就直接报出来，别假装比过了）
+  const curByT = new Map(cur.shots.map((x) => [x.t, x]));
+  for (const b of base.shots) {
+    const c = curByT.get(b.t);
+    const tag = `帧 t=${b.t}`;
+    if (!c) { drift.push(`${tag}：基线里有、本次没有`); continue; }
+    disc(`${tag} 名称`, b.name, c.name);
+    disc(`${tag} 场景`, b.scene, c.scene);
+    disc(`${tag} 全黑`, b.blank, c.blank);
+    disc(`${tag} 爆白`, b.blown, c.blown);
+    val(`${tag} 亮度`, b.lum, c.lum);
+    val(`${tag} 结构差 Δ`, b.structDiff, c.structDiff);
+    val(`${tag} 主图 ROI Δ`, b.roiDiff, c.roiDiff);
+    val(`${tag} 重复渲染差`, b.determinismDiff, c.determinismDiff);
+  }
+  const added = cur.shots.filter((x) => !base.shots.some((y) => y.t === x.t)).map((x) => x.t);
+  if (added.length) drift.push(`新增采样点：t=${added.join(", ")}`);
+
+  // 逐镜
+  const curByScene = new Map(cur.scenes.map((x) => [x.scene, x]));
+  for (const b of base.scenes) {
+    const c = curByScene.get(b.scene);
+    const tag = `场景 ${b.scene}（${b.label}）`;
+    if (!c) { drift.push(`${tag}：基线里有、本次没有`); continue; }
+    disc(`${tag} 名称`, b.label, c.label);
+    disc(`${tag} 起止`, [b.from, b.to], [c.from, c.to]);
+    disc(`${tag} 采样数`, b.samples, c.samples);
+    disc(`${tag} 无主运动`, b.still, c.still);
+    val(`${tag} 入场段 Δ`, b.entryDiff, c.entryDiff);
+    val(`${tag} 镜内最大 Δ`, b.maxDiff, c.maxDiff);
+    val(`${tag} 镜内最大整帧 Δ`, b.maxDiffWhole, c.maxDiffWhole);
+  }
+  if (base.scenes.length !== cur.scenes.length) drift.push(`场景数：${base.scenes.length} → ${cur.scenes.length}`);
+
+  return { path: BASELINE?.path || "", at: base.generatedAt || "", drift, noise };
 }
 
 /* --------------------------------- 主流程 --------------------------------- */
@@ -639,6 +751,8 @@ async function main() {
     JSON.stringify(rows.map((x) => ({ file: basename(x.file), t: x.t, name: x.name })), null, 2),
   );
 
+  const cmp = BASELINE ? compareBaseline(BASELINE.data, report) : null;
+
   const fmtLum = (x) => (x.lum === null ? "—" : x.lum.toFixed(1));
   const fmtD = (v) => (v === null || v === undefined ? "—" : v.toFixed(2));
   const fmtDet = (v) => (v === null || v === undefined ? "—" : (v > DET_TOL ? "⚠ " : "") + v.toFixed(3));
@@ -723,6 +837,23 @@ async function main() {
       ``,
     );
   }
+  if (cmp) {
+    md.push(
+      `## 与基线对比`,
+      ``,
+      `- 基线：\`${cmp.path}\`${cmp.at ? `　生成于 ${cmp.at}` : ""}`,
+      `- 结论：${cmp.drift.length ? `✗ **${cmp.drift.length} 处判定漂移**` : `✓ 判定一致`}${cmp.noise.length ? `　末位抖动 ${cmp.noise.length} 处（< ${BASE_TOL}）` : ""}`,
+      ``,
+      ...cmp.drift.map((d) => `- ✗ ${d}`),
+      ...cmp.noise.map((d) => `- ~ ${d}`),
+      ``,
+      `> **判据是「判定结果是否相同」，不是「数值逐位相同」。** 截图来自浏览器，子像素`,
+      `> 渲染抖动会让亮度与 Δ 在末位漂 —— 实测同一份代码连跑三次，同一帧的亮度是`,
+      `> 28.6005 / 28.6007 / 28.6004。所以数值层给 ${BASE_TOL} 的容差（超出才算漂移），`,
+      `> 而离散的判定字段（全黑 / 爆白 / 无主运动 / 场景归属 / 页面报错）零容忍。`,
+      ``,
+    );
+  }
   md.push(
     `## 页面报错`,
     ``,
@@ -747,6 +878,19 @@ async function main() {
     else console.log(`✓ 重复渲染一致（${rows.filter((x) => x.det !== null).length} 帧，同一时刻两次渲染像素相同）`);
   }
   if (ROI) console.error(`· ROI 模式：判定用 ROI Δ，但门槛 ${MOTION_MIN} 是按整帧校准的 —— 请按 ROI 分布重新标定`);
+  if (cmp) {
+    console.log("");
+    console.log(`基线  ${cmp.path}${cmp.at ? `（生成于 ${cmp.at}）` : ""}`);
+    if (cmp.drift.length) {
+      console.error(`✗ 与基线不一致：判定漂移 ${cmp.drift.length} 处`);
+      cmp.drift.slice(0, 12).forEach((d) => console.error(`  · ${d}`));
+      if (cmp.drift.length > 12) console.error(`  · …另有 ${cmp.drift.length - 12} 处，见 report.md`);
+    } else {
+      console.log(`✓ 与基线判定一致${cmp.noise.length ? `（${cmp.noise.length} 处末位抖动，均未超 ${BASE_TOL}）` : "，数值逐位相同"}`);
+      cmp.noise.slice(0, 5).forEach((d) => console.log(`  ~ ${d}`));
+      if (cmp.noise.length > 5) console.log(`  ~ …另有 ${cmp.noise.length - 5} 处，见 report.md`);
+    }
+  }
   console.log(`报告  ${join(OUT, "report.md")}`);
   console.log(`截图  ${SHOTS_DIR}`);
   if (sheet) console.log(`印相  ${sheet}`);
@@ -755,6 +899,7 @@ async function main() {
   if (FAIL_ON_BLANK && (blanks.length || blown.length)) process.exit(1);
   if (FAIL_ON_STILL && stills.length) process.exit(1);
   if (flags.has("fail-on-nondeterministic") && detBad.length) process.exit(1);
+  if (FAIL_ON_DRIFT && cmp && cmp.drift.length) process.exit(1);
 }
 
 main().catch((e) => {
