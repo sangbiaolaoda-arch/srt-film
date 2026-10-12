@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>srt-film — 字幕变电影</title>
+</head>
+<body>
+  <div id="app">
+    <header class="masthead">
+      <h1>srt-film</h1>
+      <p class="tagline">贴入字幕，得到一部逐拍演出的片子。画面里的每个数字都可溯源。</p>
+    </header>
+
+    <main class="workspace">
+      <section class="pane pane-input">
+        <label class="field">
+          <span class="field-label">字幕（SRT）</span>
+          <textarea id="srt-input" rows="14" spellcheck="false"
+            placeholder="1&#10;00:00:00,000 --> 00:00:02,000&#10;第一句话。"></textarea>
+        </label>
+        <label class="field">
+          <span class="field-label">导演覆写（JSON，可选）— key 为拍序号</span>
+          <textarea id="override-input" rows="6" spellcheck="false"
+            placeholder='{ "2": { "bigNumber": "120毫秒", "source": "耗时120毫秒" } }'></textarea>
+        </label>
+        <div class="actions">
+          <button id="btn-load" class="btn btn-primary">载入并规划</button>
+          <button id="btn-play" class="btn" disabled>播放</button>
+          <button id="btn-export" class="btn" disabled>导出 MP4</button>
+        </div>
+        <ul id="gate-report" class="gate-report" hidden></ul>
+      </section>
+
+      <section class="pane pane-stage">
+        <div id="stage" class="stage">
+          <div class="stage-empty">片子会在这里逐拍演出</div>
+        </div>
+        <div class="transport">
+          <input id="scrubber" type="range" min="0" max="1000" value="0" disabled />
+          <span id="timecode">00:00.0</span>
+        </div>
+        <ol id="beat-list" class="beat-list"></ol>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="/src/ui/main.ts"></script>
+</body>
+</html>

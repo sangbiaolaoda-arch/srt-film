@@ -1,0 +1,52 @@
+/* 画廊页：编辑风的版式陈列墙。 */
+
+:root {
+  --paper: #faf9f6;
+  --ink: #1c1b18;
+  --ink-dim: #8a867c;
+  --accent: #c8401f;
+  --hairline: #e3e0d8;
+  --serif: "Source Han Serif SC", "Noto Serif SC", "Songti SC", SimSun, serif;
+  --sans: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+.gh { max-width: 1360px; margin: 0 auto; padding: 56px 32px 8px; }
+.gh h1 { font-family: var(--serif); font-size: 46px; font-weight: 600; letter-spacing: 0.02em; }
+.gh .tagline { margin-top: 10px; color: var(--ink-dim); font-size: 14px; }
+.g-nav { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px 18px; padding-bottom: 20px; border-bottom: 1px solid var(--hairline); }
+.g-nav a { color: var(--ink-dim); font-size: 13px; text-decoration: none; }
+.g-nav a:hover { color: var(--accent); }
+
+.g-section { max-width: 1360px; margin: 0 auto; padding: 36px 32px 0; }
+.g-section h2 {
+  font-family: var(--serif); font-size: 22px; font-weight: 600;
+  padding-bottom: 12px; margin-bottom: 22px; border-bottom: 1px solid var(--hairline);
+}
+
+.g-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 26px 22px;
+}
+
+.g-card { margin: 0; }
+.g-canvas {
+  border: 1px solid var(--hairline);
+  background: var(--paper);
+  overflow: hidden;
+}
+.g-canvas svg { display: block; width: 100%; height: auto; }
+.g-card figcaption {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 9px 2px 0;
+}
+.g-id { font-size: 11px; letter-spacing: 0.06em; color: var(--accent); font-family: ui-monospace, Consolas, monospace; }
+.g-name { font-size: 14px; }
+.g-motions { font-size: 11px; color: var(--ink-dim); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+}

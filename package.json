@@ -1,0 +1,40 @@
+{
+  "name": "srt-film",
+  "private": true,
+  "version": "0.1.0",
+  "description": "贴入字幕（SRT），得到一部逐拍演出的片子 — 浏览器内 GSAP 播放，可导出 MP4",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sangbiaolaoda-arch/srt-film.git"
+  },
+  "homepage": "https://github.com/sangbiaolaoda-arch/srt-film#readme",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "test": "node tools/test-all.mjs",
+    "test:one": "vitest run",
+    "check": "tsc --noEmit && node tools/test-all.mjs",
+    "dupes": "node tools/run-ts.mjs tools/dupes.ts",
+    "sweep": "node tools/run-ts.mjs tools/style-sweep.ts"
+  },
+  "dependencies": {
+    "gsap": "^3.12.5",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "mp4-muxer": "^5.1.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0",
+    "vitest": "^2.0.0"
+  },
+  "optionalDependencies": {
+    "@types/dom-webcodecs": "^0.1.19"
+  }
+}

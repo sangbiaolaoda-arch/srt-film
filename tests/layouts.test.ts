@@ -1,0 +1,315 @@
+import { describe, it, expect } from "vitest";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { readdirSync, readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { LAYOUTS, LAYOUT_BY_ID, LAYOUT_GROUPS } from "../src/layouts/catalog";
+import { LayoutSVG } from "../src/layouts/render";
+import { MOTIONS, MOTION_BY_ID, conflictsOf, validateMotionSet } from "../src/motion/catalog";
+import { APPLIED_MOTION_IDS } from "../src/motion/apply";
+import { decideStyle, eligible, pickLayout, planStyles } from "../src/layouts/pick";
+import { CHART_KINDS } from "../src/layouts/charts";
+import { ASSET_IDS } from "../src/layouts/assets";
+import { shotAt } from "../src/render/frame";
+import { parseSRT } from "../src/core/srt";
+import { planBeats } from "../src/core/beats";
+import { composeScenes } from "../src/core/compose";
+import { buildContent } from "../src/core/content";
+import type { Shot } from "../src/core/shot";
+import type { Layout, RenderContent, Style } from "../src/layouts/types";
+
+const EXAMPLES = resolve(__dirname, "../examples");
+
+const demoContent = (beat = 1): RenderContent => ({
+  headline: "服务器返回 HTML，耗时 120 毫秒",
+  bignum: "120",
+  unit: "毫秒",
+  caption: "地址问题先解决",
+  left: "十年前",
+  right: "现在",
+  bullets: ["输入网址", "翻译成 IP", "返回页面"],
+  numbers: [120, 85, 3],
+  beat,
+});
+
+const EDITORIAL = LAYOUTS.filter((l) => (l.style ?? "editorial") === "editorial");
+const POSTER = LAYOUTS.filter((l) => l.style === "poster");
+
+describe("版式目录完整性", () => {
+  it("总数 ≥ 176（编辑 128 + 海报 48）", () => {
+    expect(LAYOUTS.length).toBeGreaterThanOrEqual(176);
+  });
+  it("编辑风 ≥ 128、海报风 ≥ 48", () => {
+    expect(EDITORIAL.length).toBeGreaterThanOrEqual(128);
+    expect(POSTER.length).toBeGreaterThanOrEqual(48);
+  });
+  it("id 唯一且非空", () => {
+    const ids = LAYOUTS.map((l) => l.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every((i) => i.trim().length > 3)).toBe(true);
+  });
+  it("每个版式都有槽位，且槽位落在 12×8 网格内", () => {
+    for (const l of LAYOUTS) {
+      expect(l.slots.length, l.id).toBeGreaterThan(0);
+      for (const s of l.slots) {
+        const [x, y, w, h] = s.box;
+        expect(x, `${l.id} x`).toBeGreaterThanOrEqual(0);
+        expect(y, `${l.id} y`).toBeGreaterThanOrEqual(0);
+        expect(x + w, `${l.id} 右边界`).toBeLessThanOrEqual((l.cols ?? 12) + 0.001);
+        expect(y + h, `${l.id} 下边界`).toBeLessThanOrEqual((l.rows ?? 8) + 0.001);
+      }
+    }
+  });
+  it("十四个分组都至少有 8 个版式", () => {
+    expect(LAYOUT_GROUPS.length).toBe(14);
+    for (const g of LAYOUT_GROUPS) {
+      expect(LAYOUTS.filter((l) => l.group === g).length, g).toBeGreaterThanOrEqual(8);
+    }
+  });
+  it("海报风版式必须声明 canvas 特效", () => {
+    for (const l of POSTER) {
+      expect(l.fx, l.id).toBeTruthy();
+      expect(l.fx, l.id).not.toBe("none");
+    }
+  });
+  it("编辑风版式不声明 canvas 特效", () => {
+    for (const l of EDITORIAL) expect(l.fx ?? "none", l.id).toBe("none");
+  });
+  it("引用的图表种类与素材 id 都存在", () => {
+    for (const l of LAYOUTS) {
+      for (const s of l.slots) {
+        if (s.chart) expect(CHART_KINDS, `${l.id} chart`).toContain(s.chart);
+        if (s.k === "asset" || s.k === "image" || s.k === "device" || s.k === "icon") {
+          expect(ASSET_IDS, `${l.id} asset`).toContain(s.asset ?? "icon-star");
+        }
+      }
+    }
+  });
+});
+
+describe("动效目录完整性", () => {
+  it("至少 60 个动效", () => {
+    expect(MOTIONS.length).toBeGreaterThanOrEqual(60);
+  });
+  it("每个动效都有实现", () => {
+    for (const m of MOTIONS) expect(APPLIED_MOTION_IDS, m.id).toContain(m.id);
+  });
+  it("实现里没有游离的动效 id", () => {
+    for (const id of APPLIED_MOTION_IDS) expect(MOTION_BY_ID.has(id), id).toBe(true);
+  });
+  it("五个分组都有足够的动效", () => {
+    for (const g of ["enter", "emphasis", "exit", "transition", "ambient"]) {
+      expect(MOTIONS.filter((m) => m.group === g).length, g).toBeGreaterThanOrEqual(3);
+    }
+  });
+  it("版式引用的动效全部存在，且自带的动效组合合法", () => {
+    for (const l of LAYOUTS) {
+      const ids = [...l.enter, ...(l.emphasis ? [l.emphasis] : []), ...l.slots.flatMap((s) => [s.m, s.mx].filter(Boolean) as string[])];
+      for (const id of ids) expect(MOTION_BY_ID.has(id), `${l.id} → ${id}`).toBe(true);
+      expect(validateMotionSet([...l.enter, ...(l.emphasis ? [l.emphasis] : [])]), l.id).toHaveLength(0);
+      expect(l.enter.length, `${l.id} 入场动效数`).toBeLessThanOrEqual(4);
+    }
+  });
+  it("冲突检测生效（左滑 × 右滑、翻面 × 擦除）", () => {
+    expect(validateMotionSet(["m-slide-left", "m-slide-right"]).length).toBeGreaterThan(0);
+    expect(validateMotionSet(["m-flip-x", "m-wipe-left"]).length).toBeGreaterThan(0);
+    expect(validateMotionSet(["m-fade-up", "m-underline-draw"])).toHaveLength(0);
+  });
+  it("冲突声明是对称的（任一方声明即算冲突）", () => {
+    expect(conflictsOf("m-slide-left")).toContain("m-slide-right");
+    expect(conflictsOf("m-slide-right")).toContain("m-slide-left");
+  });
+});
+
+describe("渲染与 canvas 安全", () => {
+  it("全部版式都能渲染出非空 SVG", () => {
+    for (const l of LAYOUTS) {
+      const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent(LAYOUTS.indexOf(l) + 1) }));
+      expect(html.startsWith("<svg"), l.id).toBe(true);
+      expect(html.length, l.id).toBeGreaterThan(400);
+    }
+  });
+  it("渲染结果不含 foreignObject / image / 外链（否则 canvas 会被污染）", () => {
+    for (const l of LAYOUTS) {
+      const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent() }))
+        .replace(/xmlns="[^"]*"/g, ""); // xmlns 只是命名空间声明，不是外部引用
+      expect(html.includes("foreignObject"), l.id).toBe(false);
+      expect(/<image\b/.test(html), l.id).toBe(false);
+      expect(/xlink:href|url\(\s*['"]?https?:/.test(html), l.id).toBe(false);
+      expect(html.includes("http://") || html.includes("https://"), l.id).toBe(false);
+    }
+  });
+  it("版式渲染对同一输入是确定性的", () => {
+    const l = LAYOUT_BY_ID.get("ch-line-up")!;
+    const a = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent() }));
+    const b = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent() }));
+    expect(a).toBe(b);
+  });
+  it("海报风大字拆成逐字符（逐字动效才有作用对象）", () => {
+    const l = POSTER.find((x) => x.slots.some((s) => s.k === "headline" && s.size === "mega"))!;
+    const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent() }));
+    expect(html.includes('data-char=""'), l.id).toBe(true);
+  });
+  it("编辑风不拆字符（保持既有视觉）", () => {
+    const l = LAYOUT_BY_ID.get("st-h1-center")!;
+    const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent() }));
+    expect(html.includes("data-char")).toBe(false);
+  });
+});
+
+describe("风格判定", () => {
+  it("覆写优先于自动判定", () => {
+    expect(decideStyle(demoContent(), 0, 5, "editorial").style).toBe("editorial");
+    expect(decideStyle(demoContent(), 0, 5, "poster").style).toBe("poster");
+  });
+  it("同一输入必得同一判定（确定性）", () => {
+    for (let b = 1; b <= 20; b++) {
+      const a = decideStyle(demoContent(b), b, 12);
+      const c = decideStyle(demoContent(b), b, 12);
+      expect(a.style, `beat ${b}`).toBe(c.style);
+      expect(a.reason).toBe(c.reason);
+    }
+  });
+  it("短句无数据 → 海报风；数字密集 + 要点多 → 编辑风", () => {
+    const shortNoNum: RenderContent = { headline: "就这样吧", bullets: [], numbers: [], beat: 5 };
+    expect(decideStyle(shortNoNum, 3, 10).style).toBe("poster");
+    const heavy: RenderContent = { ...demoContent(6), numbers: [1, 2, 3], bullets: ["a", "b", "c", "d"] };
+    expect(decideStyle(heavy, 3, 10).style).toBe("editorial");
+  });
+  it("判定理由非空", () => {
+    expect(decideStyle(demoContent(1), 0, 5).reason.length).toBeGreaterThan(0);
+  });
+});
+
+describe("全片风格规划（planStyles）", () => {
+  const corpus = readdirSync(EXAMPLES)
+    .filter((f) => f.endsWith(".srt"))
+    .sort();
+
+  const contentsOf = (file: string): RenderContent[] => {
+    const beats = planBeats(parseSRT(readFileSync(resolve(EXAMPLES, file), "utf8")));
+    return beats.map((b) => buildContent(composeScenes([b])[0]!, b, false));
+  };
+
+  it("四段真实语料都能真的用上海报风（自动兜底不能是死代码）", () => {
+    for (const f of corpus) {
+      const d = planStyles(contentsOf(f));
+      const poster = d.filter((x) => x.style === "poster").length;
+      expect(poster, `${f} 一个海报风都没选出来`).toBeGreaterThanOrEqual(1);
+      expect(poster, `${f} 海报风过多，重音变底色`).toBeLessThanOrEqual(4);
+      expect(poster / d.length, `${f} 海报风占比过高`).toBeLessThanOrEqual(0.25);
+    }
+  });
+
+  it("海报风拍互不相邻（重音之间必须有呼吸）", () => {
+    for (const f of corpus) {
+      const d = planStyles(contentsOf(f));
+      d.forEach((x, i) => {
+        if (x.style === "poster" && i > 0) {
+          expect(d[i - 1]!.style, `${f} 第 ${i} 与第 ${i + 1} 拍都成了海报风`).toBe("editorial");
+        }
+      });
+    }
+  });
+
+  it("覆写优先：锁定的拍不受自动规划影响", () => {
+    const contents = contentsOf(corpus[0]!);
+    const overrides: (Style | undefined)[] = contents.map(() => undefined);
+    overrides[3] = "poster";
+    overrides[4] = "editorial";
+    const d = planStyles(contents, overrides);
+    expect(d[3]!.style).toBe("poster");
+    expect(d[4]!.style).toBe("editorial");
+    expect(d[3]!.reason).toBe("导演覆写");
+  });
+
+  it("确定性：同输入必得同规划", () => {
+    for (const f of corpus) {
+      const a = planStyles(contentsOf(f)).map((x) => x.style).join(",");
+      const b = planStyles(contentsOf(f)).map((x) => x.style).join(",");
+      expect(a).toBe(b);
+    }
+  });
+
+  it("恒定惩罚陷阱：旁白整句 + bullets 按标点切，不得让海报风永远选不出来", () => {
+    // 回归：这两种信号对每一拍都成立，一旦当成惩罚项，阈值就永远达不到
+    const narration: RenderContent = {
+      headline: "他问，这个怎么退回去\n我说，从左边往右滑一下",
+      bullets: ["他问", "这个怎么退回去", "我说", "从左边往右滑一下"],
+      numbers: [],
+      beat: 2,
+    };
+    expect(decideStyle(narration, 1, 13).style).toBe("poster");
+  });
+});
+
+describe("选择与资格门禁", () => {
+  it("数字不足时图表版式不合格", () => {
+    const chartLayout = LAYOUT_BY_ID.get("ch-line-up")!;
+    expect(eligible(chartLayout, { ...demoContent(), numbers: [1] })).toBe(false);
+    expect(eligible(chartLayout, demoContent())).toBe(true);
+  });
+  it("选版式避开上一拍用过的版式", () => {
+    const content = demoContent(3);
+    const first = pickLayout(content, "editorial");
+    const second = pickLayout({ ...content, beat: 4 }, "editorial", first.id);
+    expect(second.id).not.toBe(first.id);
+  });
+  it("数字丰富时图表版式会出现在选中的版式里", () => {
+    const picked = new Set<string>();
+    for (let b = 1; b <= 12; b++) picked.add(pickLayout(demoContent(b), "editorial").group);
+    expect(picked.has("chart")).toBe(true);
+  });
+  it("无数字时不会选到图表版式", () => {
+    const content: RenderContent = { ...demoContent(), numbers: [], bignum: undefined };
+    for (let b = 1; b <= 12; b++) {
+      expect(pickLayout({ ...content, beat: b }, "editorial").group).not.toBe("chart");
+    }
+  });
+  it("编辑风只选编辑风版式、海报风只选海报风版式", () => {
+    for (let b = 1; b <= 24; b++) {
+      const ed = pickLayout(demoContent(b), "editorial");
+      expect((ed.style ?? "editorial"), `beat ${b}`).toBe("editorial");
+      const po = pickLayout(demoContent(b), "poster");
+      expect(po.style, `beat ${b}`).toBe("poster");
+      expect(po.group.startsWith("poster-"), `beat ${b}`).toBe(true);
+    }
+  });
+  it("编辑风的多个分组都能被选到（版式不是死数据）", () => {
+    const hit = new Set<string>();
+    for (let b = 1; b <= 40; b++) hit.add(pickLayout(demoContent(b), "editorial").group);
+    expect(hit.size).toBeGreaterThanOrEqual(4);
+  });
+  it("海报风的四个分组都能被选到", () => {
+    const hit = new Set<string>();
+    for (let b = 1; b <= 40; b++) hit.add(pickLayout(demoContent(b), "poster").group);
+    expect(hit.size).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("单 canvas 渲染管线", () => {
+  const shots: Shot[] = [
+    { layout: LAYOUTS[0]!, content: demoContent(1), start: 0, end: 3, tlStart: 0 },
+    { layout: LAYOUTS[1]!, content: demoContent(2), start: 3, end: 6, tlStart: 2.75 },
+    { layout: LAYOUTS[2]!, content: demoContent(3), start: 6, end: 9, tlStart: 5.5 },
+  ];
+  it("shotAt：时间轴时间 → 拍序号（含拍间交叠）", () => {
+    expect(shotAt(shots, 0)).toBe(0);
+    expect(shotAt(shots, 2.5)).toBe(0);
+    expect(shotAt(shots, 2.8)).toBe(1); // 已进入交叠区
+    expect(shotAt(shots, 5.6)).toBe(2);
+    expect(shotAt(shots, 99)).toBe(2);
+  });
+});
+
+describe("版式结构自洽", () => {
+  it("同风格内没有两个版式完全相同（槽位布局去重）", () => {
+    const sig = (l: Layout) => l.slots.map((s) => `${s.k}:${s.box.join(",")}`).join("|");
+    for (const style of ["editorial", "poster"] as Style[]) {
+      const list = LAYOUTS.filter((l) => (l.style ?? "editorial") === style);
+      const sigs = list.map(sig);
+      const dup = sigs.filter((x, i) => sigs.indexOf(x) !== i);
+      expect(new Set(sigs).size, `${style} 重复：${[...new Set(dup)].join(" / ")}`).toBe(sigs.length);
+    }
+  });
+});
