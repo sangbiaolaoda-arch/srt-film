@@ -11,8 +11,8 @@
 //   亮度（YAVG）抓的是「画面在不在」：全黑 = 没渲染，爆白 = 蒙版叠错。
 //   结构差（Δ）抓的是「画面有没有变」：两帧各缩到 32×18 再比平均像素差，
 //   局部细节（粒子、扫描线）被平均掉，只剩结构性变化。某个镜头内 Δ 一直很小，
-//   说明它的主图从头到尾没变过 —— 手册 §13.1 的最后追问
-//  （「拿掉全部动画，信息一点没损失吗」）在这里落成了一个可计算的数。
+//   说明它的主图从头到尾没变过 —— 反 PPT 的最后一问（「这一拍能否整段换成标题页
+//   而不损失信息」，见 docs/流程-叙事与信息设计.md §6）在这里落成了一个可计算的数。
 //
 // 为什么需要它
 // ------------
@@ -27,14 +27,14 @@
 //   2. 时长可读：    时间轴对象上有 dur（__tl）或 duration（__stage）
 //   3. 报错可收：    页面把运行时错误推进 window.__err 数组
 //   另可识别第三方契约 window.__VIDEO_TEST__.renderAt(t)（外部项目通用写法，
-//   见 docs/流程-叙事与信息设计.md 附录），此时场景表从 DOM 的 section.scene 读。
+//   见 docs/流程-确定性动画与逐帧验收.md §3②），此时场景表从 DOM 的 section.scene 读。
 //
 // 用法
 // ----
 //   npm run qa:frames -- --url http://localhost:5201/
 //   node tools/qa-frames.mjs --url <url> [--shots 0.7,4.35,13] [--n 12] [--out <dir>]
 //        [--width 1600] [--height 900] [--selector "#stage"] [--settle 350]
-//        [--per-scene 5] [--motion-min 3] [--no-motion]
+//        [--per-scene 5] [--motion-min 1.2] [--no-motion]
 //        [--roi 0.48,0.2,0.48,0.63]     只在主图这块画面里算 Δ（治「主图只占一角」的低估）
 //        [--determinism] [--determinism-tol 0.5]   同一 t 渲染两次比像素，抓非确定性
 //        [--seek "<表达式>"] [--prepare "<表达式>"] [--cleanup "<表达式>"]
@@ -329,8 +329,7 @@ async function yavg(ff, png) {
  * 所以先缩到 32×18 再比：局部运动被平均掉，只剩结构性变化。返回值是两个缩小帧
  * 的平均像素差（0 = 完全一致，255 = 全变），比阈值小就是"没动"。
  *
- * 实测校准（light-lag 的两张不同场次截图）：缝内不同场 ≈ 1.56，
- * 同场只有粒子在飘 ≈ 0.1–0.6。默认阈值 3。
+ * 阈值取值与实测校准只有一处副本 —— 见下面 MOTION_MIN 的定义。
  *
  * roi 非空时先裁出主图区域再缩 —— 解决整帧 Δ 的另一个失效模式：**主图在动，
  * 但主图只占画面一角**，大面积静止背景把变化平均掉了，Δ 被低估。裁切用
@@ -373,13 +372,17 @@ async function pixelDiff(ff, a, b) {
 
 const shots = [];
 
+/** 第 i 场的右边界：自带 b（data-end）优先，否则取下一场起点；最后一场没有边界时返回 null */
+function sceneEnd(i, scenes) {
+  if (Number.isFinite(scenes[i].b)) return scenes[i].b;
+  return i + 1 < scenes.length ? scenes[i + 1].a : null;
+}
+
 /** t 落在哪个场景区间（0 基）；不在任何区间返回 -1 */
 function sceneIndexOf(t, scenes) {
   for (let i = 0; i < scenes.length; i++) {
-    const a = scenes[i].a;
-    // 场景自带 b（data-end）时用它；否则用下一场的起点（老契约只有 a）
-    const b = Number.isFinite(scenes[i].b) ? scenes[i].b : (i + 1 < scenes.length ? scenes[i + 1].a : Infinity);
-    if (t >= a && t < b) return i;
+    const end = sceneEnd(i, scenes);
+    if (t >= scenes[i].a && (end === null || t < end)) return i;
   }
   return -1;
 }
@@ -577,41 +580,36 @@ async function main() {
   const missing = rows.filter((x) => !x.ok);
 
   // 场景级判定：场内相邻采样点的**最大**结构差低于阈值，说明这一镜从头到尾
-  // 主结构没变过 —— 只有粒子/扫描线这类细节在动。手册 §13.1 最后一问
-  //（「这一镜能否被直接替换成普通标题页而不损失任何信息」）在这里变成可计算的量。
+  // 主结构没变过 —— 只有粒子/扫描线这类细节在动。反 PPT 的最后一问
+  //（「这一拍能否整段换成标题页」，docs/流程-叙事与信息设计.md §6）在这里变成可计算的量。
+  //
+  // 每个场景收两列：judge（判定用，给了 ROI 就是 ROI Δ）与 whole（整帧 Δ，只作对照）。
+  // 两列必须来自同一批采样点，所以只走一遍 rows —— 分两个循环迟早会不同步。
   const byScene = new Map();
-  const bySceneWhole = new Map();
   rows.forEach((x) => {
-    if (x.scene < 0) return;
-    if (x.judge !== null) {
-      if (!byScene.has(x.scene)) byScene.set(x.scene, []);
-      byScene.get(x.scene).push(x.judge);
-    }
-    if (x.sd !== null) {
-      if (!bySceneWhole.has(x.scene)) bySceneWhole.set(x.scene, []);
-      bySceneWhole.get(x.scene).push(x.sd);
-    }
+    if (x.scene < 0 || x.judge === null) return;
+    const acc = byScene.get(x.scene) || { judge: [], whole: [] };
+    acc.judge.push(x.judge);
+    if (x.sd !== null) acc.whole.push(x.sd);
+    byScene.set(x.scene, acc);
   });
   // 每个场景的第一个 Δ 量的是「入场段」—— 标题与主图从无到有，它几乎必然很大
   // （实测 4~7，而镜内段只有 0.1~0.8）。把它算进取值，所有场景都会判成"有运动"，
-  // 判据直接失效。所以取镜内段（其余采样点）的最大值；只采到两点的短镜头没有
-  // 镜内段，退回全部。
-  const sceneRows = [...byScene.entries()].map(([idx, all]) => {
+  // 判据直接失效。所以取镜内段（其余采样点）的最大值；只采到两点的短镜头
+  // slice 之后为空，退回全部。
+  const interior = (arr) => (arr.length > 1 ? arr.slice(1) : arr);
+  const sceneRows = [...byScene.entries()].map(([idx, acc]) => {
     const s0 = scenes[idx] || {};
-    const interior = all.slice(1);
-    const use = interior.length ? interior : all;
-    const maxDiff = Math.max(...use);
-    const whole = bySceneWhole.get(idx);
-    const wholeInterior = whole ? whole.slice(1) : [];
+    const maxDiff = Math.max(...interior(acc.judge));
     return {
       scene: idx,
       label: s0.label || `场 ${idx + 1}`,
       from: Number(s0.a ?? 0),
-      to: Number((Number.isFinite(s0.b) ? s0.b : (scenes[idx + 1] ? scenes[idx + 1].a : dur)) ?? 0),
-      samples: all.length + 1,
-      entryDiff: Number(all[0].toFixed(3)),
+      to: Number(sceneEnd(idx, scenes) ?? dur ?? 0),
+      samples: acc.judge.length + 1,
+      entryDiff: Number(acc.judge[0].toFixed(3)),
       maxDiff: Number(maxDiff.toFixed(3)),
-      maxDiffWhole: whole ? Number(Math.max(...(wholeInterior.length ? wholeInterior : whole)).toFixed(3)) : null,
+      maxDiffWhole: acc.whole.length ? Number(Math.max(...interior(acc.whole)).toFixed(3)) : null,
       still: maxDiff < MOTION_MIN,
     };
   });
