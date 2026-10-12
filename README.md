@@ -52,5 +52,17 @@ key 为拍序号（从 1 开始）：
 
 ```bash
 npm test           # vitest
-npm run check      # tsc + vitest
+npm run check      # tsc + HTML 内联脚本语法门禁 + vitest
 ```
+
+## 制作流程与工具
+
+- **`docs/流程-确定性动画与逐帧验收.md`** — 确定性时间轴三条契约、画面操控分层与
+  时间轴原语、逐帧验收流水线、实锤坑清单。做新的视觉页面从这份文档入手。
+- **`npm run lint:html`** — 抽出 HTML 内联 `<script>` 做语法门禁（单文件片子没有构建
+  步骤，这是挡住「改坏一个括号 → 全片白屏」的唯一关卡）。
+- **`npm run qa:frames`** — 无头浏览器逐帧验收：自动识别 `window.__tl` / `__stage`
+  契约，按时点 seek + 截图，ffmpeg 量每帧亮度抓「全黑/爆白」，收 `window.__err`，
+  产出 `report.md` + 接触印相。
+- **`examples/reference/`** — 《光很慢 LIGHT LAG》45 秒单文件科普片，上面每条契约的
+  可跑样本。

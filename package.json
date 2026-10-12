@@ -15,7 +15,9 @@
     "build": "tsc --noEmit && vite build",
     "test": "node tools/test-all.mjs",
     "test:one": "vitest run",
-    "check": "tsc --noEmit && node tools/test-all.mjs",
+    "check": "tsc --noEmit && node --experimental-vm-modules --no-warnings tools/check-html-syntax.mjs && node tools/test-all.mjs",
+    "lint:html": "node --experimental-vm-modules --no-warnings tools/check-html-syntax.mjs",
+    "qa:frames": "node tools/qa-frames.mjs",
     "dupes": "node tools/run-ts.mjs tools/dupes.ts",
     "sweep": "node tools/run-ts.mjs tools/style-sweep.ts"
   },
