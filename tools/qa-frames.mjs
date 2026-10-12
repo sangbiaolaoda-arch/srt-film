@@ -40,6 +40,7 @@
 //        [--seek "<表达式>"] [--prepare "<表达式>"] [--cleanup "<表达式>"]
 //        [--sheet] [--allow-err] [--fail-on-blank] [--fail-on-still]
 //        [--fail-on-nondeterministic] [--fail-on-drift] [--dry-run]
+//        [--baseline <report.json>] [--baseline-tol 0.01] [--baseline-scope full|struct]
 //
 // 改完工具怎么证明行为没变（改动本文件的固定手法）
 // -------------------------------------------------
@@ -47,6 +48,8 @@
 //   改后：node tools/qa-frames.mjs --url <url> [完全相同的其余参数] \
 //           --baseline .tmp/qa-frames/baseline/report.json --fail-on-drift
 //   判据是「判定结果是否相同」，不是「数值逐位相同」—— 见 compareBaseline 的注释。
+//   跨环境（本机存的基线拿到 Linux CI 里比）要加 --baseline-scope struct：
+//   数值层与「全黑/爆白/无主运动」都是像素的产物，换平台必漂。
 //
 // 退出码：页面报错（除非 --allow-err）→ 1；--fail-on-blank 且检出黑屏/爆白 → 1；
 //        --fail-on-still 且存在无主运动的镜头 → 1；
@@ -174,6 +177,21 @@ const BASELINE = (() => {
   }
 })();
 const FAIL_ON_DRIFT = flags.has("fail-on-drift");
+// 比对范围。full（默认）= 结构层 + 数值层 + 像素派生判定，同环境用。
+// struct = 只比结构层（契约 / 采样计划 / 场景归属 / 报错 / 门槛 / 视口…），
+// **完全不看任何从像素推出来的量**，跨环境（本地 Windows 存的基线拿到 Linux CI 里比）用。
+// 为什么必须分这两档：`全黑 / 爆白 / 无主运动` 这三个判定和所有 Δ、亮度一样是像素的产物。
+// 换个平台的字体栅格化与抗锯齿就会漂，而它们的判据又是硬阈值 —— 本仓库样片里
+// 「行星」场 ROI Δ 只有 1.97（门槛 1.2，余量 1.64 倍），跨平台翻掉它是完全可能的。
+// 拿它当跨平台硬门禁会得到一个长期报红、然后被人无视的 job。
+const BASE_SCOPE = (() => {
+  const v = opt["baseline-scope"] ?? "full";
+  if (v !== "full" && v !== "struct") {
+    console.error(`✗ --baseline-scope 只接受 full 或 struct（收到 ${v}）`);
+    process.exit(2);
+  }
+  return v;
+})();
 
 /* ------------------------------- 跑子进程 ------------------------------- */
 // 两条本机硬约束（都不是设计选择，是踩出来的）：
@@ -409,10 +427,23 @@ async function pixelDiff(ff, a, b) {
  *     · 数值层（亮度、Δ、重复渲染差）：超过 BASE_TOL 才算实质漂移，之内记为「末位抖动」
  *   BASE_TOL 的取法：同一对命令反复比，实测最大抖动 0.0035（Δ）、0.0013（亮度），
  *   取 0.01 留约 3 倍余量 —— 既能盖住噪声，又远小于任何真实回归的量级。
+ *   ⚠ 这是**同会话**的数字。跨会话有一条例外：处于场末过渡里的采样点（`b-0.05`）
+ *   会漂到 0.176 —— 因为截图结果依赖「seek 之后等了多久」，而机器负载会改变实际
+ *   等待时长（实测 Δ 5.85 ↔ 6.02，见 docs §3⑤）。跨会话比数值层时要留意这一列，
+ *   实在要用就调大 --baseline-tol。
+ *   `--baseline-tol` 可改它。但**跨环境比对不要靠放大容差**（那等于把判据关掉），
+ *   改用 `--baseline-scope struct`：只比与像素无关的结构层 —— 那才是跨平台该用的姿势。
  */
-const BASE_TOL = 0.01;
+const BASE_TOL = (() => {
+  const v = Number(opt["baseline-tol"] ?? 0.01);
+  if (!Number.isFinite(v) || v < 0) {
+    console.error(`✗ --baseline-tol 需要一个 ≥ 0 的数字（收到 ${opt["baseline-tol"]}）`);
+    process.exit(2);
+  }
+  return v;
+})();
 
-function compareBaseline(base, cur) {
+function compareBaseline(base, cur, scope) {
   const drift = []; // 判定层变化，或数值层超出容差 —— 有它就说明行为真的变了
   const noise = []; // 末位抖动，只看不当判据
 
@@ -430,6 +461,10 @@ function compareBaseline(base, cur) {
     const txt = `${label}：${a} → ${b}（${b > a ? "+" : "−"}${d.toFixed(4)}）`;
     (d > BASE_TOL ? drift : noise).push(txt);
   };
+  // 像素派生的一切在跨环境比时不看：它们是「这个环境渲出的画面」，不是「工具的判定逻辑」。
+  const FULL = scope !== "struct";
+  const px = FULL ? disc : () => {}; // 像素派生的离散判定（全黑 / 爆白 / 无主运动 / 重复渲染违规）
+  const pv = FULL ? val : () => {}; // 像素派生的数值（亮度 / 各种 Δ / 重复渲染差）
 
   // 顶层
   disc("页面", base.url, cur.url);
@@ -439,10 +474,9 @@ function compareBaseline(base, cur) {
   disc("运动门槛", base.motionThreshold, cur.motionThreshold);
   disc("主图 ROI", base.roi, cur.roi);
   disc("重复渲染容差", base.determinism?.tolerance, cur.determinism?.tolerance);
-  disc("重复渲染违规", (base.determinism?.violations || []).map((v) => v.t), (cur.determinism?.violations || []).map((v) => v.t));
+  px("重复渲染违规", (base.determinism?.violations || []).map((v) => v.t), (cur.determinism?.violations || []).map((v) => v.t));
   disc("印相", base.contactSheet, cur.contactSheet);
   disc("页面报错", base.pageErrors, cur.pageErrors);
-
   // 逐帧：按 t 配对（换了采样点数量会配不上，那就直接报出来，别假装比过了）
   const curByT = new Map(cur.shots.map((x) => [x.t, x]));
   for (const b of base.shots) {
@@ -451,12 +485,12 @@ function compareBaseline(base, cur) {
     if (!c) { drift.push(`${tag}：基线里有、本次没有`); continue; }
     disc(`${tag} 名称`, b.name, c.name);
     disc(`${tag} 场景`, b.scene, c.scene);
-    disc(`${tag} 全黑`, b.blank, c.blank);
-    disc(`${tag} 爆白`, b.blown, c.blown);
-    val(`${tag} 亮度`, b.lum, c.lum);
-    val(`${tag} 结构差 Δ`, b.structDiff, c.structDiff);
-    val(`${tag} 主图 ROI Δ`, b.roiDiff, c.roiDiff);
-    val(`${tag} 重复渲染差`, b.determinismDiff, c.determinismDiff);
+    px(`${tag} 全黑`, b.blank, c.blank);
+    px(`${tag} 爆白`, b.blown, c.blown);
+    pv(`${tag} 亮度`, b.lum, c.lum);
+    pv(`${tag} 结构差 Δ`, b.structDiff, c.structDiff);
+    pv(`${tag} 主图 ROI Δ`, b.roiDiff, c.roiDiff);
+    pv(`${tag} 重复渲染差`, b.determinismDiff, c.determinismDiff);
   }
   const added = cur.shots.filter((x) => !base.shots.some((y) => y.t === x.t)).map((x) => x.t);
   if (added.length) drift.push(`新增采样点：t=${added.join(", ")}`);
@@ -470,19 +504,17 @@ function compareBaseline(base, cur) {
     disc(`${tag} 名称`, b.label, c.label);
     disc(`${tag} 起止`, [b.from, b.to], [c.from, c.to]);
     disc(`${tag} 采样数`, b.samples, c.samples);
-    disc(`${tag} 无主运动`, b.still, c.still);
-    val(`${tag} 入场段 Δ`, b.entryDiff, c.entryDiff);
-    val(`${tag} 镜内最大 Δ`, b.maxDiff, c.maxDiff);
-    val(`${tag} 镜内最大整帧 Δ`, b.maxDiffWhole, c.maxDiffWhole);
+    px(`${tag} 无主运动`, b.still, c.still);
+    pv(`${tag} 入场段 Δ`, b.entryDiff, c.entryDiff);
+    pv(`${tag} 镜内最大 Δ`, b.maxDiff, c.maxDiff);
+    pv(`${tag} 镜内最大整帧 Δ`, b.maxDiffWhole, c.maxDiffWhole);
   }
   if (base.scenes.length !== cur.scenes.length) drift.push(`场景数：${base.scenes.length} → ${cur.scenes.length}`);
 
-  return { path: BASELINE?.path || "", at: base.generatedAt || "", drift, noise };
+  return { path: BASELINE?.path || "", at: base.generatedAt || "", scope, drift, noise };
 }
 
 /* --------------------------------- 主流程 --------------------------------- */
-
-const shots = [];
 
 /** 第 i 场的右边界：自带 b（data-end）优先，否则取下一场起点；最后一场没有边界时返回 null */
 function sceneEnd(i, scenes) {
@@ -751,7 +783,7 @@ async function main() {
     JSON.stringify(rows.map((x) => ({ file: basename(x.file), t: x.t, name: x.name })), null, 2),
   );
 
-  const cmp = BASELINE ? compareBaseline(BASELINE.data, report) : null;
+  const cmp = BASELINE ? compareBaseline(BASELINE.data, report, BASE_SCOPE) : null;
 
   const fmtLum = (x) => (x.lum === null ? "—" : x.lum.toFixed(1));
   const fmtD = (v) => (v === null || v === undefined ? "—" : v.toFixed(2));
@@ -842,15 +874,35 @@ async function main() {
       `## 与基线对比`,
       ``,
       `- 基线：\`${cmp.path}\`${cmp.at ? `　生成于 ${cmp.at}` : ""}`,
-      `- 结论：${cmp.drift.length ? `✗ **${cmp.drift.length} 处判定漂移**` : `✓ 判定一致`}${cmp.noise.length ? `　末位抖动 ${cmp.noise.length} 处（< ${BASE_TOL}）` : ""}`,
+      `- 范围：${cmp.scope === "struct" ? "**只看结构层**（契约 / 采样计划 / 场景归属 / 报错 / 门槛 / 视口；不看任何像素派生的量）" : `全量（结构层 + 数值层，数值容差 ${BASE_TOL} + 像素派生判定）`}`,
+      `- 结论：${cmp.drift.length ? `✗ **${cmp.drift.length} 处判定漂移**` : `✓ 判定一致`}${cmp.noise.length ? `　末位抖动 ${cmp.noise.length} 处` : ""}`,
       ``,
       ...cmp.drift.map((d) => `- ✗ ${d}`),
       ...cmp.noise.map((d) => `- ~ ${d}`),
       ``,
-      `> **判据是「判定结果是否相同」，不是「数值逐位相同」。** 截图来自浏览器，子像素`,
-      `> 渲染抖动会让亮度与 Δ 在末位漂 —— 实测同一份代码连跑三次，同一帧的亮度是`,
-      `> 28.6005 / 28.6007 / 28.6004。所以数值层给 ${BASE_TOL} 的容差（超出才算漂移），`,
-      `> 而离散的判定字段（全黑 / 爆白 / 无主运动 / 场景归属 / 页面报错）零容忍。`,
+      cmp.scope === "struct"
+        ? [
+            `> **深度比对（默认）与结构比对（--baseline-scope struct）的区别。** 数值层与`,
+            `> 「全黑 / 爆白 / 无主运动」都是由**像素**推出来的：换个平台的字体栅格化与抗锯齿`,
+            `> 就会漂，而它们的判据是硬阈值 —— 本仓库样片「行星」场的 ROI Δ 只有 1.97`,
+            `> （门槛 1.2，余量 1.64 倍），跨平台完全可能翻过来。所以跨环境比对只保留`,
+            `> 「工具的判定逻辑」这一层：采样计划、场景归属、契约识别、报错收集、门槛与视口。`,
+            `> 这些与像素无关，变了就一定是工具改错了。`,
+            ``,
+            `> 数值层的严格比对（默认 ${BASE_TOL} 容差）留给**同环境**做：本地改完工具，用`,
+            `> 同一台机器同一浏览器跑的基线比，才是能查出「量法变了」的判据。`,
+            ``,
+          ].join("\n")
+        : [
+            `> **判据是「判定结果是否相同」，不是「数值逐位相同」。** 截图来自浏览器，子像素`,
+            `> 渲染抖动会让亮度与 Δ 在末位漂 —— 实测同一份代码连跑三次，同一帧的亮度是`,
+            `> 28.6005 / 28.6007 / 28.6004。所以数值层给 ${BASE_TOL} 的容差（超出才算漂移），`,
+            `> 而离散的判定字段（全黑 / 爆白 / 无主运动 / 场景归属 / 页面报错）零容忍。`,
+            ``,
+          ].join("\n"),
+      `> **Δ 判据对采样密度敏感，别随手调 --per-scene。** 样片「行星」场：--per-scene 3 时`,
+      `> ROI Δ 峰值只有 0.927（判无主运动），--per-scene 4 时是 1.972（通过）—— 少采两个`,
+      `> 点就会错过运动峰值。要比对基线，两次运行必须用同一个 --per-scene。`,
       ``,
     );
   }
@@ -866,7 +918,7 @@ async function main() {
   /* 7) 结论 */
   console.log("");
   if (errs.length) console.error(`✗ 页面报错 ${errs.length} 条`); else console.log("✓ 页面零报错");
-  if (missing.length) console.error(`✗ ${missing.length} 帧没截到`);
+  if (missing.length) console.error(`✗ ${missing.length} 帧没截到（工具层故障，不是片子的问题）`);
   if (blanks.length) console.error(`⚠ ${blanks.length} 帧近乎全黑：${blanks.map((b) => `t=${b.t}`).join(", ")}`);
   if (blown.length) console.error(`⚠ ${blown.length} 帧近乎爆白：${blown.map((b) => `t=${b.t}`).join(", ")}`);
   if (ranked.length) {
@@ -881,6 +933,7 @@ async function main() {
   if (cmp) {
     console.log("");
     console.log(`基线  ${cmp.path}${cmp.at ? `（生成于 ${cmp.at}）` : ""}`);
+    console.log(`范围  ${cmp.scope === "struct" ? "只看结构层（跳过像素派生的量）" : `全量，数值容差 ${BASE_TOL}`}`);
     if (cmp.drift.length) {
       console.error(`✗ 与基线不一致：判定漂移 ${cmp.drift.length} 处`);
       cmp.drift.slice(0, 12).forEach((d) => console.error(`  · ${d}`));
@@ -895,6 +948,9 @@ async function main() {
   console.log(`截图  ${SHOTS_DIR}`);
   if (sheet) console.log(`印相  ${sheet}`);
 
+  // 截不到图是工具层故障（浏览器/驱动坏了），不是片子的毛病 —— 这种情况没有理由判通过，
+  // 所以不给 --fail-on-* 开关，直接失败。
+  if (missing.length) process.exit(1);
   if (errs.length && !ALLOW_ERR) process.exit(1);
   if (FAIL_ON_BLANK && (blanks.length || blown.length)) process.exit(1);
   if (FAIL_ON_STILL && stills.length) process.exit(1);

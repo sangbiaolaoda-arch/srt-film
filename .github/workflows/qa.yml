@@ -1,0 +1,122 @@
+# 持续验收
+# ============================================================================
+# 两个 job，一快一慢，慢的依赖快的：
+#
+#   check       ── tsc + HTML 语法门禁 + 单测。秒级、任何平台结果一致，是真正的挡门岗位。
+#   browser-qa  ── 起静态服务 + 真浏览器逐帧验收样片。它挡的是「上不了单元测试」的那类失效：
+#                  某一拍没渲染（全黑）、蒙版叠成一片白、同一时刻两次渲染不一样
+#                  （Math.random / 实时钟混进了画面）、工具的判定逻辑被改坏。
+#                  前三类只有真浏览器 + 逐帧截图能发现，过去全靠人盯。
+#
+# 为什么 browser-qa 需要额外装东西
+# --------------------------------
+# tools/qa-frames.mjs 依赖两个本机工具：agent-browser（无头浏览器驱动）与 ffmpeg。
+#   · agent-browser 不在本仓库依赖里（本地用的是全局装的）。它的 npm 包里**自带
+#     linux-x64 预编译二进制**，所以 CI 上全局装即可；Chrome 由 `agent-browser install`
+#     从 Chrome for Testing 下载，`--with-deps` 顺手装系统库（需要 sudo，runner 有）。
+#   · ffmpeg 在 ubuntu-latest 镜像里预装，那行只是兜底。
+# 版本钉在 0.27.0 —— 它是本仓库这批命令实际验证过的版本，别用 latest。
+#
+# ⚠ 为什么 --baseline-scope struct（这是这个 workflow 里最要紧的一个决定）
+# ------------------------------------------------------------------------
+# examples/reference/light-lag.qa-baseline.json 是本机（Windows Chrome）跑出来的报告快照。
+# 它不能按「全量」比 —— 数值层与「全黑 / 爆白 / 无主运动」都是**像素的产物**，
+# Linux 的 Chrome for Testing 与 Windows Chrome 字体栅格化不同，这些量会大面积漂；
+# 而它们的判据是硬阈值，样片「行星」场的 ROI Δ 只有 1.97（门槛 1.2，余量 1.64 倍），
+# 跨平台翻过来完全可能。拿它当跨平台硬门禁 → 得到一个长期报红、随后被人无视的 job。
+# 所以这里只比**结构层**：契约 / 时长 / 视口 / 门槛 / ROI / 采样计划 / 场景归属与区间 /
+# 页面报错。这些与像素无关，变了就一定是工具的判定逻辑改错了 —— 这正是 CI 该管的事。
+# 数值层的严格比对（默认 0.01 容差）留在本地同环境做，见
+# docs/流程-确定性动画与逐帧验收.md §3⑥。
+#
+# 为什么这里**没有** --fail-on-still
+# --------------------------------
+# 两个理由，都不是偷懒：
+#   1. 用了 --roi 时门槛没标定过 —— 1.2 是按整帧分布校准的（工具自己会打印这条警告），
+#      拿未标定的阈值当硬门禁没有依据。
+#   2. 不用 --roi 时样片自己就过不了：「结论」场整帧 Δ 只有 1.128 < 1.2 —— 而且这恰是
+#      文档里写明的已知边界（Δ 对 canvas 几何渐变偏钝，只能当报警器，不能当硬验收线）。
+# 所以「这一拍没动」在 CI 里是**报告出来给人看**（报告与印相当 artifact 上传），不是自动判红。
+#
+# --baseline 把「测量」与「比对」合成一次运行，所以这个 job 只跑一遍验收，不跑两遍。
+name: QA
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: 代码层门禁
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+
+  browser-qa:
+    name: 逐帧验收（真浏览器）
+    runs-on: ubuntu-latest
+    needs: check # 代码层都不过，就别浪费几分钟装浏览器
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: 装 agent-browser 与 Chrome for Testing
+        run: |
+          npm i -g agent-browser@0.27.0
+          agent-browser --version
+          agent-browser install --with-deps
+
+      - name: 兜底确认 ffmpeg
+        run: ffmpeg -version | head -1 || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+
+      # 服务与验收放同一个 step：跨 step 的后台进程在 runner 上不保证活着，
+      # 而 kill 必须发生在同一步里，否则失败路径上服务会留到 job 结束。
+      - name: 逐帧验收 + 与基线快照比对
+        run: |
+          set +e
+          python3 -m http.server 5311 --bind 127.0.0.1 --directory examples/reference &
+          SERVER=$!
+          sleep 2
+          curl -sf -o /dev/null http://127.0.0.1:5311/light-lag.html || { echo "静态服务没起来"; kill $SERVER; exit 1; }
+
+          npm run qa:frames -- \
+            --url http://127.0.0.1:5311/light-lag.html \
+            --per-scene 4 \
+            --roi 0.45,0.15,0.5,0.6 \
+            --determinism --fail-on-nondeterministic \
+            --fail-on-blank \
+            --sheet \
+            --baseline examples/reference/light-lag.qa-baseline.json \
+            --baseline-scope struct --fail-on-drift \
+            --out .tmp/qa-frames/ci
+          STATUS=$?
+
+          kill $SERVER
+          exit $STATUS
+
+      - name: 上传报告与印相
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-report
+          path: |
+            .tmp/qa-frames/ci/report.md
+            .tmp/qa-frames/ci/report.json
+            .tmp/qa-frames/ci/contact-sheet.png
+            .tmp/qa-frames/ci/shots/
+          if-no-files-found: warn
