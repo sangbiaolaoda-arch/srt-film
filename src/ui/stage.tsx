@@ -49,11 +49,14 @@ function Stage({ shots }: { shots: Shot[] }): JSX.Element {
     <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${STAGE_W} ${STAGE_H}`} width={STAGE_W} height={STAGE_H} data-stage="">
       {shots.map((shot, i) => (
         <g key={i} data-layer={i} data-shot={shot.layout.id}>
-          <LayoutLayer layout={shot.layout} content={shot.content} />
-          <BeatMark beat={shot.content.beat} style={shot.layout.style} />
-          {shot.layout.decor !== false && (
-            <DecorLayer beat={shot.content.beat} total={shots.length} style={shot.layout.style} />
-          )}
+          {/* 机位运动作用于这个内层容器：与转场/出场（作用于外层 data-layer）不抢同一 transform */}
+          <g data-cam={i}>
+            <LayoutLayer layout={shot.layout} content={shot.content} />
+            <BeatMark beat={shot.content.beat} style={shot.layout.style} />
+            {shot.layout.decor !== false && (
+              <DecorLayer beat={shot.content.beat} total={shots.length} style={shot.layout.style} />
+            )}
+          </g>
         </g>
       ))}
     </svg>
@@ -132,6 +135,19 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
     if (shot.layout.ambient) {
       const ambDef = MOTION_BY_ID.get(shot.layout.ambient);
       if (ambDef) applyMotion(ambDef.id, { tl, el: layer, at, dur });
+    }
+
+    // 机位运动：贯穿整拍的持续线性运动 —— 镜内 Δ 的来源（推／拉／摇／移）。
+    // 摇／移会平出画面边界，所以带平移时把缩放下限抬到 1.06 兜底防露边。
+    const cam = shot.layout.camera;
+    if (cam) {
+      const camEl = layer.querySelector("[data-cam]") ?? layer;
+      const hasPan = (cam.xFrom ?? 0) !== (cam.xTo ?? 0) || (cam.yFrom ?? 0) !== (cam.yTo ?? 0);
+      const floor = hasPan ? 1.06 : 1;
+      const s0 = Math.max(cam.scaleFrom ?? floor, floor);
+      const s1 = Math.max(cam.scaleTo ?? s0, floor);
+      tl.fromTo(camEl, { scale: s0, x: cam.xFrom ?? 0, y: cam.yFrom ?? 0, svgOrigin: "640 360" },
+        { scale: s1, x: cam.xTo ?? 0, y: cam.yTo ?? 0, duration: dur, ease: "none", immediateRender: false }, at);
     }
 
     const exitId = shot.layout.exit ?? EXIT_MOTIONS[i % EXIT_MOTIONS.length]!;

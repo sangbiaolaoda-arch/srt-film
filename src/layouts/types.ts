@@ -66,6 +66,17 @@ export interface Slot {
   needs?: number;
 }
 
+export interface CameraMove {
+  /** 起止缩放（1 = 原尺寸）。缓推 1.0→1.06；后拉揭示 1.06→1.0 */
+  scaleFrom?: number;
+  scaleTo?: number;
+  /** 起止平移（px，画面坐标系 1280×720）。摇／移配少量缩放防露边 */
+  xFrom?: number;
+  xTo?: number;
+  yFrom?: number;
+  yTo?: number;
+}
+
 export interface Layout {
   id: string;
   name: string;
@@ -94,6 +105,12 @@ export interface Layout {
   transition?: string;
   /** 本拍的出场动效 id（缺省按 stage 的轮转序列取） */
   exit?: string;
+  /**
+   * 机位运动：整拍图层在镜内的持续线性运动（推／拉／摇／移）。
+   * 这是「镜内 Δ」的来源 —— 没有它，静态构图 + 一次性入场 ≈ 幻灯片。
+   * 作用于独立的内层容器，与转场／出场动效（作用于整拍图层）互不抢 transform。
+   */
+  camera?: CameraMove;
   /** 是否绘制母版装饰层（点阵 / 四角角标 / 进度条）。专属场景片应关闭，缺省开启 */
   decor?: boolean;
   /** 海报风的 canvas 特效（背景层） */
