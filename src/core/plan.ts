@@ -54,8 +54,9 @@ export function plan(srt: string, ovRaw: string): PlanResult {
 
   prepared.forEach(({ beat, ovr, content }, i) => {
     const decision = decisions[i]!;
-    let layout = ovr?.layoutId ? LAYOUT_BY_ID.get(ovr.layoutId) : undefined;
-    if (ovr?.layoutId && !layout) {
+    // 版式来源优先级：内联完整版式（ovr.layout，如专属场景）> catalog 查表（ovr.layoutId）> 自动挑选
+    let layout = ovr?.layout ?? (ovr?.layoutId ? LAYOUT_BY_ID.get(ovr.layoutId) : undefined);
+    if (ovr?.layoutId && !ovr.layout && !layout) {
       problems.push(`拍 ${beat.index}：覆写的版式 id「${ovr.layoutId}」不存在`);
     }
     layout = layout ?? pickLayout(content, decision.style, prevLayout);
@@ -98,7 +99,7 @@ export function plan(srt: string, ovRaw: string): PlanResult {
 
     const realStyle = layout.style ?? "editorial";
     styles.push(
-      `${String(beat.index).padStart(2, "0")} ${realStyle === "poster" ? "海报" : "编辑"}（${ovr?.layoutId ? "覆写版式" : decision.reason}）`,
+      `${String(beat.index).padStart(2, "0")} ${realStyle === "poster" ? "海报" : "编辑"}（${ovr?.layoutId || ovr?.layout ? "覆写版式" : decision.reason}）`,
     );
 
     // 资格门禁：图表版式必须拿得到足够多的可溯源数字

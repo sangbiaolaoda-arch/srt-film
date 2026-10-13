@@ -84,6 +84,12 @@ export interface Layout {
   rows?: number;
   /** 视觉风格，缺省 editorial */
   style?: Style;
+  /**
+   * 专属场景 id：命中 KAOJIN_SCENES 注册表时，整拍由手绘满版场景渲染，
+   * slots 被忽略。用于「一部片一套全新画面」的完全重做 —— 场景与台词一一对应，
+   * 不进自动挑选池，只被导演覆写点名。
+   */
+  custom?: string;
   /** 海报风的 canvas 特效（背景层） */
   fx?: FxKind;
   /** 特效强度 0..1，缺省 0.6 */

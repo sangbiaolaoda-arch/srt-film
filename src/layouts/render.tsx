@@ -6,6 +6,7 @@ import { Fragment } from "react";
 import { Chart } from "./charts";
 import { Asset } from "./assets";
 import { Figure } from "./figures";
+import { KAOJIN_SCENES } from "./kaojin";
 import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT, type Seg, type SemTone } from "./emphasis";
 import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
@@ -428,6 +429,15 @@ export interface LayoutSVGProps {
 
 /** 版式图层：只有槽位，不带 <svg> 外壳与背景 —— 供播放器把多拍叠在同一张 SVG 里。 */
 export function LayoutLayer({ layout, content }: { layout: Layout; content: RenderContent }): JSX.Element {
+  // 专属场景（kaojin.tsx）：整拍由手绘画面渲染，槽位机制被绕过。
+  const scene = layout.custom ? KAOJIN_SCENES[layout.custom] : undefined;
+  if (scene) {
+    return (
+      <g data-layout={layout.id}>
+        {scene({ text: content.headline, beat: content.beat, style: layout.style ?? "editorial" })}
+      </g>
+    );
+  }
   const ctx: Ctx = { content, layout, numericIndex: 0 };
   return (
     <g data-layout={layout.id}>

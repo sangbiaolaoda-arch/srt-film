@@ -1,0 +1,333 @@
+{
+  "1": {
+    "layout": {
+      "id": "kj-01",
+      "name": "完全重做·靠近·引力",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#16130f",
+      "custom": "kj-01",
+      "slots": []
+    }
+  },
+  "2": {
+    "layout": {
+      "id": "kj-02",
+      "name": "完全重做·红黑对峙",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#faf6ef",
+      "custom": "kj-02",
+      "slots": []
+    }
+  },
+  "3": {
+    "layout": {
+      "id": "kj-03",
+      "name": "完全重做·胸口有洞的人",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#dfe3e4",
+      "custom": "kj-03",
+      "slots": []
+    }
+  },
+  "4": {
+    "layout": {
+      "id": "kj-04",
+      "name": "完全重做·被划掉的在乎",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#f4f1ea",
+      "custom": "kj-04",
+      "slots": []
+    }
+  },
+  "5": {
+    "layout": {
+      "id": "kj-05",
+      "name": "完全重做·痛的热成像",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#2b0709",
+      "custom": "kj-05",
+      "slots": []
+    }
+  },
+  "6": {
+    "layout": {
+      "id": "kj-06",
+      "name": "完全重做·离开的光",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#0a1220",
+      "custom": "kj-06",
+      "slots": []
+    }
+  },
+  "7": {
+    "layout": {
+      "id": "kj-07",
+      "name": "完全重做·书页特写",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#f7f2e7",
+      "custom": "kj-07",
+      "slots": []
+    }
+  },
+  "8": {
+    "layout": {
+      "id": "kj-08",
+      "name": "完全重做·巨大的不",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#ececea",
+      "custom": "kj-08",
+      "slots": []
+    }
+  },
+  "9": {
+    "layout": {
+      "id": "kj-09",
+      "name": "完全重做·门缝的光",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#1a2332",
+      "custom": "kj-09",
+      "slots": []
+    }
+  },
+  "10": {
+    "layout": {
+      "id": "kj-10",
+      "name": "完全重做·疑问的波浪线",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#faf9f6",
+      "custom": "kj-10",
+      "slots": []
+    },
+    "headline": "这些人真的过得更好吗"
+  },
+  "11": {
+    "layout": {
+      "id": "kj-11",
+      "name": "完全重做·不是不疼",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#121212",
+      "custom": "kj-11",
+      "slots": []
+    },
+    "headline": "不是不疼"
+  },
+  "12": {
+    "layout": {
+      "id": "kj-12",
+      "name": "完全重做·地平线",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#0d0f12",
+      "custom": "kj-12",
+      "slots": []
+    },
+    "headline": "没有尽头"
+  },
+  "13": {
+    "layout": {
+      "id": "kj-13",
+      "name": "完全重做·冰冷灰字",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#e8ecee",
+      "custom": "kj-13",
+      "slots": []
+    }
+  },
+  "14": {
+    "layout": {
+      "id": "kj-14",
+      "name": "完全重做·赌桌孤筹码",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#0f3d2e",
+      "custom": "kj-14",
+      "slots": []
+    },
+    "headline": "不下注的赌局"
+  },
+  "15": {
+    "layout": {
+      "id": "kj-15",
+      "name": "完全重做·旧纸墨路",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#efe6d2",
+      "custom": "kj-15",
+      "slots": []
+    }
+  },
+  "16": {
+    "layout": {
+      "id": "kj-16",
+      "name": "完全重做·夜空两点光",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#0b1026",
+      "custom": "kj-16",
+      "slots": []
+    },
+    "headline": "离你越远 我就越爱你"
+  },
+  "17": {
+    "layout": {
+      "id": "kj-17",
+      "name": "完全重做·雪白宝石",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#c9ced4",
+      "custom": "kj-17",
+      "slots": []
+    }
+  },
+  "18": {
+    "layout": {
+      "id": "kj-18",
+      "name": "完全重做·下行阶梯",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#14121f",
+      "custom": "kj-18",
+      "slots": []
+    }
+  },
+  "19": {
+    "layout": {
+      "id": "kj-19",
+      "name": "完全重做·九宫格黑点",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#f2efe8",
+      "custom": "kj-19",
+      "slots": []
+    },
+    "headline": "丢的那一次"
+  },
+  "20": {
+    "layout": {
+      "id": "kj-20",
+      "name": "完全重做·同一源头的光路",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#0a0a0c",
+      "custom": "kj-20",
+      "slots": []
+    },
+    "headline": "同一个源头"
+  },
+  "21": {
+    "layout": {
+      "id": "kj-21",
+      "name": "完全重做·价签上的疼",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#f5f2ec",
+      "custom": "kj-21",
+      "slots": []
+    }
+  },
+  "22": {
+    "layout": {
+      "id": "kj-22",
+      "name": "完全重做·在乎与不怕",
+      "group": "poster-focus",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "poster",
+      "paper": "#1f090c",
+      "custom": "kj-22",
+      "slots": []
+    },
+    "headline": "我在乎 但我不怕"
+  },
+  "23": {
+    "layout": {
+      "id": "kj-23",
+      "name": "完全重做·在乎过的收据",
+      "group": "statement",
+      "enter": [
+        "m-fade-up"
+      ],
+      "style": "editorial",
+      "paper": "#f6efe2",
+      "custom": "kj-23",
+      "slots": []
+    },
+    "headline": "你在乎过的收据"
+  }
+}

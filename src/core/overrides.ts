@@ -2,12 +2,16 @@
 // 结构：以拍序号为 key 的 JSON。覆写永远优先于自动推断。
 // 诚实约束：覆写数字必须提供 source（原文出处片段），否则门禁拒绝。
 
-import type { Layout, BeatScene } from "./compose";
-import type { Slot, Style } from "../layouts/types";
+import type { BeatScene } from "./compose";
+import type { Layout, Slot, Style } from "../layouts/types";
 
 export interface BeatOverride {
   /** 指定版式 id，覆写优先于自动挑选 */
   layoutId?: string;
+  /**
+   * 内联完整版式对象（如专属场景的壳版式），优先级高于 layoutId。
+   * 注意这是 layouts/types 的版式对象，不是 compose 的旧字符串枚举。
+   */
   layout?: Layout;
   /**
    * 槽级覆写：{ 槽序号: 要合并进该槽的字段 }。
@@ -35,7 +39,6 @@ export type OverrideMap = Record<string, BeatOverride>;
 export function applyOverride(scene: BeatScene, ov: BeatOverride): BeatScene {
   return {
     ...scene,
-    layout: ov.layout ?? scene.layout,
     headline: ov.headline ?? scene.headline,
     bigNumber: ov.bigNumber
       ? { raw: ov.bigNumber, unit: scene.bigNumber?.unit }
