@@ -85,9 +85,31 @@ export async function renderFrame(input: FrameInput): Promise<void> {
   const shot = shots[active];
   const style = shot?.layout.style ?? "editorial";
 
-  // 1. 底色
-  ctx.fillStyle = shot?.layout.paper ?? (style === "poster" ? DARK : PAPER);
-  ctx.fillRect(0, 0, W, H);
+  const bgOf = (s?: Shot): string =>
+    s?.layout.paper ?? ((s?.layout.style ?? "editorial") === "poster" ? DARK : PAPER);
+
+  // 1. 底色。
+  // 相邻两拍交叠 0.25s（下一拍的入场与上一拍的出场同时进行）。底色**不能**在这 0.25s
+  // 的起点瞬切到下一拍：此刻上一拍的图层还立着（出场动效到 tlEnd 才结束），它的深色字
+  // 一旦压在下一拍的浅底色上（或反过来）就两边都看不见 —— 实测 8 个跨风格转场里 7 个
+  // 会闪出 3~7 帧空屏（内容像素占比最低掉到 0.02%）。这跟 stage.tsx「交叠 0.25s →
+  // 交叉溶解，无黑场」的声明是矛盾的。
+  // 所以底色也参与交叉溶解：先铺上一拍的底色，再按**这一拍入场图层的不透明度**把这一拍
+  // 的底色叠上去。同风格转场两色相同，只走一次 fillRect，与改动前逐像素一致。
+  const bg = bgOf(shot);
+  const bgPrev = bgOf(shots[active - 1]);
+  if (bg === bgPrev) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+  } else {
+    ctx.fillStyle = bgPrev;
+    ctx.fillRect(0, 0, W, H);
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, Math.max(0, layerOpacity(svg, active)));
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
 
   // 2. 海报风：canvas 特效（背景层，在文字之下）
   if (style === "poster" && shot) drawFx(ctx, shot, t, W, H);

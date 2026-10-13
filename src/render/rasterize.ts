@@ -18,9 +18,13 @@ export async function rasterizeLayer(
   const layer = svg.querySelector(`[data-layer="${index}"]`);
   if (!layer) return null;
   const inner = new XMLSerializer().serializeToString(layer);
+  // 包装层的 viewBox 必须沿用**舞台坐标系**，width/height 才跟着输出分辨率走。
+  // 早先这里直接把 viewBox 写成输出尺寸 —— 输出恰好是舞台尺寸 1280×720 时看不出问题，
+  // 一旦换分辨率（比如 1080p），图层坐标仍按 1280×720 排布，就会挤在左上角、右下一片空白。
+  const box = svg.getAttribute("viewBox") ?? `0 0 ${w} ${h}`;
   const doc =
     `<svg xmlns="${XMLNS}" xmlns:xlink="http://www.w3.org/1999/xlink" ` +
-    `viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${inner}</svg>`;
+    `viewBox="${box}" width="${w}" height="${h}">${inner}</svg>`;
   const url = URL.createObjectURL(new Blob([doc], { type: "image/svg+xml;charset=utf-8" }));
   try {
     const img = new Image();

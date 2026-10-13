@@ -41,22 +41,51 @@ function charWidth(ch: string): number {
 
 function wrapText(text: string, sizePx: number, maxWidth: number): string[] {
   const maxUnits = maxWidth / sizePx;
-  const lines: string[] = [];
+  const chars = Array.from(text);
+  const widths = chars.map(charWidth);
+
+  // 贪心：能塞就塞，得到最少行数
+  const greedy: string[] = [];
   let line = "";
   let used = 0;
-  for (const ch of text) {
-    const w = charWidth(ch);
+  for (let i = 0; i < chars.length; i++) {
+    const w = widths[i]!;
     if (used + w > maxUnits && line) {
-      lines.push(line);
-      line = ch;
+      greedy.push(line);
+      line = chars[i]!;
       used = w;
     } else {
-      line += ch;
+      line += chars[i]!;
       used += w;
     }
   }
-  if (line) lines.push(line);
-  return lines;
+  if (line) greedy.push(line);
+
+  // 中文标题的孤字行很难看：15 个字会被贪心切成 14+1，最后一行只剩一个「恶」。
+  // 只在这种情况（不止一行、且最后一行 ≤ 2 个字符）重排一次 —— 把字符尽量均匀摊到
+  // 同样多的行数里；摊完只要有任何一行放不下，就退回贪心结果，绝不比原来更差。
+  const lastLen = Array.from(greedy[greedy.length - 1] ?? "").length;
+  if (greedy.length < 2 || lastLen > 2) return greedy;
+
+  const n = greedy.length;
+  const balanced: string[] = [];
+  let at = 0;
+  for (let ln = 0; ln < n; ln++) {
+    const charsLeft = chars.length - at;
+    const rowsLeft = n - ln;
+    const want = Math.max(1, Math.round(charsLeft / rowsLeft));
+    let u = 0;
+    let k = 0;
+    while (k < want && at + k < chars.length && u + widths[at + k]! <= maxUnits + 1e-9) {
+      u += widths[at + k]!;
+      k++;
+    }
+    if (k === 0) return greedy; // 一个都放不下：退回贪心
+    balanced.push(chars.slice(at, at + k).join(""));
+    at += k;
+  }
+  if (at < chars.length) return greedy; // 没摊完：退回贪心
+  return balanced;
 }
 
 function textAnchor(align: Slot["align"]): "start" | "middle" | "end" {

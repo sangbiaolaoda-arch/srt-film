@@ -4,8 +4,8 @@
 import type { StageHandle } from "../ui/stage";
 import { STAGE_FPS, renderFrame } from "../render/frame";
 
-export const EXPORT_W = 1280;
-export const EXPORT_H = 720;
+export const EXPORT_W = 1920;
+export const EXPORT_H = 1080;
 
 export async function exportMp4(stage: StageHandle, duration: number): Promise<Blob> {
   if (typeof VideoEncoder === "undefined") {
@@ -31,10 +31,11 @@ export async function exportMp4(stage: StageHandle, duration: number): Promise<B
     error: (e) => { encodeError = new Error(`编码器错误：${e.message}`); },
   });
   encoder.configure({
-    codec: "avc1.42001f",
+    // 1920×1080 是 8160 宏块/帧，超出 Level 3.1 的 3600 上限 → 必须报 Level 4.0（0x28）。
+    codec: "avc1.420028",
     width: EXPORT_W,
     height: EXPORT_H,
-    bitrate: 4_000_000,
+    bitrate: 8_000_000,
     framerate: STAGE_FPS,
   });
 
