@@ -29,17 +29,27 @@ npm run dev        # 打开浏览器
 
 ## 导演覆写
 
-key 为拍序号（从 1 开始）：
+key 为拍序号（从 1 开始）。覆写永远优先于自动规划。
 
 ```json
 {
-  "4": { "headline": "更短的标题", "layout": "number", "bigNumber": "120毫秒", "source": "耗时120毫秒" }
+  "4": { "headline": "更短的标题", "layoutId": "nm-big-number", "bigNumber": "120毫秒", "source": "耗时120毫秒" }
 }
 ```
 
-- `layout`: `statement`（大字陈述）/ `number`（数字焦点）/ `contrast`（左右对照）
+| 字段 | 作用 |
+| --- | --- |
+| `layoutId` | 指定版式 id（见 `src/layouts/catalog.ts`，如 `st-huge-word` / `nm-big-number` / `ch-bar-v`），覆写自动挑选 |
+| `layout` | 内联完整版式对象（专属场景的壳版式），**优先级高于 `layoutId`** —— `custom` 字段命中 `src/layouts/kaojin.tsx` 的场景注册表时，整拍由该场景渲染、`slots` 被绕过 |
+| `slots` | 槽级覆写 `{ 槽序号: 要合并进该槽的字段 }`：放大图形槽的 `box`、换 `figure` 种类、改字号等。只作用于本拍的版式副本，不写回 `LAYOUT_BY_ID` |
+| `animations` | 槽级入场动效覆写 `{ 槽序号: 动效 id }`（id 见 `src/motion/catalog.ts`，共 60 个）。缺省的槽仍按版式自带 `enter` 池轮转 |
+| `style` | 强制视觉风格：`editorial`（纸白朱红）/ `poster`（暗底电光青绿）。会写进渲染用的 `layout.style`，底色与调色板随之切换 |
+| `headline` / `bigNumber` / `source` / `left` / `right` | 文案与画面主数字 |
+
 - 覆写 `bigNumber` 时必须给 `source`（包含该数字的原文片段），否则门禁拒绝
-- 样例：`examples/01-overrides.json`
+
+样例：`examples/01-overrides.json`（最简）/ `examples/05-overrides.json`（60 秒样片，槽级动效覆写）/
+`examples/06-kaojin-v6.json`（图形当主角 + 转海报风）/ `examples/07-kaojin-v7.json`（23 拍全点名专属场景）。
 
 ## 分拍规则（可解释，无黑箱）
 
@@ -63,7 +73,7 @@ CI 跑两件事（`.github/workflows/qa.yml`）：上表这套「代码层门禁
 
 ## 制作流程与工具
 
-两层文档：一层管「讲什么」，一层管「怎么渲」。
+三层文档：一层管「讲什么」，一层管「怎么渲」，一层管「一个图形怎么画」。
 
 - **`docs/流程-叙事与信息设计.md`** — 这一拍该不该这么讲。事实与视觉隐喻分离记账、
   镜头表的 `forbidden` 字段、一个运动值不值得存在的六个问题、六种运动关系、
@@ -103,3 +113,8 @@ CI 跑两件事（`.github/workflows/qa.yml`）：上表这套「代码层门禁
   由 CI 里逐字相同的那条命令生成（去掉 `--baseline*` 三个参数即可重生成）。
 - **`examples/reference/`** — 《光很慢 LIGHT LAG》45 秒单文件科普片，上面每条契约的
   可跑样本。
+- **`examples/05-kaojin-60s.srt` + `examples/07-kaojin-v7.json`** — 60 秒样片：24 条 cue
+  / 23 拍，全部点名 `src/layouts/kaojin.tsx` 里的专属场景（不复用 catalog 版式库），
+  演示「一拍一幅手绘满版画面 + 内联 `layout` 覆写」这条通路。同题的
+  `05-overrides.json`（槽级动效覆写）、`06-kaojin-v6.json`（图形放大 + 转海报风）
+  记录了从「图形浮在纸上」到「图形当主角」的两次改法。
