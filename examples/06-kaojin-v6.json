@@ -1,0 +1,168 @@
+{
+  "1": {
+    "layoutId": "fg-curve-pain",
+    "animations": { "0": "m-stroke-draw", "1": "m-char-rise" },
+    "slots": {
+      "0": { "box": [0, 0.2, 12, 5.9] },
+      "1": { "box": [1, 6.2, 10, 1.7], "size": "huge", "align": "center" }
+    }
+  },
+  "2": {
+    "layoutId": "fg-fork",
+    "animations": { "0": "m-blur-in", "1": "m-rise-lines" },
+    "slots": {
+      "0": { "box": [0.8, 6.3, 10.4, 1.5], "align": "center" },
+      "1": { "box": [0, 0.2, 12, 6.1] }
+    }
+  },
+  "3": {
+    "layoutId": "fg-flatline",
+    "style": "poster",
+    "animations": { "0": "m-stroke-draw", "1": "m-fade-up" },
+    "slots": {
+      "0": { "box": [0, 2.2, 12, 3.6] },
+      "1": { "box": [0.8, 0.6, 10.4, 1.7], "align": "center" }
+    }
+  },
+  "4": {
+    "layoutId": "fg-question",
+    "animations": { "0": "m-stroke-draw", "1": "m-stagger-words" },
+    "slots": {
+      "0": { "box": [0.3, 0, 6.6, 8] },
+      "1": { "box": [7.1, 2.5, 4.6, 3.2], "size": "xl" }
+    }
+  },
+  "5": { "layoutId": "pf-vortex-quote" },
+  "6": { "layoutId": "pg-poly-center" },
+  "7": {
+    "layoutId": "fg-balance",
+    "animations": { "0": "m-stroke-draw", "1": "m-clip-reveal" },
+    "slots": {
+      "0": { "box": [0.6, 0.4, 10.8, 5.8] },
+      "1": { "box": [1, 6.4, 10, 1.5], "align": "center" }
+    }
+  },
+  "8": {
+    "layoutId": "fg-checklist",
+    "animations": { "0": "m-tick-pulse", "1": "m-slide-left" },
+    "slots": {
+      "0": { "box": [1.8, 0.5, 8.4, 5.7] },
+      "1": { "box": [1, 6.4, 10, 1.4], "size": "l", "align": "center" }
+    }
+  },
+  "9": {
+    "layoutId": "fg-door",
+    "animations": { "0": "m-type-on", "1": "m-stroke-draw" },
+    "slots": {
+      "0": { "box": [0.8, 0.5, 10.4, 1.5] },
+      "1": { "box": [4.3, 0, 3.4, 8] }
+    }
+  },
+  "10": {
+    "layoutId": "fg-quote-frame",
+    "headline": "这些人真的过得更好吗",
+    "animations": { "0": "m-stroke-draw", "1": "m-fade-up" }
+  },
+  "11": {
+    "layoutId": "cp-now-then",
+    "headline": "不是不疼",
+    "left": "保持距离",
+    "right": "把疼换了形态",
+    "animations": { "0": "m-slide-left", "1": "m-blur-in", "2": "m-slide-right", "3": "m-fade-down" },
+    "slots": {
+      "0": { "box": [0.6, 0.9, 5, 1.1] },
+      "1": { "box": [0.6, 2, 5, 5], "size": "xxl" },
+      "2": { "box": [6.4, 0.9, 5, 1.1] },
+      "3": { "box": [6.4, 2, 5, 5], "size": "xxl" }
+    }
+  },
+  "12": {
+    "layoutId": "fg-corridor",
+    "style": "poster",
+    "headline": "没有尽头",
+    "animations": { "0": "m-zoom-in", "1": "m-rotate-in" },
+    "slots": {
+      "0": { "box": [3.5, 3, 5, 2], "align": "center", "size": "xxl" },
+      "1": { "box": [0, 0, 12, 8] }
+    }
+  },
+  "13": {
+    "layoutId": "fg-dim",
+    "animations": { "0": "m-bar-sweep", "1": "m-fade-down" },
+    "slots": {
+      "0": { "box": [0, 0.5, 12, 5.6] },
+      "1": { "box": [0.8, 6.3, 10.4, 1.5], "align": "center" }
+    }
+  },
+  "14": {
+    "layoutId": "pg-crosshair",
+    "headline": "不下注的赌局",
+    "animations": { "0": "m-clip-reveal", "1": "m-skew-in" }
+  },
+  "15": {
+    "layoutId": "fg-path-end",
+    "style": "poster",
+    "animations": { "0": "m-type-on", "1": "m-stroke-draw" },
+    "slots": {
+      "0": { "box": [0.8, 0.5, 10.4, 1.4], "align": "center" },
+      "1": { "box": [0, 1.9, 12, 4.6] }
+    }
+  },
+  "16": { "layoutId": "pn-tunnel-quote", "headline": "离你越远 我就越爱你" },
+  "17": {
+    "layoutId": "cp-strikethrough-old",
+    "left": "守住了纯粹",
+    "right": "守住了孤独",
+    "animations": { "0": "m-slide-left", "1": "m-wipe-right", "2": "m-slide-right" },
+    "slots": {
+      "0": { "box": [0.5, 1.8, 5.2, 3.8], "size": "xl" },
+      "2": { "box": [6.3, 1.8, 5.2, 3.8], "size": "xl" }
+    }
+  },
+  "18": {
+    "layoutId": "fg-scurve",
+    "style": "poster",
+    "animations": { "0": "m-stroke-draw", "1": "m-char-type" },
+    "slots": {
+      "0": { "box": [0.4, 0.3, 11.2, 7.4] },
+      "1": { "box": [0.8, 0.4, 10.4, 1.5], "align": "center" }
+    }
+  },
+  "19": {
+    "layoutId": "fg-weigh-bars",
+    "headline": "记住的是丢的那一次",
+    "animations": { "0": "m-bar-sweep", "1": "m-count-pop" },
+    "slots": {
+      "0": { "box": [1.4, 0.4, 9.2, 6.2] },
+      "1": { "box": [1, 6.7, 10, 1.2], "size": "l", "align": "center" }
+    }
+  },
+  "20": {
+    "layoutId": "fg-converge",
+    "style": "poster",
+    "headline": "同一个源头",
+    "animations": { "0": "m-slide-right", "1": "m-rise-lines" },
+    "slots": {
+      "0": { "box": [4, 3.2, 4, 1.7], "align": "center", "size": "xl" },
+      "1": { "box": [0, 0.8, 12, 6.4] }
+    }
+  },
+  "21": {
+    "layoutId": "fg-clash",
+    "left": "价格可以付",
+    "right": "亏损必须停",
+    "animations": { "0": "m-slide-left", "1": "m-stroke-draw", "2": "m-fade-up", "3": "m-fade-up" },
+    "slots": {
+      "0": { "box": [0.8, 0.4, 10.4, 1.3] },
+      "1": { "box": [1, 1.5, 10, 5.2] },
+      "2": { "box": [0.8, 7, 4.4, 0.8] },
+      "3": { "box": [6.8, 7, 4.4, 0.8] }
+    }
+  },
+  "22": { "layoutId": "pf-burst-word", "headline": "我在乎 但我不怕" },
+  "23": {
+    "layoutId": "fg-receipt",
+    "headline": "你在乎过的收据",
+    "animations": { "0": "m-stroke-draw", "1": "m-char-rise" }
+  }
+}

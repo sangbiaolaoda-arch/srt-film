@@ -60,6 +60,12 @@ export function plan(srt: string, ovRaw: string): PlanResult {
     }
     layout = layout ?? pickLayout(content, decision.style, prevLayout);
 
+    // 显式风格覆写灌进 layout：底色 / 图形调色板 / 特效路径全部由 layout.style 驱动，
+    // 不灌的话 ovr.style 只影响挑选、不影响渲染（编辑版式在海报拍会黑底黑线）。
+    if (ovr?.style && layout.style !== ovr.style) {
+      layout = { ...layout, style: ovr.style };
+    }
+
     // 槽级动效覆写：克隆一份版式，只改被点名的槽 —— 不能就地改 LAYOUT_BY_ID 里的原对象，
     // 否则同一版式被别的语料复用时会被这支片的动效污染。
     if (ovr?.animations) {
@@ -70,6 +76,21 @@ export function plan(srt: string, ovRaw: string): PlanResult {
       layout = {
         ...layout,
         slots: layout.slots.map((sl, k) => (anims[String(k)] ? { ...sl, m: anims[String(k)] } : sl)),
+      };
+    }
+
+    // 槽级定义覆写（box/size/figure/tone…）：同上，克隆合并，不污染原版式。
+    if (ovr?.slots) {
+      const slotOv = ovr.slots;
+      for (const k of Object.keys(slotOv)) {
+        const idx = Number(k);
+        if (!(idx >= 0 && idx < layout.slots.length)) {
+          problems.push(`拍 ${beat.index}：槽覆写序号「${k}」越界（该版式共 ${layout.slots.length} 槽）`);
+        }
+      }
+      layout = {
+        ...layout,
+        slots: layout.slots.map((sl, k) => (slotOv[String(k)] ? { ...sl, ...slotOv[String(k)] } : sl)),
       };
     }
 

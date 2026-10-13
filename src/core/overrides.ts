@@ -3,12 +3,18 @@
 // 诚实约束：覆写数字必须提供 source（原文出处片段），否则门禁拒绝。
 
 import type { Layout, BeatScene } from "./compose";
-import type { Style } from "../layouts/types";
+import type { Slot, Style } from "../layouts/types";
 
 export interface BeatOverride {
   /** 指定版式 id，覆写优先于自动挑选 */
   layoutId?: string;
   layout?: Layout;
+  /**
+   * 槽级覆写：{ 槽序号: 要合并进该槽的字段 }。
+   * 典型用途：把图形槽 box 放大成画面主角、换 figure 种类、改字号。
+   * 只作用于本拍的这一份版式副本，不写回 LAYOUT_BY_ID。
+   */
+  slots?: Record<string, Partial<Slot>>;
   /** 强制视觉风格，覆写优先于自动判定 */
   style?: Style;
   headline?: string;

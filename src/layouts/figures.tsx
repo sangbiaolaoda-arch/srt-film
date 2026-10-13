@@ -60,6 +60,8 @@ const PALETTE: Record<Style, Palette> = {
 interface FigCtx extends Palette {
   w: number;
   h: number;
+  /** 线宽系数：随槽位尺寸缩放（320px 高度基准 = 1x），图形放大后线不显稀。 */
+  lw: number;
   /**
    * 本实例的唯一前缀。用于 `<defs>` 里的 pattern / gradient / mask 的 id。
    * 23 拍图层共存于同一份 DOM —— 两个图形用同一个 id，`url(#id)` 会全部指向
@@ -116,7 +118,7 @@ function figHalftoneFade(c: FigCtx): JSX.Element {
           );
         }),
       )}
-      <line x1={2} y1={h * 0.1} x2={2} y2={h * 0.94} stroke={accent} strokeWidth={4} data-part="" />
+      <line x1={2} y1={h * 0.1} x2={2} y2={h * 0.94} stroke={accent} strokeWidth={c.lw * 4} data-part="" />
       <text x={w * 0.04} y={h * 0.07} fontSize={14} fill={accent} fontFamily="sans-serif" data-part="">
         还在乎
       </text>
@@ -164,7 +166,7 @@ function figRadialBurst(c: FigCtx): JSX.Element {
               x2={cx + Math.cos(a) * r1}
               y2={cy + Math.sin(a) * r1}
               stroke={i % 3 === 0 ? accent : dim}
-              strokeWidth={i % 3 === 0 ? 3 : 2}
+              strokeWidth={i % 3 === 0 ? c.lw * 3 : c.lw * 2}
               strokeLinecap="round"
               data-part=""
             />
@@ -172,7 +174,7 @@ function figRadialBurst(c: FigCtx): JSX.Element {
         })}
       </g>
       <circle cx={cx} cy={cy} r={r0 * 0.46} fill={accent} data-part="" />
-      <circle cx={cx} cy={cy} r={r0 * 0.84} fill="none" stroke={ink} strokeWidth={1.5} opacity={0.45} data-part="" />
+      <circle cx={cx} cy={cy} r={r0 * 0.84} fill="none" stroke={ink} strokeWidth={c.lw * 1.5} opacity={0.45} data-part="" />
     </g>
   );
 }
@@ -198,7 +200,7 @@ function figSpiral(c: FigCtx): JSX.Element {
   const ex = cx + Math.cos(thEnd) * rMax, ey = cy + Math.sin(thEnd) * rMax * 0.92;
   return (
     <g>
-      <path d={curve(pts)} fill="none" stroke={dim} strokeWidth={2.5} strokeLinecap="round" data-part="" />
+      <path d={curve(pts)} fill="none" stroke={dim} strokeWidth={c.lw * 2.5} strokeLinecap="round" data-part="" />
       <circle cx={sx} cy={sy} r={7} fill={accent} data-part="" />
       <circle cx={ex} cy={ey} r={5} fill={ink} data-part="" />
     </g>
@@ -229,10 +231,10 @@ function figWaves(c: FigCtx): JSX.Element {
   }
   return (
     <g>
-      <line x1={x0} y1={midY} x2={x1} y2={midY} stroke={hairline} strokeWidth={1} strokeDasharray="5 5" data-part="" />
-      <path d={curve(a)} fill="none" stroke={dim} strokeWidth={2} strokeDasharray="6 5" data-part="" />
-      <path d={curve(b)} fill="none" stroke={dim} strokeWidth={2} strokeDasharray="2 5" data-part="" />
-      <path d={curve(sum)} fill="none" stroke={accent} strokeWidth={4} strokeLinecap="round" data-part="" />
+      <line x1={x0} y1={midY} x2={x1} y2={midY} stroke={hairline} strokeWidth={c.lw * 1} strokeDasharray="5 5" data-part="" />
+      <path d={curve(a)} fill="none" stroke={dim} strokeWidth={c.lw * 2} strokeDasharray="6 5" data-part="" />
+      <path d={curve(b)} fill="none" stroke={dim} strokeWidth={c.lw * 2} strokeDasharray="2 5" data-part="" />
+      <path d={curve(sum)} fill="none" stroke={accent} strokeWidth={c.lw * 4} strokeLinecap="round" data-part="" />
       <text x={x0} y={h * 0.1} fontSize={14} fill={ink} fontFamily="sans-serif" data-part="">
         两种感受
       </text>
@@ -262,13 +264,13 @@ function figCurvePain(c: FigCtx): JSX.Element {
   return (
     <g>
       <g data-part="">
-        <line x1={x0} y1={y0} x2={x1} y2={y0} stroke={dim} strokeWidth={1.5} />
-        <line x1={x0} y1={y0} x2={x0} y2={y1} stroke={dim} strokeWidth={1.5} />
+        <line x1={x0} y1={y0} x2={x1} y2={y0} stroke={dim} strokeWidth={c.lw * 1.5} />
+        <line x1={x0} y1={y0} x2={x0} y2={y1} stroke={dim} strokeWidth={c.lw * 1.5} />
       </g>
-      <path d={curve(pts)} fill="none" stroke={accent} strokeWidth={3.5} strokeLinecap="round" data-part="" />
+      <path d={curve(pts)} fill="none" stroke={accent} strokeWidth={c.lw * 3.5} strokeLinecap="round" data-part="" />
       <g data-part="">
-        <line x1={x0} y1={y1} x2={x1} y2={y1} stroke={hairline} strokeWidth={1} strokeDasharray="5 5" />
-        <line x1={near} y1={nearY} x2={near} y2={y0} stroke={hairline} strokeWidth={1} strokeDasharray="4 4" />
+        <line x1={x0} y1={y1} x2={x1} y2={y1} stroke={hairline} strokeWidth={c.lw * 1} strokeDasharray="5 5" />
+        <line x1={near} y1={nearY} x2={near} y2={y0} stroke={hairline} strokeWidth={c.lw * 1} strokeDasharray="4 4" />
       </g>
       <circle cx={near} cy={nearY} r={7} fill={accent} data-part="" />
       <text x={x1} y={y0 + 22} fontSize={14} fill={dim} textAnchor="end" fontFamily="sans-serif" data-part="">
@@ -294,12 +296,12 @@ function figFork(c: FigCtx): JSX.Element {
   const up = h * 0.18, dn = h * 0.82;
   return (
     <g>
-      <path d={`M${xs} ${cy} L${mid} ${cy}`} fill="none" stroke={ink} strokeWidth={4} strokeLinecap="round" data-part="" />
-      <path d={`M${mid} ${cy} L${xe} ${up}`} fill="none" stroke={accent} strokeWidth={4} strokeLinecap="round" data-part="" />
-      <path d={`M${mid} ${cy} L${xe} ${dn}`} fill="none" stroke={dim} strokeWidth={4} strokeLinecap="round" data-part="" />
+      <path d={`M${xs} ${cy} L${mid} ${cy}`} fill="none" stroke={ink} strokeWidth={c.lw * 4} strokeLinecap="round" data-part="" />
+      <path d={`M${mid} ${cy} L${xe} ${up}`} fill="none" stroke={accent} strokeWidth={c.lw * 4} strokeLinecap="round" data-part="" />
+      <path d={`M${mid} ${cy} L${xe} ${dn}`} fill="none" stroke={dim} strokeWidth={c.lw * 4} strokeLinecap="round" data-part="" />
       <circle cx={mid} cy={cy} r={9} fill={accent} data-part="" />
       <circle cx={xe} cy={up} r={7} fill={accent} data-part="" />
-      <circle cx={xe} cy={dn} r={7} fill="none" stroke={dim} strokeWidth={3} data-part="" />
+      <circle cx={xe} cy={dn} r={7} fill="none" stroke={dim} strokeWidth={c.lw * 3} data-part="" />
       <text x={xe} y={up - 16} fontSize={15} fill={accent} textAnchor="end" fontFamily="sans-serif" data-part="">
         靠近
       </text>
@@ -324,12 +326,12 @@ function figBalance(c: FigCtx): JSX.Element {
   return (
     <g>
       <path d={`M${cx} ${cy + 10} L${cx - 16} ${h * 0.86} L${cx + 16} ${h * 0.86} Z`} fill={dim} opacity={0.5} data-part="" />
-      <line x1={lx} y1={ly} x2={rx} y2={ry} stroke={ink} strokeWidth={4} strokeLinecap="round" data-part="" />
+      <line x1={lx} y1={ly} x2={rx} y2={ry} stroke={ink} strokeWidth={c.lw * 4} strokeLinecap="round" data-part="" />
       <circle cx={cx} cy={cy} r={8} fill={accent} data-part="" />
-      <path d={`M${lx} ${ly} L${lx} ${ly + drop}`} stroke={hairline} strokeWidth={1.5} data-part="" />
-      <path d={`M${rx} ${ry} L${rx} ${ry + drop}`} stroke={hairline} strokeWidth={1.5} data-part="" />
-      <path d={bowl(lx, ly + drop, w * 0.13)} fill="none" stroke={accent} strokeWidth={3.5} strokeLinecap="round" data-part="" />
-      <path d={bowl(rx, ry + drop, w * 0.13)} fill="none" stroke={dim} strokeWidth={3.5} strokeLinecap="round" data-part="" />
+      <path d={`M${lx} ${ly} L${lx} ${ly + drop}`} stroke={hairline} strokeWidth={c.lw * 1.5} data-part="" />
+      <path d={`M${rx} ${ry} L${rx} ${ry + drop}`} stroke={hairline} strokeWidth={c.lw * 1.5} data-part="" />
+      <path d={bowl(lx, ly + drop, w * 0.13)} fill="none" stroke={accent} strokeWidth={c.lw * 3.5} strokeLinecap="round" data-part="" />
+      <path d={bowl(rx, ry + drop, w * 0.13)} fill="none" stroke={dim} strokeWidth={c.lw * 3.5} strokeLinecap="round" data-part="" />
       <text x={lx} y={ly + drop + 40} fontSize={15} fill={accent} textAnchor="middle" fontFamily="sans-serif" data-part="">
         靠近的痛
       </text>
@@ -356,17 +358,17 @@ function figChecklist(c: FigCtx): JSX.Element {
         const barW = w * (0.5 - i * 0.05);
         return (
           <g key={i} data-part="">
-            <rect x={bx} y={y} width={bw} height={bh} fill="none" stroke={i === 0 ? accent : dim} strokeWidth={2.5} />
+            <rect x={bx} y={y} width={bw} height={bh} fill="none" stroke={i === 0 ? accent : dim} strokeWidth={c.lw * 2.5} />
             <path
               d={`M${bx + bw * 0.2} ${y + bh * 0.55} L${bx + bw * 0.44} ${y + bh * 0.8} L${bx + bw * 0.82} ${y + bh * 0.2}`}
               fill="none"
               stroke={accent}
-              strokeWidth={3}
+              strokeWidth={c.lw * 3}
               strokeLinecap="round"
               strokeLinejoin="round"
             />
             <rect x={bx + bw + w * 0.05} y={y + bh * 0.36} width={barW} height={bh * 0.26} fill={ink} opacity={0.78} />
-            <line x1={bx} y1={y + rowH * 0.82} x2={w * 0.94} y2={y + rowH * 0.82} stroke={hairline} strokeWidth={1} />
+            <line x1={bx} y1={y + rowH * 0.82} x2={w * 0.94} y2={y + rowH * 0.82} stroke={hairline} strokeWidth={c.lw * 1} />
           </g>
         );
       })}
@@ -395,7 +397,7 @@ function figCorridor(c: FigCtx): JSX.Element {
             height={rh}
             fill="none"
             stroke={i === 0 ? accent : i < 3 ? dim : hairline}
-            strokeWidth={i === 0 ? 3.5 : 2}
+            strokeWidth={i === 0 ? c.lw * 3.5 : c.lw * 2}
             data-part=""
           />
         );
@@ -429,8 +431,8 @@ function figDim(c: FigCtx): JSX.Element {
           </g>
         );
       })}
-      <line x1={w * 0.03} y1={baseTop} x2={w * 0.97} y2={baseTop} stroke={hairline} strokeWidth={1} />
-      <line x1={w * 0.03} y1={baseBot} x2={w * 0.97} y2={baseBot} stroke={hairline} strokeWidth={1} />
+      <line x1={w * 0.03} y1={baseTop} x2={w * 0.97} y2={baseTop} stroke={hairline} strokeWidth={c.lw * 1} />
+      <line x1={w * 0.03} y1={baseBot} x2={w * 0.97} y2={baseBot} stroke={hairline} strokeWidth={c.lw * 1} />
       <text x={w * 0.03} y={baseTop - h * 0.34} fontSize={14} fill={accent} fontFamily="sans-serif" data-part="">
         失恋的风险
       </text>
@@ -457,10 +459,10 @@ function figSCurve(c: FigCtx): JSX.Element {
   }
   return (
     <g>
-      <line x1={w * 0.04} y1={cy} x2={w * 0.96} y2={cy} stroke={hairline} strokeWidth={1.5} />
-      <line x1={cx} y1={h * 0.06} x2={cx} y2={h * 0.94} stroke={hairline} strokeWidth={1.5} />
-      <path d={curve(loss)} fill="none" stroke={accent} strokeWidth={4} strokeLinecap="round" data-part="" />
-      <path d={curve(gain)} fill="none" stroke={ink} strokeWidth={4} strokeLinecap="round" data-part="" />
+      <line x1={w * 0.04} y1={cy} x2={w * 0.96} y2={cy} stroke={hairline} strokeWidth={c.lw * 1.5} />
+      <line x1={cx} y1={h * 0.06} x2={cx} y2={h * 0.94} stroke={hairline} strokeWidth={c.lw * 1.5} />
+      <path d={curve(loss)} fill="none" stroke={accent} strokeWidth={c.lw * 4} strokeLinecap="round" data-part="" />
+      <path d={curve(gain)} fill="none" stroke={ink} strokeWidth={c.lw * 4} strokeLinecap="round" data-part="" />
       <circle cx={cx} cy={cy} r={6} fill={accent} data-part="" />
       <text x={w * 0.94} y={cy - 14} fontSize={15} fill={ink} textAnchor="end" fontFamily="sans-serif" data-part="">
         捡到
@@ -488,7 +490,7 @@ function figWeighBars(c: FigCtx): JSX.Element {
   const lx = w * 0.2, rxp = w * 0.6;
   return (
     <g>
-      <line x1={w * 0.06} y1={base} x2={w * 0.94} y2={base} stroke={dim} strokeWidth={2} />
+      <line x1={w * 0.06} y1={base} x2={w * 0.94} y2={base} stroke={dim} strokeWidth={c.lw * 2} />
       <rect x={lx} y={base - h * 0.22} width={bw} height={h * 0.22} fill={ink} opacity={0.72} data-part="" />
       <rect x={rxp} y={base - h * 0.56} width={bw} height={h * 0.56} fill={accent} data-part="" />
       <text x={lx + bw / 2} y={base - h * 0.22 - 12} fontSize={15} fill={ink} textAnchor="middle" fontFamily="sans-serif" data-part="">
@@ -497,7 +499,7 @@ function figWeighBars(c: FigCtx): JSX.Element {
       <text x={rxp + bw / 2} y={base - h * 0.56 - 12} fontSize={15} fill={accent} textAnchor="middle" fontFamily="sans-serif" data-part="">
         丢 100
       </text>
-      <line x1={w * 0.06} y1={base - h * 0.8} x2={w * 0.94} y2={base - h * 0.8} stroke={hairline} strokeWidth={1} strokeDasharray="5 5" />
+      <line x1={w * 0.06} y1={base - h * 0.8} x2={w * 0.94} y2={base - h * 0.8} stroke={hairline} strokeWidth={c.lw * 1} strokeDasharray="5 5" />
       <text x={w * 0.94} y={base - h * 0.8 - 8} fontSize={13} fill={dim} textAnchor="end" fontFamily="sans-serif" data-part="">
         记忆权重
       </text>
@@ -514,11 +516,11 @@ function figConverge(c: FigCtx): JSX.Element {
   const stopX = w * 0.84;
   return (
     <g>
-      <path d={`M${w * 0.06} ${h * 0.12} Q${cx * 0.7} ${h * 0.2} ${cx} ${cy}`} fill="none" stroke={ink} strokeWidth={3.5} strokeLinecap="round" data-part="" />
-      <path d={`M${w * 0.06} ${h * 0.88} Q${cx * 0.7} ${h * 0.8} ${cx} ${cy}`} fill="none" stroke={accent} strokeWidth={3.5} strokeLinecap="round" data-part="" />
-      <path d={`M${cx} ${cy} L${stopX} ${cy}`} fill="none" stroke={accent} strokeWidth={4.5} strokeLinecap="round" data-part="" />
+      <path d={`M${w * 0.06} ${h * 0.12} Q${cx * 0.7} ${h * 0.2} ${cx} ${cy}`} fill="none" stroke={ink} strokeWidth={c.lw * 3.5} strokeLinecap="round" data-part="" />
+      <path d={`M${w * 0.06} ${h * 0.88} Q${cx * 0.7} ${h * 0.8} ${cx} ${cy}`} fill="none" stroke={accent} strokeWidth={c.lw * 3.5} strokeLinecap="round" data-part="" />
+      <path d={`M${cx} ${cy} L${stopX} ${cy}`} fill="none" stroke={accent} strokeWidth={c.lw * 4.5} strokeLinecap="round" data-part="" />
       <circle cx={cx} cy={cy} r={11} fill={accent} data-part="" />
-      <circle cx={cx} cy={cy} r={20} fill="none" stroke={hairline} strokeWidth={2} data-part="" />
+      <circle cx={cx} cy={cy} r={20} fill="none" stroke={hairline} strokeWidth={c.lw * 2} data-part="" />
       <text x={w * 0.06} y={h * 0.12 - 12} fontSize={15} fill={ink} fontFamily="sans-serif" data-part="">
         幸福
       </text>
@@ -550,7 +552,7 @@ function figReceipt(c: FigCtx): JSX.Element {
   const rows = 4;
   return (
     <g>
-      <path d={d} fill="none" stroke={ink} strokeWidth={3} data-part="" />
+      <path d={d} fill="none" stroke={ink} strokeWidth={c.lw * 3} data-part="" />
       {Array.from({ length: rows }, (_, i) => {
         const y = y0 + (h * 0.5 / rows) * (i + 1) + h * 0.04;
         return (
@@ -558,13 +560,13 @@ function figReceipt(c: FigCtx): JSX.Element {
             <text x={x0 + 14} y={y} fontSize={13} fill={dim} fontFamily="sans-serif">
               {`项 ${i + 1}`}
             </text>
-            <line x1={x0 + 62} y1={y - 4} x2={x1 - 52} y2={y - 4} stroke={hairline} strokeWidth={1} strokeDasharray="3 3" />
-            <line x1={x1 - 44} y1={y - 4} x2={x1 - 14} y2={y - 4} stroke={dim} strokeWidth={1.5} />
+            <line x1={x0 + 62} y1={y - 4} x2={x1 - 52} y2={y - 4} stroke={hairline} strokeWidth={c.lw * 1} strokeDasharray="3 3" />
+            <line x1={x1 - 44} y1={y - 4} x2={x1 - 14} y2={y - 4} stroke={dim} strokeWidth={c.lw * 1.5} />
           </g>
         );
       })}
-      <line x1={x0 + 14} y1={y0 + h * 0.64} x2={x1 - 14} y2={y0 + h * 0.64} stroke={ink} strokeWidth={1.5} />
-      <line x1={x0 + 14} y1={y0 + h * 0.72} x2={x1 - 30} y2={y0 + h * 0.72} stroke={accent} strokeWidth={5} data-part="" />
+      <line x1={x0 + 14} y1={y0 + h * 0.64} x2={x1 - 14} y2={y0 + h * 0.64} stroke={ink} strokeWidth={c.lw * 1.5} />
+      <line x1={x0 + 14} y1={y0 + h * 0.72} x2={x1 - 30} y2={y0 + h * 0.72} stroke={accent} strokeWidth={c.lw * 5} data-part="" />
       <text x={x0 + 14} y={y0 + h * 0.62 - 8} fontSize={13} fill={dim} fontFamily="sans-serif" data-part="">
         合计
       </text>
@@ -595,9 +597,9 @@ function figFlatline(c: FigCtx): JSX.Element {
   ];
   return (
     <g>
-      <path d={curve(flat)} fill="none" stroke={ink} strokeWidth={2.5} data-part="" />
+      <path d={curve(flat)} fill="none" stroke={ink} strokeWidth={c.lw * 2.5} data-part="" />
       <circle cx={x1} cy={yFlat} r={6} fill={accent} data-part="" />
-      <path d={curve(wavePts)} fill="none" stroke={dim} strokeWidth={2} strokeDasharray="6 5" data-part="" />
+      <path d={curve(wavePts)} fill="none" stroke={dim} strokeWidth={c.lw * 2} strokeDasharray="6 5" data-part="" />
     </g>
   );
 }
@@ -621,13 +623,13 @@ function figDoor(c: FigCtx): JSX.Element {
   return (
     <g>
       {/* 墙：左右两段 + 砖缝 */}
-      <line x1={wx} y1={top} x2={wx} y2={dy} stroke={ink} strokeWidth={3.5} data-part="" />
-      <line x1={wx} y1={dy + dh * 0.98} x2={wx} y2={bot} stroke={ink} strokeWidth={3.5} data-part="" />
-      <line x1={wx - w * 0.3} y1={top} x2={wx} y2={top} stroke={ink} strokeWidth={3.5} data-part="" />
-      <line x1={wx - w * 0.3} y1={bot} x2={wx} y2={bot} stroke={ink} strokeWidth={3.5} data-part="" />
-      <line x1={wx - w * 0.3} y1={top} x2={wx - w * 0.3} y2={bot} stroke={ink} strokeWidth={3.5} data-part="" />
+      <line x1={wx} y1={top} x2={wx} y2={dy} stroke={ink} strokeWidth={c.lw * 3.5} data-part="" />
+      <line x1={wx} y1={dy + dh * 0.98} x2={wx} y2={bot} stroke={ink} strokeWidth={c.lw * 3.5} data-part="" />
+      <line x1={wx - w * 0.3} y1={top} x2={wx} y2={top} stroke={ink} strokeWidth={c.lw * 3.5} data-part="" />
+      <line x1={wx - w * 0.3} y1={bot} x2={wx} y2={bot} stroke={ink} strokeWidth={c.lw * 3.5} data-part="" />
+      <line x1={wx - w * 0.3} y1={top} x2={wx - w * 0.3} y2={bot} stroke={ink} strokeWidth={c.lw * 3.5} data-part="" />
       {[0.24, 0.48, 0.72].map((t) => (
-        <line key={t} x1={wx - w * 0.3} y1={top + dh * t} x2={wx} y2={top + dh * t} stroke={hairline} strokeWidth={1} data-part="" />
+        <line key={t} x1={wx - w * 0.3} y1={top + dh * t} x2={wx} y2={top + dh * t} stroke={hairline} strokeWidth={c.lw * 1} data-part="" />
       ))}
       {/* 门洞光：从门缝向右下张开 */}
       <polygon
@@ -637,9 +639,9 @@ function figDoor(c: FigCtx): JSX.Element {
         data-part=""
       />
       {/* 门扇与门框 */}
-      <line x1={hx} y1={hy} x2={ex} y2={ey} stroke={ink} strokeWidth={3} data-part="" />
-      <line x1={ex} y1={ey} x2={dx + dw * 0.1} y2={dy + dh * 0.06} stroke={dim} strokeWidth={1.5} strokeDasharray="5 4" data-part="" />
-      <rect x={dx} y={dy} width={dw} height={dh * 0.98} fill="none" stroke={accent} strokeWidth={2.5} data-part="" />
+      <line x1={hx} y1={hy} x2={ex} y2={ey} stroke={ink} strokeWidth={c.lw * 3} data-part="" />
+      <line x1={ex} y1={ey} x2={dx + dw * 0.1} y2={dy + dh * 0.06} stroke={dim} strokeWidth={c.lw * 1.5} strokeDasharray="5 4" data-part="" />
+      <rect x={dx} y={dy} width={dw} height={dh * 0.98} fill="none" stroke={accent} strokeWidth={c.lw * 2.5} data-part="" />
     </g>
   );
 }
@@ -656,18 +658,18 @@ function figClash(c: FigCtx): JSX.Element {
   return (
     <g>
       {/* 止损闸：粗竖线 + 底座 + 顶部短盖 */}
-      <line x1={gateX} y1={h * 0.1} x2={gateX} y2={h * 0.9} stroke={accent} strokeWidth={7} data-part="" />
-      <line x1={gateX - w * 0.045} y1={h * 0.9} x2={gateX + w * 0.045} y2={h * 0.9} stroke={accent} strokeWidth={4} data-part="" />
-      <line x1={gateX - w * 0.03} y1={h * 0.1} x2={gateX + w * 0.03} y2={h * 0.1} stroke={accent} strokeWidth={4} data-part="" />
+      <line x1={gateX} y1={h * 0.1} x2={gateX} y2={h * 0.9} stroke={accent} strokeWidth={c.lw * 7} data-part="" />
+      <line x1={gateX - w * 0.045} y1={h * 0.9} x2={gateX + w * 0.045} y2={h * 0.9} stroke={accent} strokeWidth={c.lw * 4} data-part="" />
+      <line x1={gateX - w * 0.03} y1={h * 0.1} x2={gateX + w * 0.03} y2={h * 0.1} stroke={accent} strokeWidth={c.lw * 4} data-part="" />
       {/* 前进的箭头：杆 + 尖 */}
-      <line x1={w * 0.05} y1={arrowY} x2={tipX - 20} y2={arrowY} stroke={ink} strokeWidth={5} data-part="" />
+      <line x1={w * 0.05} y1={arrowY} x2={tipX - 20} y2={arrowY} stroke={ink} strokeWidth={c.lw * 5} data-part="" />
       <polygon points={`${tipX},${arrowY} ${tipX - 26},${arrowY - 15} ${tipX - 26},${arrowY + 15}`} fill={ink} data-part="" />
       {/* 箭头刻度：价格一路上探，每格一次加价 */}
       {[0.16, 0.3, 0.44, 0.58].map((t) => (
-        <line key={t} x1={w * t} y1={arrowY - 12} x2={w * t} y2={arrowY + 12} stroke={dim} strokeWidth={2} data-part="" />
+        <line key={t} x1={w * t} y1={arrowY - 12} x2={w * t} y2={arrowY + 12} stroke={dim} strokeWidth={c.lw * 2} data-part="" />
       ))}
       {/* 撞击碎线 */}
-      <g stroke={dim} strokeWidth={2}>
+      <g stroke={dim} strokeWidth={c.lw * 2}>
         <line x1={tipX + 4} y1={arrowY - 22} x2={tipX + 16} y2={arrowY - 34} data-part="" />
         <line x1={tipX + 8} y1={arrowY} x2={tipX + 24} y2={arrowY} data-part="" />
         <line x1={tipX + 4} y1={arrowY + 22} x2={tipX + 16} y2={arrowY + 34} data-part="" />
@@ -690,14 +692,14 @@ function figQuestion(c: FigCtx): JSX.Element {
   const axY = h * 0.82;
   return (
     <g>
-      <path d={hook} fill="none" stroke={ink} strokeWidth={7} strokeLinecap="round" data-part="" />
-      <path d={stem} fill="none" stroke={ink} strokeWidth={7} strokeLinecap="round" data-part="" />
+      <path d={hook} fill="none" stroke={ink} strokeWidth={c.lw * 7} strokeLinecap="round" data-part="" />
+      <path d={stem} fill="none" stroke={ink} strokeWidth={c.lw * 7} strokeLinecap="round" data-part="" />
       <circle cx={cx + r * 0.35} cy={cy + r * 1.5} r={7} fill={ink} data-part="" />
       {/* 分叉轴：两端各一个候选，中间悬空 */}
-      <line x1={w * 0.08} y1={axY} x2={w * 0.92} y2={axY} stroke={hairline} strokeWidth={2} data-part="" />
+      <line x1={w * 0.08} y1={axY} x2={w * 0.92} y2={axY} stroke={hairline} strokeWidth={c.lw * 2} data-part="" />
       <circle cx={w * 0.14} cy={axY} r={6} fill={dim} data-part="" />
       <circle cx={w * 0.86} cy={axY} r={6} fill={accent} data-part="" />
-      <line x1={w * 0.5} y1={axY - 14} x2={w * 0.5} y2={axY + 14} stroke={accent} strokeWidth={3} data-part="" />
+      <line x1={w * 0.5} y1={axY - 14} x2={w * 0.5} y2={axY + 14} stroke={accent} strokeWidth={c.lw * 3} data-part="" />
     </g>
   );
 }
@@ -713,16 +715,16 @@ function figPathEnd(c: FigCtx): JSX.Element {
   const ties = 7;
   return (
     <g>
-      <line x1={vx - bw / 2} y1={by} x2={vx} y2={vy} stroke={dim} strokeWidth={2.5} data-part="" />
-      <line x1={vx + bw / 2} y1={by} x2={vx} y2={vy} stroke={dim} strokeWidth={2.5} data-part="" />
+      <line x1={vx - bw / 2} y1={by} x2={vx} y2={vy} stroke={dim} strokeWidth={c.lw * 2.5} data-part="" />
+      <line x1={vx + bw / 2} y1={by} x2={vx} y2={vy} stroke={dim} strokeWidth={c.lw * 2.5} data-part="" />
       {Array.from({ length: ties }, (_, i) => {
         const t = (i + 1) / (ties + 1);
         const y = by + (vy - by) * t;
         const hw = (bw / 2) * (1 - t);
-        return <line key={i} x1={vx - hw} y1={y} x2={vx + hw} y2={y} stroke={hairline} strokeWidth={2} data-part="" />;
+        return <line key={i} x1={vx - hw} y1={y} x2={vx + hw} y2={y} stroke={hairline} strokeWidth={c.lw * 2} data-part="" />;
       })}
-      <rect x={vx - gw / 2} y={vy - gh} width={gw} height={gh} fill="none" stroke={accent} strokeWidth={4} data-part="" />
-      <line x1={vx - gw * 0.9} y1={vy - gh} x2={vx + gw * 0.9} y2={vy - gh} stroke={ink} strokeWidth={3} data-part="" />
+      <rect x={vx - gw / 2} y={vy - gh} width={gw} height={gh} fill="none" stroke={accent} strokeWidth={c.lw * 4} data-part="" />
+      <line x1={vx - gw * 0.9} y1={vy - gh} x2={vx + gw * 0.9} y2={vy - gh} stroke={ink} strokeWidth={c.lw * 3} data-part="" />
     </g>
   );
 }
@@ -750,7 +752,7 @@ function figQuoteFrame(c: FigCtx): JSX.Element {
         transform={`rotate(180 ${rx + s * 0.43} ${h * 0.42 - s * 0.2})`}
         data-part=""
       />
-      <rect x={w * 0.08} y={h * 0.56} width={w * 0.84} height={h * 0.36} fill="none" stroke={hairline} strokeWidth={2} strokeDasharray="8 6" data-part="" />
+      <rect x={w * 0.08} y={h * 0.56} width={w * 0.84} height={h * 0.36} fill="none" stroke={hairline} strokeWidth={c.lw * 2} strokeDasharray="8 6" data-part="" />
     </g>
   );
 }
@@ -795,9 +797,11 @@ export function Figure(props: FigureProps): JSX.Element {
   const p = PALETTE[style];
   // useId 保证同一份 DOM 里每个实例拿到不同前缀；冒号在 url(#id) 里要清掉。
   const uid = `f${useId().replace(/:/g, "")}`;
+  // 线宽随槽位尺寸缩放：全屏 720px 高 ≈ 2.25x，小卡 420px ≈ 1.3x，线永远不会显稀。
+  const lw = Math.max(1, Math.min(w, h) / 320);
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${w} ${h}`} width={w} height={h} x={x} y={y}>
-      {render({ w, h, uid, ...p }, kind)}
+      {render({ w, h, uid, lw, ...p }, kind)}
     </svg>
   );
 }
