@@ -864,7 +864,7 @@ export const LAYOUTS: Layout[] = [
      s("source", 1, 5.8, 10, 1, { size: "s", tone: "dim", align: "center", src: "none", literal: "— 本段收束" })],
     { note: "段落收尾" }),
 
-  // ══════════ O. 概念图形 (10) ══════════
+  // ══════════ O. 概念图形 (20) ══════════
   // 图形不是装饰：每一张的形状都由这一拍旁白的语义决定（越近越疼 / 损失比收益陡 /
   // 同一个源头），而不是由随机种子决定。所以它们不需要旁白里有数字，也永远不会
   // 声称一个不存在的数据形状。形状全部是 path/line/rect/circle —— 图形槽显式指定
@@ -939,6 +939,24 @@ export const LAYOUTS: Layout[] = [
     [s("figure", 0.8, 1.0, 10.4, 4.2, { figure: "fig-quote-frame", m: "m-stroke-draw" }),
      s("headline", 1.2, 5.5, 9.6, 2.1, { size: "xxl", align: "center", m: "m-fade-up" })],
     { note: "被引述的设问：答案不在画面里" }),
+  // ── 下面 4 个图形来自《图像代码画法》手册：逐点网点 / 极坐标调制 + 遮罩 /
+  //    参数曲线 / 相位叠加。技法差异在图形内部，版式沿用 O 组既定模式。
+  L("fg-halftone", "网点渐隐 + 标题", "figure", ["m-fade-up", "m-fade-down"],
+    [s("figure", 0.6, 0.5, 10.8, 4.6, { figure: "fig-halftone-fade", m: "m-fade-up", mx: "m-color-shift" }),
+     s("headline", 1, 5.4, 10, 2.2, { size: "xxl", align: "center", m: "m-fade-down" })],
+    { note: "从「还在乎」到「没有了」：一层层淡下去，不是被切断", ambient: "m-drift-slow" }),
+  L("fg-radial", "脉冲 + 文字", "figure", ["m-zoom-in", "m-slide-right"],
+    [s("headline", 0.8, 2.8, 5, 3, { size: "xl", align: "start", m: "m-slide-right" }),
+     s("figure", 6.0, 0.8, 5.8, 6, { figure: "fig-radial-burst", m: "m-zoom-in", mx: "m-pulse" })],
+    { note: "向外扩散的一次脉冲：亮起来的那一下", ambient: "m-drift-slow" }),
+  L("fg-spiral", "螺旋 + 文字", "figure", ["m-stroke-draw", "m-fade-up"],
+    [s("figure", 0.6, 1.2, 6.2, 5.6, { figure: "fig-spiral", m: "m-rotate-in", mx: "m-breathe" }),
+     s("headline", 7.2, 3, 4.8, 2.6, { size: "xl", align: "start", m: "m-fade-up" })],
+    { note: "一路绕出去，却始终在同一圈里", ambient: "m-float" }),
+  L("fg-waves", "波叠加 + 标题", "figure", ["m-rise-lines", "m-stroke-draw"],
+    [s("figure", 0.7, 0.9, 10.6, 4.2, { figure: "fig-waves", m: "m-rise-lines", mx: "m-glow" }),
+     s("headline", 1, 5.4, 10, 2.2, { size: "xxl", align: "center", m: "m-stroke-draw" })],
+    { note: "两种感受合成为一条：同源，不是并列", ambient: "m-breathe-bg" }),
 ];
 
 export const LAYOUT_BY_ID = new Map(LAYOUTS.map((l) => [l.id, l]));

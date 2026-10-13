@@ -11,9 +11,14 @@
 // canvas 导出。所有几何只画 path/line/circle/rect/polygon —— 这样 apply.ts 的
 // m-stroke-draw / m-rise-lines 能自动把它们变成「生长」动画。
 
+import { useId } from "react";
 import type { Style } from "./types";
 
 export type FigureKind =
+  | "fig-halftone-fade" // 网点渐隐：从左到右逐点消失
+  | "fig-radial-burst"  // 放射脉冲：极坐标调制的长短线 + 边缘渐隐遮罩
+  | "fig-spiral"        // 阿基米德螺旋：绕不出去的循环
+  | "fig-waves"         // 相位叠加：两个来源合成为一条
   | "fig-curve-pain"   // 痛感随距离衰减
   | "fig-fork"         // 岔路：靠近 / 远离
   | "fig-balance"      // 两难天平
@@ -32,6 +37,7 @@ export type FigureKind =
   | "fig-quote-frame"; // 引语：成对的大引号 + 引用范围框
 
 export const FIGURE_KINDS: FigureKind[] = [
+  "fig-halftone-fade", "fig-radial-burst", "fig-spiral", "fig-waves",
   "fig-curve-pain", "fig-fork", "fig-balance", "fig-checklist", "fig-corridor",
   "fig-dim", "fig-scurve", "fig-weigh-bars", "fig-converge", "fig-receipt",
   "fig-flatline", "fig-door", "fig-clash",
@@ -54,6 +60,12 @@ const PALETTE: Record<Style, Palette> = {
 interface FigCtx extends Palette {
   w: number;
   h: number;
+  /**
+   * 本实例的唯一前缀。用于 `<defs>` 里的 pattern / gradient / mask 的 id。
+   * 23 拍图层共存于同一份 DOM —— 两个图形用同一个 id，`url(#id)` 会全部指向
+   * 先出现的那个定义，后一个图形被前一个的渐变污染（画法手册 T19）。
+   */
+  uid: string;
 }
 
 /** 采样一条函数曲线成折线，32 段足够平滑且输出稳定。 */
@@ -64,6 +76,171 @@ function curve(pts: Array<[number, number]>): string {
 /** 画一个碗（天平托盘 / 汇聚的容器）。 */
 function bowl(cx: number, cy: number, r: number): string {
   return `M${cx - r} ${cy} A${r} ${r} 0 0 0 ${cx + r} ${cy}`;
+}
+
+// ───────────────────────── 00a 网点渐隐 ─────────────────────────
+// 语义：从「还在乎」到「没有了」——不是被一刀切断，是自己一层层淡下去。
+// 画法：**逐点绘制**而不是用 pattern。两个理由：① 每个点都是独立元素，可以带
+// data-part 被逐个驱动（手册的跨领域基线：几何必须可寻址）；② pattern 的 id 在
+// 23 拍共存 DOM 里会互相污染。密度与半径、透明度三通道同向递减，才是「渐隐」
+// 而不是「变淡」。
+function figHalftoneFade(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent } = c;
+  const top = h * 0.16, bot = h * 0.88;
+  // 网格自适应：点间距按短边定，随槽位宽高比自动增减列数 —— 网格永远是接近正方形
+  const cell = Math.min(w, h) / 7.5;
+  const cols = Math.max(7, Math.round(w / cell));
+  const rows = Math.max(4, Math.round((bot - top) / cell));
+  const gapX = w / (cols + 1);
+  const gapY = (bot - top) / (rows + 1);
+  const base = Math.min(gapX, gapY) * 0.44;
+  return (
+    <g>
+      {Array.from({ length: rows }, (_, r) =>
+        Array.from({ length: cols }, (_, q) => {
+          const t = q / (cols - 1);
+          const fade = Math.pow(1 - t, 1.6);
+          if (fade < 0.05) return null;
+          // 确定性微扰（不是随机）—— 网点要有手绘的呼吸感，但每次渲染必须一致
+          const wobble = 1 + 0.16 * Math.sin(r * 2.1 + q * 0.7);
+          return (
+            <circle
+              key={`${r}-${q}`}
+              cx={gapX * (q + 1)}
+              cy={top + gapY * (r + 1) + Math.sin(q * 0.5) * gapY * 0.12}
+              r={base * (0.3 + 0.7 * fade) * wobble}
+              fill={ink}
+              opacity={0.12 + 0.74 * fade}
+              data-part=""
+            />
+          );
+        }),
+      )}
+      <line x1={2} y1={h * 0.1} x2={2} y2={h * 0.94} stroke={accent} strokeWidth={4} data-part="" />
+      <text x={w * 0.04} y={h * 0.07} fontSize={14} fill={accent} fontFamily="sans-serif" data-part="">
+        还在乎
+      </text>
+      <text x={w * 0.98} y={h * 0.07} fontSize={14} fill={dim} textAnchor="end" fontFamily="sans-serif" data-part="">
+        没有了
+      </text>
+    </g>
+  );
+}
+
+// ───────────────────────── 00b 放射脉冲 ─────────────────────────
+// 语义：向外扩散的一次脉冲 —— 心动、被注视、亮起来的那一下。
+// 画法：极坐标。36 条射线的长度按 `|sin(2.5θ)|` 调制出花瓣节奏（不是等长的齿轮），
+// 外层套一个 radialGradient 做的遮罩让线端渐隐（硬边会让脉冲显得像刺）。
+// 遮罩 id 带 uid 前缀 —— 这是 23 拍共存 DOM 的硬要求。
+function figRadialBurst(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent, uid } = c;
+  const cx = w * 0.5, cy = h * 0.52;
+  const r0 = Math.min(w, h) * 0.1;
+  const rMax = Math.min(w, h) * 0.46;
+  const n = 36;
+  const gid = `${uid}-burst-fade`;
+  const mid = `${uid}-burst-mask`;
+  return (
+    <g>
+      <defs>
+        <radialGradient id={gid} gradientUnits="userSpaceOnUse" cx={cx} cy={cy} r={rMax * 1.14}>
+          <stop offset="0.42" stopColor="#fff" stopOpacity="1" />
+          <stop offset="1" stopColor="#fff" stopOpacity="0" />
+        </radialGradient>
+        <mask id={mid} maskUnits="userSpaceOnUse" x={0} y={0} width={w} height={h}>
+          <rect x={0} y={0} width={w} height={h} fill={`url(#${gid})`} />
+        </mask>
+      </defs>
+      <g mask={`url(#${mid})`}>
+        {Array.from({ length: n }, (_, i) => {
+          const a = (i / n) * Math.PI * 2 - Math.PI / 2;
+          const k = 0.4 + 0.6 * Math.abs(Math.sin(2.5 * a + 0.7));
+          const r1 = r0 + (rMax - r0) * k;
+          return (
+            <line
+              key={i}
+              x1={cx + Math.cos(a) * r0}
+              y1={cy + Math.sin(a) * r0}
+              x2={cx + Math.cos(a) * r1}
+              y2={cy + Math.sin(a) * r1}
+              stroke={i % 3 === 0 ? accent : dim}
+              strokeWidth={i % 3 === 0 ? 3 : 2}
+              strokeLinecap="round"
+              data-part=""
+            />
+          );
+        })}
+      </g>
+      <circle cx={cx} cy={cy} r={r0 * 0.46} fill={accent} data-part="" />
+      <circle cx={cx} cy={cy} r={r0 * 0.84} fill="none" stroke={ink} strokeWidth={1.5} opacity={0.45} data-part="" />
+    </g>
+  );
+}
+
+// ───────────────────────── 00c 螺旋 ─────────────────────────
+// 语义：一路绕出去，却始终在同一圈里 —— 漫长、没有尽头。
+// 画法：阿基米德螺旋 r = kθ，采样 180 段。y 轴压到 0.92 是为了补偿视觉上圆的
+// 竖向拉伸感（同一个 r 在屏幕上看会比横向更大）。
+function figSpiral(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent } = c;
+  const cx = w * 0.5, cy = h * 0.5;
+  const rMax = Math.min(w, h) * 0.45;
+  const thEnd = 4.2 * Math.PI * 2;
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i <= 180; i++) {
+    const t = i / 180;
+    const th = t * thEnd;
+    const r = rMax * (0.06 + 0.94 * t);
+    pts.push([cx + Math.cos(th) * r, cy + Math.sin(th) * r * 0.92]);
+  }
+  // 首尾两点直接算，避免越界索引（noUncheckedIndexedAccess）
+  const sx = cx + rMax * 0.06, sy = cy;
+  const ex = cx + Math.cos(thEnd) * rMax, ey = cy + Math.sin(thEnd) * rMax * 0.92;
+  return (
+    <g>
+      <path d={curve(pts)} fill="none" stroke={dim} strokeWidth={2.5} strokeLinecap="round" data-part="" />
+      <circle cx={sx} cy={sy} r={7} fill={accent} data-part="" />
+      <circle cx={ex} cy={ey} r={5} fill={ink} data-part="" />
+    </g>
+  );
+}
+
+// ───────────────────────── 00d 相位叠加 ─────────────────────────
+// 语义：两个来源合成为一条 —— 你分不出哪一段是痛、哪一段是幸福。
+// 画法：两条频率不同的分量波（2 倍与 3 倍频）逐点相加，合成线因此出现包络起伏
+// （拍频）。这是「叠加」最直观的视觉证据：不只是叠在一起，是真的合成了新波形。
+function figWaves(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent, hairline } = c;
+  const x0 = w * 0.06, x1 = w * 0.94;
+  const midY = h * 0.5;
+  const amp = h * 0.26;
+  const N = 96;
+  const at = (i: number) => x0 + (i / N) * (x1 - x0);
+  const a: Array<[number, number]> = [];
+  const b: Array<[number, number]> = [];
+  const sum: Array<[number, number]> = [];
+  for (let i = 0; i <= N; i++) {
+    const t = i / N;
+    const ya = Math.sin(t * Math.PI * 2 * 2) * amp * 0.36;
+    const yb = Math.sin(t * Math.PI * 2 * 3) * amp * 0.3;
+    a.push([at(i), midY + ya]);
+    b.push([at(i), midY + yb]);
+    sum.push([at(i), midY + (ya + yb) * 1.32]);
+  }
+  return (
+    <g>
+      <line x1={x0} y1={midY} x2={x1} y2={midY} stroke={hairline} strokeWidth={1} strokeDasharray="5 5" data-part="" />
+      <path d={curve(a)} fill="none" stroke={dim} strokeWidth={2} strokeDasharray="6 5" data-part="" />
+      <path d={curve(b)} fill="none" stroke={dim} strokeWidth={2} strokeDasharray="2 5" data-part="" />
+      <path d={curve(sum)} fill="none" stroke={accent} strokeWidth={4} strokeLinecap="round" data-part="" />
+      <text x={x0} y={h * 0.1} fontSize={14} fill={ink} fontFamily="sans-serif" data-part="">
+        两种感受
+      </text>
+      <text x={x1} y={h * 0.97} fontSize={14} fill={accent} textAnchor="end" fontFamily="sans-serif" data-part="">
+        合成的那一条
+      </text>
+    </g>
+  );
 }
 
 // ───────────────────────── 01 痛感曲线 ─────────────────────────
@@ -580,6 +757,10 @@ function figQuoteFrame(c: FigCtx): JSX.Element {
 
 function render(c: FigCtx, kind: FigureKind): JSX.Element {
   switch (kind) {
+    case "fig-halftone-fade": return figHalftoneFade(c);
+    case "fig-radial-burst": return figRadialBurst(c);
+    case "fig-spiral": return figSpiral(c);
+    case "fig-waves": return figWaves(c);
     case "fig-curve-pain": return figCurvePain(c);
     case "fig-fork": return figFork(c);
     case "fig-balance": return figBalance(c);
@@ -612,9 +793,11 @@ export interface FigureProps {
 export function Figure(props: FigureProps): JSX.Element {
   const { kind, w, h, x, y, style = "editorial" } = props;
   const p = PALETTE[style];
+  // useId 保证同一份 DOM 里每个实例拿到不同前缀；冒号在 url(#id) 里要清掉。
+  const uid = `f${useId().replace(/:/g, "")}`;
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${w} ${h}`} width={w} height={h} x={x} y={y}>
-      {render({ w, h, ...p }, kind)}
+      {render({ w, h, uid, ...p }, kind)}
     </svg>
   );
 }
