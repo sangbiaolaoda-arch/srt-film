@@ -76,7 +76,10 @@ btnLoad.addEventListener("click", () => {
 
   renderBeatList();
   stage = buildStage(stageHost, shots);
-  (window as unknown as { __stage?: StageHandle }).__stage = stage; // 调试钩子
+  // 调试钩子：__stage 供逐帧验收拿时间轴；__exportMp4 供无头链路发起导出 ——
+  // 生产构建里没有可 import 的 /src 路径，无头脚本只能走页面契约。
+  (window as unknown as { __stage?: StageHandle; __exportMp4?: typeof exportMp4 }).__stage = stage;
+  (window as unknown as { __exportMp4?: typeof exportMp4 }).__exportMp4 = exportMp4;
   stage.onComplete(() => { playing = false; btnPlay.textContent = "重播"; });
 
   scrubber.disabled = false;
