@@ -23,11 +23,15 @@ export type FigureKind =
   | "fig-scurve"       // 损失厌恶价值函数（前景理论）
   | "fig-weigh-bars"   // 同额不同权的感知柱
   | "fig-converge"     // 同一源头
-  | "fig-receipt";     // 收据
+  | "fig-receipt"      // 收据
+  | "fig-flatline"     // 从未疼过的心电图：一条平线 vs 一条起伏线
+  | "fig-door"         // 心里的后门：墙 + 开着的门缝 + 透出的光
+  | "fig-clash";       // 价格向前 vs 止损闸
 
 export const FIGURE_KINDS: FigureKind[] = [
   "fig-curve-pain", "fig-fork", "fig-balance", "fig-checklist", "fig-corridor",
   "fig-dim", "fig-scurve", "fig-weigh-bars", "fig-converge", "fig-receipt",
+  "fig-flatline", "fig-door", "fig-clash",
 ];
 
 interface Palette {
@@ -387,6 +391,110 @@ function figReceipt(c: FigCtx): JSX.Element {
   );
 }
 
+// ───────────────────────── 11 平线（从未疼过） ─────────────────────────
+// 语义：拍 03「一个从来没有为谁疼过的人，到底是活得通透」。
+// 上方一条几乎无波动的线（从未疼过的人生），下方一条起伏剧烈的线（疼过的人生）
+// —— 两条线的反差本身就是论点：平，既可能是通透，也可能是空白。
+function figFlatline(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent } = c;
+  const x0 = w * 0.06, x1 = w * 0.96;
+  const yFlat = h * 0.34, yWave = h * 0.76;
+  // 平线：只有呼吸级的微起伏
+  const flat: Array<[number, number]> = [];
+  for (let i = 0; i <= 32; i++) {
+    const t = i / 32;
+    flat.push([x0 + t * (x1 - x0), yFlat + Math.sin(t * Math.PI * 2) * 1.6]);
+  }
+  // 起伏线：有峰值有谷底，疼过的人生
+  const wavePts: Array<[number, number]> = [
+    [x0, yWave], [w * 0.14, yWave - h * 0.16], [w * 0.22, yWave + h * 0.04],
+    [w * 0.34, yWave - h * 0.26], [w * 0.46, yWave + h * 0.08],
+    [w * 0.6, yWave - h * 0.2], [w * 0.74, yWave - h * 0.02],
+    [w * 0.86, yWave - h * 0.3], [x1, yWave],
+  ];
+  return (
+    <g>
+      <path d={curve(flat)} fill="none" stroke={ink} strokeWidth={2.5} data-part="" />
+      <circle cx={x1} cy={yFlat} r={6} fill={accent} data-part="" />
+      <path d={curve(wavePts)} fill="none" stroke={dim} strokeWidth={2} strokeDasharray="6 5" data-part="" />
+    </g>
+  );
+}
+
+// ───────────────────────── 12 后门 ─────────────────────────
+// 语义：拍 09「喜欢一个人的时候先在心里留个后门」。
+// 一堵墙留一个门洞，门扇向外敞开，一道光从门缝里透进来 —— 后门是退路，也是光。
+function figDoor(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent, hairline } = c;
+  const wx = w * 0.42;                       // 墙所在竖线
+  const top = h * 0.08, bot = h * 0.94;
+  const dh = bot - top;                      // 门洞高
+  const dw = w * 0.13;                       // 门洞宽
+  const dx = wx, dy = top + dh * 0.12;       // 门洞左上
+  // 门扇：绕左铰链向外开 55°
+  const rad = (55 * Math.PI) / 180;
+  const sw = dw * 0.96;
+  const hx = dx, hy = dy + dh * 0.98;        // 铰链（门洞左下）
+  const ex = hx + sw * Math.sin(rad);
+  const ey = hy - sw * Math.cos(rad);
+  return (
+    <g>
+      {/* 墙：左右两段 + 砖缝 */}
+      <line x1={wx} y1={top} x2={wx} y2={dy} stroke={ink} strokeWidth={3.5} data-part="" />
+      <line x1={wx} y1={dy + dh * 0.98} x2={wx} y2={bot} stroke={ink} strokeWidth={3.5} data-part="" />
+      <line x1={wx - w * 0.3} y1={top} x2={wx} y2={top} stroke={ink} strokeWidth={3.5} data-part="" />
+      <line x1={wx - w * 0.3} y1={bot} x2={wx} y2={bot} stroke={ink} strokeWidth={3.5} data-part="" />
+      <line x1={wx - w * 0.3} y1={top} x2={wx - w * 0.3} y2={bot} stroke={ink} strokeWidth={3.5} data-part="" />
+      {[0.24, 0.48, 0.72].map((t) => (
+        <line key={t} x1={wx - w * 0.3} y1={top + dh * t} x2={wx} y2={top + dh * t} stroke={hairline} strokeWidth={1} data-part="" />
+      ))}
+      {/* 门洞光：从门缝向右下张开 */}
+      <polygon
+        points={`${dx},${dy + dh * 0.1} ${dx + dw}, ${dy + dh * 0.98} ${dx + w * 0.42},${dy + dh * 1.06}`}
+        fill={accent}
+        opacity={0.14}
+        data-part=""
+      />
+      {/* 门扇与门框 */}
+      <line x1={hx} y1={hy} x2={ex} y2={ey} stroke={ink} strokeWidth={3} data-part="" />
+      <line x1={ex} y1={ey} x2={dx + dw * 0.1} y2={dy + dh * 0.06} stroke={dim} strokeWidth={1.5} strokeDasharray="5 4" data-part="" />
+      <rect x={dx} y={dy} width={dw} height={dh * 0.98} fill="none" stroke={accent} strokeWidth={2.5} data-part="" />
+    </g>
+  );
+}
+
+// ───────────────────────── 13 价格 vs 止损闸 ─────────────────────────
+// 语义：拍 21「这种疼是价格，可以付；但亏损必须有底线」。
+// 左侧箭头一路向右（愿意付的价格），撞上右侧一道止损失闸 —— 边界不是懦弱，是设计。
+function figClash(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent } = c;
+  const yMid = h * 0.52;
+  const gateX = w * 0.82;
+  const arrowY = yMid;
+  const tipX = gateX - w * 0.035;
+  return (
+    <g>
+      {/* 止损闸：粗竖线 + 底座 + 顶部短盖 */}
+      <line x1={gateX} y1={h * 0.1} x2={gateX} y2={h * 0.9} stroke={accent} strokeWidth={7} data-part="" />
+      <line x1={gateX - w * 0.045} y1={h * 0.9} x2={gateX + w * 0.045} y2={h * 0.9} stroke={accent} strokeWidth={4} data-part="" />
+      <line x1={gateX - w * 0.03} y1={h * 0.1} x2={gateX + w * 0.03} y2={h * 0.1} stroke={accent} strokeWidth={4} data-part="" />
+      {/* 前进的箭头：杆 + 尖 */}
+      <line x1={w * 0.05} y1={arrowY} x2={tipX - 20} y2={arrowY} stroke={ink} strokeWidth={5} data-part="" />
+      <polygon points={`${tipX},${arrowY} ${tipX - 26},${arrowY - 15} ${tipX - 26},${arrowY + 15}`} fill={ink} data-part="" />
+      {/* 箭头刻度：价格一路上探，每格一次加价 */}
+      {[0.16, 0.3, 0.44, 0.58].map((t) => (
+        <line key={t} x1={w * t} y1={arrowY - 12} x2={w * t} y2={arrowY + 12} stroke={dim} strokeWidth={2} data-part="" />
+      ))}
+      {/* 撞击碎线 */}
+      <g stroke={dim} strokeWidth={2}>
+        <line x1={tipX + 4} y1={arrowY - 22} x2={tipX + 16} y2={arrowY - 34} data-part="" />
+        <line x1={tipX + 8} y1={arrowY} x2={tipX + 24} y2={arrowY} data-part="" />
+        <line x1={tipX + 4} y1={arrowY + 22} x2={tipX + 16} y2={arrowY + 34} data-part="" />
+      </g>
+    </g>
+  );
+}
+
 function render(c: FigCtx, kind: FigureKind): JSX.Element {
   switch (kind) {
     case "fig-curve-pain": return figCurvePain(c);
@@ -399,6 +507,9 @@ function render(c: FigCtx, kind: FigureKind): JSX.Element {
     case "fig-weigh-bars": return figWeighBars(c);
     case "fig-converge": return figConverge(c);
     case "fig-receipt": return figReceipt(c);
+    case "fig-flatline": return figFlatline(c);
+    case "fig-door": return figDoor(c);
+    case "fig-clash": return figClash(c);
   }
 }
 
@@ -406,14 +517,17 @@ export interface FigureProps {
   kind: FigureKind;
   w: number;
   h: number;
+  /** 槽位落点（舞台坐标系）。嵌套 svg 缺省 x/y=0 —— 缺了它所有图形都挤到画布左上角。 */
+  x?: number;
+  y?: number;
   style?: Style;
 }
 
 export function Figure(props: FigureProps): JSX.Element {
-  const { kind, w, h, style = "editorial" } = props;
+  const { kind, w, h, x, y, style = "editorial" } = props;
   const p = PALETTE[style];
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${w} ${h}`} width={w} height={h}>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${w} ${h}`} width={w} height={h} x={x} y={y}>
       {render({ w, h, ...p }, kind)}
     </svg>
   );

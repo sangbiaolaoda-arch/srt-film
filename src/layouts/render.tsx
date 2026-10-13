@@ -199,7 +199,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
     case "figure":
       return g(
         <g opacity={opacity}>
-          <Figure kind={slot.figure ?? "fig-converge"} w={w} h={h} style={ctx.layout.style} />
+          <Figure kind={slot.figure ?? "fig-converge"} w={w} h={h} x={x} y={y} style={ctx.layout.style} />
         </g>,
       );
     case "asset": case "image": case "device": case "icon":
