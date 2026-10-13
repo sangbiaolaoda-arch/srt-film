@@ -33,8 +33,14 @@ export interface StageHandle {
   __tl: gsap.core.Timeline;
 }
 
-const ENTER_TRANSITIONS = ["m-cross-dissolve", "m-push-left", "m-wipe-panel", "m-zoom-through", "m-split-open"];
-const EXIT_MOTIONS = ["m-fade-out", "m-slide-out-down", "m-mask-close", "m-scale-out", "m-sink"];
+const ENTER_TRANSITIONS = [
+  "m-cross-dissolve", "m-push-left", "m-wipe-panel", "m-zoom-through", "m-split-open",
+  "m-wipe-diagonal", "m-sweep-light", "m-mask-circle",
+];
+const EXIT_MOTIONS = [
+  "m-fade-out", "m-slide-out-down", "m-mask-close", "m-scale-out", "m-sink",
+  "m-blur-out", "m-shrink-away", "m-slide-out-left", "m-flip-out", "m-dissolve-up",
+];
 
 /** 离屏的版式容器：不可见，但保留布局（GSAP 需要能算盒子）。 */
 function Stage({ shots }: { shots: Shot[] }): JSX.Element {
@@ -100,13 +106,26 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
     slots.forEach((slotEl, k) => {
       const id = slotEl.getAttribute("data-motion") ?? shot.layout.enter[k % shot.layout.enter.length]!;
       const def = MOTION_BY_ID.get(id) ?? MOTION_BY_ID.get("m-fade-up")!;
-      applyMotion(def.id, { tl, el: slotEl, at: at + 0.08 * Math.min(k, 4), dur: def.dur });
+      const slotAt = at + 0.08 * Math.min(k, 4);
+      applyMotion(def.id, { tl, el: slotEl, at: slotAt, dur: def.dur });
+      // 槽级强调（版式在槽上声明的 mx）：入场收尾后再触发，避免和入场抢同一个 transform 属性。
+      const mxId = slotEl.getAttribute("data-mx");
+      const mxDef = mxId ? MOTION_BY_ID.get(mxId) : undefined;
+      if (mxDef) applyMotion(mxDef.id, { tl, el: slotEl, at: slotAt + def.dur + 0.12, dur: mxDef.dur });
     });
 
     if (shot.layout.emphasis) {
       const main = slots[0];
       const def = MOTION_BY_ID.get(shot.layout.emphasis);
       if (main && def) applyMotion(def.id, { tl, el: main, at: at + Math.min(0.75, dur / 3), dur: def.dur });
+    }
+
+    // 环境动效：贯穿整拍图层（传入拍长；ambient 实现保证总长不超过它）。
+    // 此前传 Math.max(dur, ambDef.dur * 2) 配合 yoyo 往返会把 timeline 撑长，
+    // 后续每拍的 tlStart 全部被推迟 —— 已随 ambient 实现一起修正。
+    if (shot.layout.ambient) {
+      const ambDef = MOTION_BY_ID.get(shot.layout.ambient);
+      if (ambDef) applyMotion(ambDef.id, { tl, el: layer, at, dur });
     }
 
     const exitId = EXIT_MOTIONS[i % EXIT_MOTIONS.length]!;

@@ -16,6 +16,12 @@ export interface BeatOverride {
   source?: string;         // 出处：包含该数字的原文片段（溯源用）
   left?: string;
   right?: string;
+  /**
+   * 槽级入场动效覆写：{ 槽序号: 动效 id }。
+   * 只作用于本拍的这一份版式副本，不写回 LAYOUT_BY_ID —— 同一版式被别的片子用时不受影响。
+   * 缺省的槽仍按版式自带的 enter 池轮转。
+   */
+  animations?: Record<string, string>;
 }
 
 export type OverrideMap = Record<string, BeatOverride>;

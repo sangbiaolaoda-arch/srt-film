@@ -3,11 +3,12 @@
 
 import type { ChartKind } from "./charts";
 import type { AssetId } from "./assets";
+import type { FigureKind } from "./figures";
 
 export type Group =
   // 编辑风（纸白 + 朱红）
   | "statement" | "number" | "compare" | "process" | "list"
-  | "chart" | "image" | "quote" | "timeline" | "bookend"
+  | "chart" | "image" | "quote" | "timeline" | "bookend" | "figure"
   // 海报风（暗底 + 高饱和），只在 style === "poster" 时被选中
   | "poster-focus" | "poster-field" | "poster-geo" | "poster-nest";
 
@@ -30,8 +31,9 @@ export type SlotKind =
   | "rule" | "panel" | "frame" | "arrow" | "axis" | "progress" | "divider" | "vignette"
   // 列表
   | "bullets" | "listnum" | "checklist" | "pills" | "tags"
-  // 图表 / 图像 / 素材
+  // 图表 / 图像 / 素材 / 概念图形
   | "chart" | "image" | "icon" | "asset" | "device" | "dotmatrix" | "clock" | "calendar"
+  | "figure"
   // 标注
   | "label" | "source" | "meta" | "badge";
 
@@ -51,6 +53,8 @@ export interface Slot {
   literal?: string;
   /** 图表种类 */
   chart?: ChartKind;
+  /** 概念图形种类（不依赖数据，形状来自旁白语义） */
+  figure?: FigureKind;
   /** 素材 id */
   asset?: AssetId;
   /** 该槽专属入场动效（缺省继承 layout.enter 轮转分配） */
@@ -70,6 +74,8 @@ export interface Layout {
   enter: string[];
   /** 强调动效（可选，作用于首个主槽） */
   emphasis?: string;
+  /** 环境动效（可选，作用于整拍图层、贯穿这一拍） */
+  ambient?: string;
   /** 适用条件说明 */
   note?: string;
   /** 本版式至少需要多少个可溯源数字，否则不合格（图表类默认 3） */

@@ -36,12 +36,12 @@ const EDITORIAL = LAYOUTS.filter((l) => (l.style ?? "editorial") === "editorial"
 const POSTER = LAYOUTS.filter((l) => l.style === "poster");
 
 describe("版式目录完整性", () => {
-  it("总数 ≥ 176（编辑 128 + 海报 48）", () => {
-    expect(LAYOUTS.length).toBeGreaterThanOrEqual(176);
+  it("总数 ≥ 186（编辑 136 + 海报 50）", () => {
+    expect(LAYOUTS.length).toBeGreaterThanOrEqual(186);
   });
-  it("编辑风 ≥ 128、海报风 ≥ 48", () => {
-    expect(EDITORIAL.length).toBeGreaterThanOrEqual(128);
-    expect(POSTER.length).toBeGreaterThanOrEqual(48);
+  it("编辑风 ≥ 136、海报风 ≥ 50", () => {
+    expect(EDITORIAL.length).toBeGreaterThanOrEqual(136);
+    expect(POSTER.length).toBeGreaterThanOrEqual(50);
   });
   it("id 唯一且非空", () => {
     const ids = LAYOUTS.map((l) => l.id);
@@ -60,8 +60,8 @@ describe("版式目录完整性", () => {
       }
     }
   });
-  it("十四个分组都至少有 8 个版式", () => {
-    expect(LAYOUT_GROUPS.length).toBe(14);
+  it("十五个分组都至少有 8 个版式", () => {
+    expect(LAYOUT_GROUPS.length).toBe(15);
     for (const g of LAYOUT_GROUPS) {
       expect(LAYOUTS.filter((l) => l.group === g).length, g).toBeGreaterThanOrEqual(8);
     }
@@ -118,6 +118,36 @@ describe("动效目录完整性", () => {
   it("冲突声明是对称的（任一方声明即算冲突）", () => {
     expect(conflictsOf("m-slide-left")).toContain("m-slide-right");
     expect(conflictsOf("m-slide-right")).toContain("m-slide-left");
+  });
+  it("每个槽都解析得到入场动效（不能有裸奔的元素）", () => {
+    for (const l of LAYOUTS) {
+      l.slots.forEach((s, k) => {
+        const id = s.m ?? l.enter[k % l.enter.length];
+        expect(MOTION_BY_ID.has(id ?? ""), `${l.id} 槽 ${k}（${s.k}）没有入场动效`).toBe(true);
+      });
+    }
+  });
+  it("图形槽不许配文字动效（title 会逐字拆、图形不会，配错等于不动）", () => {
+    const figureLayouts = LAYOUTS.filter((l) => l.slots.some((s) => s.k === "figure"));
+    expect(figureLayouts.length).toBeGreaterThanOrEqual(8);
+    for (const l of figureLayouts) {
+      l.slots.forEach((s, k) => {
+        if (s.k !== "figure") return;
+        const id = s.m ?? l.enter[k % l.enter.length]!;
+        const def = MOTION_BY_ID.get(id)!;
+        expect(def, `${l.id} → ${id}`).toBeTruthy();
+        expect(def.target, `${l.id} 的图形槽用了文字动效 ${id}`).not.toBe("text");
+      });
+    }
+  });
+  it("环境动效有入口（ambient 不再是死字段）", () => {
+    const withAmbient = LAYOUTS.filter((l) => l.ambient);
+    expect(withAmbient.length).toBeGreaterThanOrEqual(5);
+    for (const l of withAmbient) {
+      const def = MOTION_BY_ID.get(l.ambient!);
+      expect(def, `${l.id} → ${l.ambient}`).toBeTruthy();
+      expect(def!.group, `${l.id} 的 ambient 必须是环境动效`).toBe("ambient");
+    }
   });
 });
 

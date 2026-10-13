@@ -5,6 +5,7 @@
 import { Fragment } from "react";
 import { Chart } from "./charts";
 import { Asset } from "./assets";
+import { Figure } from "./figures";
 import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
 
@@ -157,7 +158,14 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
   const motion = slot.m ?? ctx.layout.enter[index % (ctx.layout.enter.length || 1)] ?? "m-fade-up";
 
   const g = (children: React.ReactNode) => (
-    <g key={`${ctx.layout.id}-${index}`} data-anim="" data-slot={index} data-motion={motion} data-kind={slot.k}>
+    <g
+      key={`${ctx.layout.id}-${index}`}
+      data-anim=""
+      data-slot={index}
+      data-motion={motion}
+      data-mx={slot.mx ?? ""}
+      data-kind={slot.k}
+    >
       {children}
     </g>
   );
@@ -188,6 +196,12 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       const kind = slot.chart ?? "line-up";
       return g(<Chart kind={kind} w={w} h={h} seed={ctx.content.beat} tone={tone === "accent" ? "accent" : "ink"} values={ctx.content.numbers} />);
     }
+    case "figure":
+      return g(
+        <g opacity={opacity}>
+          <Figure kind={slot.figure ?? "fig-converge"} w={w} h={h} style={ctx.layout.style} />
+        </g>,
+      );
     case "asset": case "image": case "device": case "icon":
       return g(<Asset id={slot.asset ?? "icon-star"} w={w} h={h} tone={tone === "accent" ? "accent" : tone === "dim" ? "dim" : tone === "paper" ? "paper" : "ink"} />);
     case "dotmatrix": {

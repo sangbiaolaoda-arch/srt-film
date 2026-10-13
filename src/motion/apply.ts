@@ -137,7 +137,10 @@ const APPLIERS: Record<string, Applier> = {
 
   // ── 环境 3 ──
   "m-grain-drift": ({ tl, el, at, dur }) =>
-    tl.fromTo(el, { x: -6, y: 4 }, { x: 6, y: -4, duration: dur, yoyo: true, repeat: 1, ease: "sine.inOut", immediateRender: false }, at),
+    // yoyo+repeat1 的往返总长 = 2×duration → 传 dur/2 才正好占满调用方给的时长。
+    // 此前 duration: dur 会让 tween 实际长 2×dur：环境动效作用在整拍图层上，
+    // 超出拍末的部分把 timeline 一路撑长，后续每一拍的 tlStart 全部被推迟。
+    tl.fromTo(el, { x: -6, y: 4 }, { x: 6, y: -4, duration: dur / 2, yoyo: true, repeat: 1, ease: "sine.inOut", immediateRender: false }, at),
   "m-cursor-blink": ({ tl, el, at, dur }) =>
     tl.to(el, { opacity: 0.25, duration: 0.35, repeat: Math.max(1, Math.floor(dur / 0.7)), yoyo: true, ease: "none" }, at),
   "m-float": ({ tl, el, at, dur }) =>
@@ -219,7 +222,7 @@ const APPLIERS: Record<string, Applier> = {
       { scale: 1, duration: dur * 0.6, stagger: Math.min(0.035, dur / (targets.length + 1)), ease: "back.out(2)", immediateRender: false }, at);
   },
   "m-breathe": ({ tl, el, at, dur }) =>
-    tl.to(el, { scale: 1.025, transformOrigin: "center center", duration: dur, yoyo: true, repeat: 1, ease: "sine.inOut" }, at),
+    tl.to(el, { scale: 1.025, transformOrigin: "center center", duration: dur / 2, yoyo: true, repeat: 1, ease: "sine.inOut" }, at),
   "m-flip-x": ({ tl, el, at, dur }) =>
     tl.fromTo(el, { scaleX: 0.86, transformOrigin: "center center" }, { scaleX: 1, duration: dur, ease: "back.out(1.6)", immediateRender: false }, at),
   "m-underline-slide": ({ tl, el, at, dur }) => {
@@ -251,10 +254,11 @@ const APPLIERS: Record<string, Applier> = {
 
   // ── 环境 +3 ──
   "m-drift-slow": ({ tl, el, at, dur }) =>
-    tl.fromTo(el, { x: -5, y: 3 }, { x: 5, y: -3, duration: dur, yoyo: true, repeat: 1, ease: "sine.inOut", immediateRender: false }, at),
+    // 同 m-grain-drift：yoyo 往返总长 = 2×duration，传 dur/2。
+    tl.fromTo(el, { x: -5, y: 3 }, { x: 5, y: -3, duration: dur / 2, yoyo: true, repeat: 1, ease: "sine.inOut", immediateRender: false }, at),
   "m-breathe-bg": ({ tl, el, at, dur }) =>
     tl.fromTo(el, { scale: 0.985, transformOrigin: "center center" },
-      { scale: 1.015, duration: dur, yoyo: true, repeat: 1, ease: "sine.inOut", immediateRender: false }, at),
+      { scale: 1.015, duration: dur / 2, yoyo: true, repeat: 1, ease: "sine.inOut", immediateRender: false }, at),
   "m-flicker": ({ tl, el, at, dur }) =>
     tl.to(el, { opacity: 0.86, duration: 0.06, repeat: Math.max(1, Math.floor(dur / 0.9)), yoyo: true, ease: "none" }, at),
 };

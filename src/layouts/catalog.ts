@@ -8,14 +8,14 @@ const s = (k: SlotKind, x: number, y: number, w: number, h: number, o: Partial<S
 
 const L = (
   id: string, name: string, group: Group, enter: string[],
-  slots: Slot[], extra: { emphasis?: string; note?: string; needs?: number } = {},
+  slots: Slot[], extra: { emphasis?: string; ambient?: string; note?: string; needs?: number } = {},
 ): Layout => ({ id, name, group, enter, slots, ...extra });
 
 /** 海报风版式：暗底 + canvas 特效，fx 决定背景特效种类。 */
 const P = (
   id: string, name: string, group: Group, enter: string[], fx: FxKind,
   slots: Slot[],
-  extra: { emphasis?: string; note?: string; needs?: number; fxStrength?: number } = {},
+  extra: { emphasis?: string; ambient?: string; note?: string; needs?: number; fxStrength?: number } = {},
 ): Layout => ({ id, name, group, enter, slots, style: "poster", fx, ...extra });
 
 const CHART_ENTER = ["m-rise-lines", "m-fade-up"];
@@ -863,10 +863,60 @@ export const LAYOUTS: Layout[] = [
     [s("headline", 1, 2.4, 10, 2.6, { size: "huge", align: "center" }),
      s("source", 1, 5.8, 10, 1, { size: "s", tone: "dim", align: "center", src: "none", literal: "— 本段收束" })],
     { note: "段落收尾" }),
+
+  // ══════════ O. 概念图形 (10) ══════════
+  // 图形不是装饰：每一张的形状都由这一拍旁白的语义决定（越近越疼 / 损失比收益陡 /
+  // 同一个源头），而不是由随机种子决定。所以它们不需要旁白里有数字，也永远不会
+  // 声称一个不存在的数据形状。形状全部是 path/line/rect/circle —— 图形槽显式指定
+  // m-stroke-draw / m-bar-sweep / m-tick-pulse，把这些形状变成「画出来」的动画；
+  // 不能靠 enter 轮转分配（轮转会把文字动效安到图形槽上）。
+  // 这里的 m / mx 是「版式对任何片子都站得住的默认」，`examples/05-overrides.json`
+  // 里另有这套片子的导演选择 —— 覆写只改这一支片的副本，不动 LAYOUT_BY_ID。
+  // ambient 走整拍图层，是此前零入口的那一组环境动效。
+  L("fg-fork", "岔路 + 文字", "figure", ["m-blur-in", "m-rise-lines"],
+    [s("headline", 0.8, 2.6, 5, 3, { size: "xxl", align: "start", m: "m-blur-in", mx: "m-underline-draw" }),
+     s("figure", 6.2, 1.4, 5.4, 5.2, { figure: "fig-fork", m: "m-rise-lines" })],
+    { note: "二选一的设问", ambient: "m-drift-slow" }),
+  L("fg-balance", "天平 + 标题", "figure", ["m-stroke-draw", "m-clip-reveal"],
+    [s("figure", 1.6, 0.5, 8.8, 4.4, { figure: "fig-balance", m: "m-stroke-draw", mx: "m-morph-blob" }),
+     s("headline", 1, 5.4, 10, 2.2, { size: "xxl", align: "center", m: "m-clip-reveal", mx: "m-pulse" })],
+    { note: "两难、权衡", ambient: "m-breathe-bg" }),
+  L("fg-checklist", "清单图 + 文字", "figure", ["m-tick-pulse", "m-slide-left"],
+    [s("figure", 0.8, 1.6, 6.2, 5, { figure: "fig-checklist", m: "m-tick-pulse", mx: "m-dot-bounce" }),
+     s("headline", 7.4, 2.6, 4.4, 3, { size: "xl", align: "start", m: "m-slide-left" })],
+    { note: "一套被逐条执行的规则", ambient: "m-flicker" }),
+  L("fg-corridor", "走廊 + 文字", "figure", ["m-zoom-in", "m-rotate-in"],
+    [s("headline", 1, 2.8, 5, 2.6, { size: "xxl", align: "start", m: "m-zoom-in" }),
+     s("figure", 6.4, 0.8, 5.2, 5.6, { figure: "fig-corridor", m: "m-rotate-in", mx: "m-breathe" })],
+    { note: "没有尽头、没完没了", ambient: "m-breathe-bg" }),
+  L("fg-dim", "衰减图 + 标题", "figure", ["m-bar-sweep", "m-fade-down"],
+    [s("figure", 0.8, 0.8, 10.4, 4.4, { figure: "fig-dim", m: "m-bar-sweep", mx: "m-color-shift" }),
+     s("headline", 1, 5.4, 10, 2.2, { size: "xxl", align: "center", m: "m-fade-down", mx: "m-jitter" })],
+    { note: "代价消失，收益同时消失", ambient: "m-drift-slow" }),
+  L("fg-scurve", "损失曲线 + 文字", "figure", ["m-stroke-draw", "m-char-type"],
+    [s("figure", 0.8, 1.4, 6.4, 5.2, { figure: "fig-scurve", m: "m-stroke-draw", mx: "m-focus-ring" }),
+     s("headline", 7.6, 2.8, 4.4, 2.8, { size: "xl", align: "start", m: "m-char-type" })],
+    { note: "损失厌恶等心理学术语登场", ambient: "m-breathe-bg" }),
+  L("fg-weigh-bars", "权重柱 + 标题", "figure", ["m-bar-sweep", "m-count-pop"],
+    [s("figure", 1.2, 0.6, 9.6, 4.6, { figure: "fig-weigh-bars", m: "m-bar-sweep", mx: "m-shake" }),
+     s("headline", 1, 5.5, 10, 2, { size: "xl", align: "center", m: "m-count-pop" })],
+    { note: "同样金额，不同权重", ambient: "m-breathe-bg" }),
+  L("fg-converge", "汇聚 + 文字", "figure", ["m-slide-right", "m-rise-lines"],
+    [s("headline", 0.8, 2.8, 5.4, 3, { size: "xl", align: "start", m: "m-slide-right", mx: "m-weight-morph" }),
+     s("figure", 6.4, 1.2, 5.2, 5.6, { figure: "fig-converge", m: "m-rise-lines" })],
+    { note: "两件事其实同源", ambient: "m-float" }),
+  P("fg-curve-pain", "痛感曲线", "figure", PO_LINE, "glow",
+    [s("figure", 0.5, 0.6, 11, 5.4, { figure: "fig-curve-pain", opacity: 0.72, m: "m-stroke-draw" }),
+     s("headline", 1, 5.2, 10, 2.4, { size: "huge", align: "center", m: "m-char-rise", mx: "m-glow" })],
+    { note: "开场：靠近与疼的量化隐喻", fxStrength: 0.4, ambient: "m-grain-drift" }),
+  P("fg-receipt", "收据 + 文字", "figure", PO_TYPE, "glow",
+    [s("figure", 0.9, 1, 4.6, 6, { figure: "fig-receipt", m: "m-stroke-draw" }),
+     s("headline", 6.2, 3, 5.4, 2.6, { size: "huge", align: "start", m: "m-char-rise", mx: "m-highlight-sweep" })],
+    { note: "收束：把疼结算成一张凭条", fxStrength: 0.4, ambient: "m-float" }),
 ];
 
 export const LAYOUT_BY_ID = new Map(LAYOUTS.map((l) => [l.id, l]));
 export const LAYOUT_GROUPS: Group[] = [
-  "statement", "number", "compare", "process", "list", "chart", "image", "quote", "timeline", "bookend",
+  "statement", "number", "compare", "process", "list", "chart", "image", "quote", "timeline", "bookend", "figure",
   "poster-focus", "poster-field", "poster-geo", "poster-nest",
 ];

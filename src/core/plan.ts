@@ -59,6 +59,20 @@ export function plan(srt: string, ovRaw: string): PlanResult {
       problems.push(`拍 ${beat.index}：覆写的版式 id「${ovr.layoutId}」不存在`);
     }
     layout = layout ?? pickLayout(content, decision.style, prevLayout);
+
+    // 槽级动效覆写：克隆一份版式，只改被点名的槽 —— 不能就地改 LAYOUT_BY_ID 里的原对象，
+    // 否则同一版式被别的语料复用时会被这支片的动效污染。
+    if (ovr?.animations) {
+      const anims = ovr.animations;
+      for (const [k, id] of Object.entries(anims)) {
+        if (!MOTION_BY_ID.has(id)) problems.push(`拍 ${beat.index}：覆写的动效「${id}」不存在（槽 ${k}）`);
+      }
+      layout = {
+        ...layout,
+        slots: layout.slots.map((sl, k) => (anims[String(k)] ? { ...sl, m: anims[String(k)] } : sl)),
+      };
+    }
+
     prevLayout = layout.id;
 
     const realStyle = layout.style ?? "editorial";
