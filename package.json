@@ -21,6 +21,7 @@
     "qa:still": "node tools/qa-frames.mjs --fail-on-still --sheet",
     "qa:det": "node tools/qa-frames.mjs --determinism --fail-on-nondeterministic --sheet",
     "dupes": "node tools/run-ts.mjs tools/dupes.ts",
+    "plan:dry": "node tools/run-ts.mjs tools/plan-dry.ts",
     "sweep": "node tools/run-ts.mjs tools/style-sweep.ts"
   },
   "dependencies": {

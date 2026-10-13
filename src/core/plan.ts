@@ -1,0 +1,82 @@
+// 规划管线：SRT + 导演覆写 → 拍序列（含门禁问题）。
+// 纯函数、无 DOM —— 浏览器（ui/main.ts）与干跑工具（tools/plan-dry.ts）共用这一份，
+// 避免两处各写一遍规划逻辑后悄悄漂移。
+
+import { parseSRT } from "./srt";
+import { planBeats } from "./beats";
+import { composeScenes, validateScene, type BeatScene } from "./compose";
+import { buildContent } from "./content";
+import { applyOverride, type OverrideMap } from "./overrides";
+import type { Shot } from "./shot";
+import { LAYOUT_BY_ID } from "../layouts/catalog";
+import { eligible, pickLayout, planStyles } from "../layouts/pick";
+import { MOTION_BY_ID, validateMotionSet } from "../motion/catalog";
+
+export interface PlanResult {
+  shots: Shot[];
+  /** 门禁问题；非空则不应播放 */
+  problems: string[];
+  /** 逐拍风格判定说明（进调试面板） */
+  styles: string[];
+}
+
+/** 构建管线：返回拍计划与门禁问题（问题非空则不播放）。 */
+export function plan(srt: string, ovRaw: string): PlanResult {
+  const ov: OverrideMap = ovRaw.trim() ? (JSON.parse(ovRaw) as OverrideMap) : {};
+  const beats = planBeats(parseSRT(srt));
+  const problems: string[] = [];
+  const styles: string[] = [];
+
+  // 第一遍：把每拍旁白变成内容（并做溯源校验）
+  const prepared = beats.map((beat) => {
+    const ovr = ov[String(beat.index)];
+    const scene: BeatScene = composeScenes([beat])[0]!;
+    const applied = ovr ? applyOverride(scene, ovr) : scene;
+    problems.push(...validateScene(applied, ovr?.source));
+
+    const content = buildContent(applied, beat, false);
+    if (ovr?.headline) content.headline = ovr.headline;
+    if (ovr?.bigNumber) content.bignum = ovr.bigNumber;
+    if (ovr?.left) content.left = ovr.left;
+    if (ovr?.right) content.right = ovr.right;
+    return { beat, ovr, content };
+  });
+
+  // 第二遍：全片定风格（覆写优先，自动兜底按配额+锚点选海报风拍）
+  const decisions = planStyles(
+    prepared.map((p) => p.content),
+    prepared.map((p) => p.ovr?.style),
+  );
+
+  // 第三遍：风格内挑版式 + 资格/动效门禁
+  const out: Shot[] = [];
+  let prevLayout: string | undefined;
+
+  prepared.forEach(({ beat, ovr, content }, i) => {
+    const decision = decisions[i]!;
+    let layout = ovr?.layoutId ? LAYOUT_BY_ID.get(ovr.layoutId) : undefined;
+    if (ovr?.layoutId && !layout) {
+      problems.push(`拍 ${beat.index}：覆写的版式 id「${ovr.layoutId}」不存在`);
+    }
+    layout = layout ?? pickLayout(content, decision.style, prevLayout);
+    prevLayout = layout.id;
+
+    const realStyle = layout.style ?? "editorial";
+    styles.push(
+      `${String(beat.index).padStart(2, "0")} ${realStyle === "poster" ? "海报" : "编辑"}（${ovr?.layoutId ? "覆写版式" : decision.reason}）`,
+    );
+
+    // 资格门禁：图表版式必须拿得到足够多的可溯源数字
+    if (!eligible(layout, content)) {
+      problems.push(`拍 ${beat.index}：版式「${layout.name}」需要更多可溯源数字，旁白里不够`);
+    }
+    // 动效门禁：版式自带的动效必须存在且可组合
+    const motions = [...layout.enter, ...(layout.emphasis ? [layout.emphasis] : [])];
+    problems.push(...validateMotionSet(motions).map((e) => `拍 ${beat.index}：${e}`));
+    for (const id of motions) if (!MOTION_BY_ID.has(id)) problems.push(`拍 ${beat.index}：版式引用了未知动效 ${id}`);
+
+    out.push({ layout, content, start: beat.start, end: beat.end });
+  });
+
+  return { shots: out, problems, styles };
+}
