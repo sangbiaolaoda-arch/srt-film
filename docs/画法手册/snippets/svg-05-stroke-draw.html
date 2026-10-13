@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVG 05 · 描边生长动画</title>
+<style>
+  :root{ --bg:#faf9f6; --text:#1c1b18; --muted:#6b675e; --accent:#c8401f; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 24px 64px; background:var(--bg); color:var(--text);
+        font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  h1{ font-size:24px; margin:0 0 6px; color:var(--accent); }
+  .lead{ color:var(--muted); margin:0 0 30px; max-width:74ch; }
+  section{ margin:0 0 34px; }
+  h2{ font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .note{ color:var(--muted); font-size:13px; margin:0 0 16px 12px; max-width:78ch; }
+  .stage{ background:#fff; border:1px solid #e7e3da; border-radius:12px; padding:18px; display:inline-block; }
+  svg{ display:block; }
+  .formula{ background:#fff; border:1px solid #e7e3da; border-radius:10px; padding:14px 18px;
+    font:13px/1.9 "Consolas","Menlo",monospace; color:var(--text); max-width:640px; }
+  .formula b{ color:var(--accent); }
+  .val{ color:var(--accent); font-weight:700; }
+  button{ margin-top:14px; padding:8px 18px; border:none; border-radius:8px; cursor:pointer;
+    background:var(--accent); color:#fff; font-size:14px; }
+  code{ background:#f1efe9; padding:1px 5px; border-radius:4px; font-size:12.5px; color:var(--accent); }
+
+  /* 关键点：pathLength 归一化写法 —— 路径实际多长都当 1，dasharray/dashoffset 直接用 1 */
+  .grow{
+    stroke-dasharray:1;
+    stroke-dashoffset:1;
+    animation:draw 2s ease forwards;
+  }
+  @keyframes draw{ to{ stroke-dashoffset:0; } }
+
+  details{ margin-top:26px; border:1px solid #e7e3da; border-radius:10px; background:#fff; padding:8px 14px; }
+  summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+  pre{ margin:12px 0 4px; padding:14px; background:#1c1b18; color:#f3f0e9; border-radius:8px;
+       overflow:auto; font:12.5px/1.6 "Consolas","Menlo",monospace; }
+</style>
+</head>
+<body>
+
+<h1>描边生长动画</h1>
+<p class="lead">这个片段演示什么：用 stroke-dasharray / stroke-dashoffset 让线条从起点长到终点，标出长度怎么算、动画公式怎么写，并给出「量长度」与「归一化」两种做法。</p>
+
+<section>
+  <h2>1. 原理与公式</h2>
+  <div class="formula">
+    ① 把整条路径包成「一段实线 + 等长空白」：<b>dasharray = L L</b>（简写 <b>L</b>）<br>
+    ② 初态把实线藏进空白里：<b>dashoffset = L</b> → 看不见<br>
+    ③ 末态让实线全露出：<b>dashoffset = 0</b> → 画满<br>
+    ④ <b>L</b> = <code>getTotalLength()</code> 实测值；或用属性 <code>pathLength="1"</code> 归一化成 1，省去量长
+  </div>
+  <p class="note" style="margin-top:12px">dashoffset 相当于把虚线的起点沿路径往后退：offset 等于一个实线长度时，露出的正好全是空白。</p>
+</section>
+
+<section>
+  <h2>2. 归一化写法：pathLength="1"（路径多长都通用）</h2>
+  <div class="stage">
+    <svg width="320" height="110" viewBox="0 0 320 110" xmlns="http://www.w3.org/2000/svg">
+      <!-- 关键点：pathLength="1" 把真实长度归一化成 1，dasharray/dashoffset 直接用 1 -->
+      <path class="grow" pathLength="1"
+            d="M 20 60 C 80 5, 150 115, 210 60 S 290 15, 305 60"
+            fill="none" stroke="#c8401f" stroke-width="5" stroke-linecap="round"/>
+    </svg>
+  </div>
+</section>
+
+<section>
+  <h2>3. 实测写法：JS 量长度后驱动动画</h2>
+  <p class="note">下面这条路径的实际长度由 <code>getTotalLength()</code> 量出：<span class="val" id="len">…</span> 用户单位，然后把它当作 dasharray / dashoffset 的初值。</p>
+  <div class="stage">
+    <svg width="360" height="130" viewBox="0 0 360 130" xmlns="http://www.w3.org/2000/svg">
+      <!-- 关键点：pathLength 不写，长度交给 JS 实测 -->
+      <path id="curve"
+            d="M 25 95 L 85 35 L 145 95 L 205 35 L 265 95 L 335 35"
+            fill="none" stroke="#2b6cb0" stroke-width="5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <button id="replay">重播</button>
+  </div>
+</section>
+
+<section>
+  <h2>4. 端点细节：linecap 影响生长两端的样子</h2>
+  <p class="note"><code>stroke-linecap: round</code> 让线头是圆的，生长动画看起来更像笔刷；<code>butt</code>（默认）是平头，起步会更「硬」。</p>
+  <div class="stage">
+    <svg width="360" height="140" viewBox="0 0 360 140" xmlns="http://www.w3.org/2000/svg">
+      <path class="grow" pathLength="1" d="M 20 40 C 90 10, 270 70, 340 40"
+            fill="none" stroke="#1c1b18" stroke-width="8" stroke-linecap="butt"/>
+      <path class="grow" pathLength="1" d="M 20 100 C 90 70, 270 130, 340 100"
+            fill="none" stroke="#c8401f" stroke-width="8" stroke-linecap="round"
+            style="animation-delay:.3s"/>
+    </svg>
+  </div>
+</section>
+
+<details>
+  <summary>核心代码</summary>
+<pre><code>&lt;!-- 关键点：归一化写法 —— pathLength="1" 省去量长，任何路径都通用 --&gt;
+&lt;svg width="320" height="110" viewBox="0 0 320 110"&gt;
+  &lt;path class="grow" pathLength="1"
+        d="M 20 60 C 80 5, 150 115, 210 60 S 290 15, 305 60"
+        fill="none" stroke="#c8401f" stroke-width="5" stroke-linecap="round"/&gt;
+&lt;/svg&gt;
+&lt;style&gt;
+  /* 关键点：dasharray=1 把路径包成「实线+等长空白」；dashoffset 1→0 即生长 */
+  .grow{ stroke-dasharray:1; stroke-dashoffset:1;
+         animation:draw 2s ease forwards; }
+  @keyframes draw{ to{ stroke-dashoffset:0; } }
+&lt;/style&gt;
+
+&lt;!-- 关键点：实测写法 —— 不写 pathLength，用 JS 取真实长度 --&gt;
+&lt;script&gt;
+  const p = document.getElementById('curve');
+  const L = p.getTotalLength();            // ④ 量出真实长度
+  p.style.strokeDasharray  = L;            // ① dasharray = L
+  p.style.strokeDashoffset = L;            // ② 初态藏起来
+  requestAnimationFrame(() =&gt; {
+    p.style.transition = 'stroke-dashoffset 2s ease';
+    p.style.strokeDashoffset = 0;          // ③ 末态画满
+  });
+&lt;/script&gt;
+
+&lt;!-- 备选：SMIL 写法，不依赖 CSS --&gt;
+&lt;path d="M 20 50 C 80 0, 220 100, 280 50"
+      fill="none" stroke="#1ddea3" stroke-width="4"
+      stroke-dasharray="300" stroke-dashoffset="300"&gt;
+  &lt;animate attributeName="stroke-dashoffset" from="300" to="0" dur="2s" fill="freeze"/&gt;
+&lt;/path&gt;</code></pre>
+</details>
+
+<script>
+  // 关键点：量出路径真实长度，写进页面并作为 dasharray / dashoffset 的初值
+  const curve = document.getElementById('curve');
+  const L = curve.getTotalLength();
+  document.getElementById('len').textContent = L.toFixed(1);
+  curve.style.strokeDasharray = L;
+
+  function replay(){
+    curve.style.transition = 'none';
+    curve.style.strokeDashoffset = L;   // 初态：整条藏进空白
+    void curve.getBoundingClientRect(); // 强制重排，重新触发过渡
+    curve.style.transition = 'stroke-dashoffset 2s ease';
+    curve.style.strokeDashoffset = 0;   // 末态：实线全露出
+  }
+  document.getElementById('replay').addEventListener('click', replay);
+  replay();
+</script>
+
+</body>
+</html>

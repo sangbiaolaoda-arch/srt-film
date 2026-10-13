@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WebGL 距离场画形状 · 片段着色器</title>
+<style>
+  :root { --bg:#faf9f6; --ink:#1c1b18; --muted:#6b675e; --accent:#c8401f; --line:#e4e0d8; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:36px 24px 72px; background:var(--bg); color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  .wrap { max-width:780px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 8px; }
+  .lede { color:var(--muted); margin:0; }
+  h2 { font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .cap { color:var(--muted); font-size:13px; margin:4px 0 14px; }
+  .block { margin-top:38px; }
+  #stage { position:relative; width:100%; height:440px; border:1px solid var(--line);
+           border-radius:10px; overflow:hidden; background:#faf9f6; }
+  #gl { display:block; width:100%; height:100%; cursor:crosshair; }
+  #tip { position:absolute; left:14px; bottom:12px; font-size:12.5px; color:var(--muted);
+         background:rgba(250,249,246,.86); border-radius:6px; padding:3px 10px; }
+  #fallback { position:absolute; inset:0; display:none; place-items:center; text-align:center;
+              color:var(--muted); padding:30px; font-size:14px; }
+  .grid4 { display:grid; grid-template-columns:1fr 1fr; gap:8px 20px; margin-top:14px; font-size:13px; }
+  .grid4 div { display:flex; align-items:center; gap:8px; color:var(--ink); }
+  .grid4 i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  code { font-family:ui-monospace,Consolas,"Courier New",monospace; font-size:12.5px;
+         background:#f1efe9; padding:1px 5px; border-radius:4px; }
+  details { margin-top:44px; border:1px solid var(--line); border-radius:12px; padding:14px 18px; background:#fff; }
+  summary { cursor:pointer; font-weight:600; color:var(--accent); }
+  pre { margin:14px 0 0; overflow-x:auto; background:#f7f5f0; border-radius:8px; padding:14px; }
+  pre code { background:none; padding:0; font-size:12.5px; line-height:1.6;
+             font-family:ui-monospace,Consolas,"Courier New",monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>WebGL 距离场画形状</h1>
+  <p class="lede">这个片段演示什么：不去「画一个圆」，而是对每个像素回答「你到圆心的距离是多少」，再用 <code>step</code> / <code>smoothstep</code> 把距离切成形状。用 <code>fwidth</code> 做像素级自适应抗锯齿。移动鼠标，四个形状会跟着走。</p>
+
+  <div class="block">
+    <h2>① 四个形状，一个 fragment shader</h2>
+    <p class="cap">屏幕分成 2×2 格，每格一个形状，全部用 SDF（有符号距离场）写：<code>d &lt; 0</code> 在形状内部，<code>d &gt; 0</code> 在外部。</p>
+    <div id="stage">
+      <canvas id="gl"></canvas>
+      <div id="tip">移动鼠标 → 形状跟随</div>
+      <div id="fallback">当前浏览器/环境不支持 WebGL2，无法运行此片段。<br>请用较新版本的 Chrome / Edge / Firefox / Safari 打开。</div>
+    </div>
+    <div class="grid4">
+      <div><i style="background:#3f6f6b;grid-column:1"></i>左上 · 十字 = 两个矩形 SDF 取 <code>min</code>（并集）</div>
+      <div><i style="background:#b98a26"></i>右上 · 星形 = 极坐标下 <code>cos(a·5)</code> 调制半径</div>
+      <div><i style="background:#c8401f"></i>左下 · 圆 = <code>length(p) - r</code></div>
+      <div><i style="background:#1c1b18"></i>右下 · 矩形 = <code>abs(p) - b</code> 的 sdBox</div>
+    </div>
+  </div>
+
+  <details>
+    <summary>核心代码</summary>
+    <pre><code>// ---- 顶点着色器：一个铺满屏幕的四边形 ----
+#version 300 es
+in vec2 aPos;
+void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+
+// ---- 片段着色器：把图形当距离场画 ----
+#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform vec2 uMouse;          // 0..1
+out vec4 fragColor;
+
+// 矩形 SDF：p 为相对中心的坐标，b 为半宽半高
+float sdBox(vec2 p, vec2 b) {
+  vec2 d = abs(p) - b;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+
+void main() {
+  vec2 st = gl_FragCoord.xy / uResolution;   // 像素坐标 → 0..1（原点左下）
+
+  // 关键点：把鼠标位移叠加到形状位置上
+  vec2 off = (uMouse - 0.5) * 0.30;
+
+  // 2×2 分格
+  int col = st.x &gt; 0.5 ? 1 : 0;
+  int row = st.y &gt; 0.5 ? 1 : 0;              // 0 = 下半屏
+  int idx = row * 2 + col;
+
+  // 本格局部坐标 -0.5..0.5，并修正宽高比（否则圆变椭圆）
+  vec2 q = vec2(st.x - float(col) * 0.5, st.y - float(row) * 0.5) * 2.0 - 0.5;
+  q.x *= uResolution.x / uResolution.y;
+  vec2 p = q - off;
+
+  float d;
+  if (idx == 0)      d = length(p) - 0.26;                        // 圆
+  else if (idx == 1) d = sdBox(p, vec2(0.30, 0.20));              // 矩形
+  else if (idx == 2) d = min(sdBox(p, vec2(0.07, 0.32)),          // 十字 = 并集
+                             sdBox(p, vec2(0.32, 0.07)));
+  else {                                                          // 星
+    float r = length(p);
+    float a = atan(p.y, p.x);
+    float k = 0.5 + 0.5 * cos(a * 5.0);
+    d = r - mix(0.12, 0.32, k);
+  }
+
+  // 关键点：fwidth(d) ≈ 一个像素内 d 的变化量 → 过渡带正好一个像素宽
+  float w = fwidth(d);
+  float m = 1.0 - smoothstep(-w, w, d);
+
+  vec3 bg = vec3(0.980, 0.976, 0.961);
+  vec3 fg = idx == 0 ? vec3(0.784, 0.251, 0.122)
+          : idx == 1 ? vec3(0.110, 0.106, 0.094)
+          : idx == 2 ? vec3(0.247, 0.435, 0.420)
+                     : vec3(0.725, 0.541, 0.149);
+  fragColor = vec4(mix(bg, fg, m), 1.0);     // 关键点：mix 把「形状值」变「颜色」
+}</code></pre>
+  </details>
+</div>
+
+<script>
+  const canvas = document.getElementById("gl");
+  const gl = canvas.getContext("webgl2", { antialias: true, alpha: false });
+
+  if (!gl) {
+    document.getElementById("fallback").style.display = "grid";
+  } else {
+    const VERT = `#version 300 es
+      in vec2 aPos;
+      void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+    const FRAG = `#version 300 es
+precision highp float;
+uniform vec2 uResolution;
+uniform vec2 uMouse;
+out vec4 fragColor;
+
+// 关键点：矩形 SDF（|p|-b 再取外/内两部分）
+float sdBox(vec2 p, vec2 b) {
+  vec2 d = abs(p) - b;
+  return length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+}
+
+void main() {
+  vec2 st = gl_FragCoord.xy / uResolution;
+
+  // 关键点：鼠标位移叠加到形状位置
+  vec2 off = (uMouse - 0.5) * 0.30;
+
+  int col = st.x > 0.5 ? 1 : 0;
+  int row = st.y > 0.5 ? 1 : 0;
+  int idx = row * 2 + col;
+
+  // 本格局部坐标 -0.5..0.5；修正宽高比让圆保持正圆
+  vec2 q = vec2(st.x - float(col) * 0.5, st.y - float(row) * 0.5) * 2.0 - 0.5;
+  q.x *= uResolution.x / uResolution.y;
+  vec2 p = q - off;
+
+  float d;
+  if (idx == 0) {
+    d = length(p) - 0.26;                                   // 圆
+  } else if (idx == 1) {
+    d = sdBox(p, vec2(0.30, 0.20));                         // 矩形
+  } else if (idx == 2) {
+    d = min(sdBox(p, vec2(0.07, 0.32)),                     // 十字 = min 并集
+            sdBox(p, vec2(0.32, 0.07)));
+  } else {
+    float r = length(p);                                    // 星：极坐标调半径
+    float a = atan(p.y, p.x);
+    float k = 0.5 + 0.5 * cos(a * 5.0);
+    d = r - mix(0.12, 0.32, k);
+  }
+
+  // 关键点：fwidth 做像素级自适应抗锯齿（WebGL2/GLSL3 内置导数函数）
+  float w = fwidth(d);
+  float m = 1.0 - smoothstep(-w, w, d);
+
+  vec3 bg = vec3(0.980, 0.976, 0.961);
+  vec3 fg = idx == 0 ? vec3(0.784, 0.251, 0.122)
+          : idx == 1 ? vec3(0.110, 0.106, 0.094)
+          : idx == 2 ? vec3(0.247, 0.435, 0.420)
+                     : vec3(0.725, 0.541, 0.149);
+  fragColor = vec4(mix(bg, fg, m), 1.0);
+}`;
+
+    function compile(type, src) {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src);
+      gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+        console.error(gl.getShaderInfoLog(s));
+      }
+      return s;
+    }
+
+    const prog = gl.createProgram();
+    gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+    gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+    gl.linkProgram(prog);
+    gl.useProgram(prog);
+
+    // 全屏四边形 = 两个三角形
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1, 1, -1, -1, 1,
+      -1, 1, 1, -1, 1, 1
+    ]), gl.STATIC_DRAW);
+    const aPos = gl.getAttribLocation(prog, "aPos");
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+    const uResolution = gl.getUniformLocation(prog, "uResolution");
+    const uMouse = gl.getUniformLocation(prog, "uMouse");
+    const mouse = { x: 0.5, y: 0.5 };
+
+    function resize() {
+      // 关键点：限制像素比，移动端第一优化（dpr 上限 2）
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+      const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      gl.viewport(0, 0, w, h);
+    }
+
+    function render() {
+      resize();
+      gl.uniform2f(uResolution, canvas.width, canvas.height);
+      // 关键点：gl_FragCoord 原点在左下角，所以 y 要翻转
+      gl.uniform2f(uMouse, mouse.x, 1 - mouse.y);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+    }
+
+    canvas.addEventListener("pointermove", (e) => {
+      const r = canvas.getBoundingClientRect();
+      mouse.x = (e.clientX - r.left) / r.width;
+      mouse.y = (e.clientY - r.top) / r.height;
+      render();                       // 按需渲染：只有鼠标动的时候才重画
+    });
+
+    window.addEventListener("resize", render);
+    render();
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVG 01 · viewBox 与坐标系</title>
+<style>
+  :root{ --bg:#faf9f6; --text:#1c1b18; --muted:#6b675e; --accent:#c8401f; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 24px 64px; background:var(--bg); color:var(--text);
+        font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  h1{ font-size:24px; margin:0 0 6px; color:var(--accent); }
+  .lead{ color:var(--muted); margin:0 0 34px; max-width:74ch; }
+  section{ margin:0 0 38px; }
+  h2{ font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .note{ color:var(--muted); font-size:13px; margin:0 0 14px 12px; }
+  .row{ display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start; }
+  .cell{ background:#fff; border:1px solid #e7e3da; border-radius:10px; padding:12px; }
+  .cap{ font-size:12px; color:var(--muted); margin-top:8px; text-align:center; }
+  svg{ display:block; background:#f1efe9; border-radius:6px; }
+  code.k{ background:#f1efe9; padding:1px 5px; border-radius:4px; font-size:13px; color:var(--accent); }
+  details{ margin-top:14px; border:1px solid #e7e3da; border-radius:10px; background:#fff; padding:8px 14px; }
+  summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+  pre{ margin:12px 0 4px; padding:14px; background:#1c1b18; color:#f3f0e9; border-radius:8px;
+       overflow:auto; font:12.5px/1.6 "Consolas","Menlo",monospace; }
+</style>
+</head>
+<body>
+
+<h1>viewBox 与坐标系</h1>
+<p class="lead">这个片段演示什么：同一个图形在三种 viewBox 下被“放大 / 平移”的不同呈现，preserveAspectRatio 里 meet 与 slice 的差别，以及嵌套 &lt;svg&gt; 不写 x/y 会掉到父级原点的陷阱。</p>
+
+<!-- ===================== 块 1：三种 viewBox ===================== -->
+<section>
+  <h2>1. 一张图，三种 viewBox</h2>
+  <p class="note">同一个 <code class="k">rect + circle</code>，外层尺寸都写 200×150，只改 viewBox。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="200" height="150" viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg">
+        <!-- 关键点：viewBox 与视口等大，1 用户单位 = 1 px，图形原样呈现 -->
+        <rect x="0" y="0" width="200" height="150" fill="#e8e3d7"/>
+        <circle cx="100" cy="75" r="50" fill="#c8401f"/>
+        <rect x="150" y="10" width="30" height="30" fill="#1c1b18"/>
+      </svg>
+      <div class="cap">viewBox="0 0 200 150"　1:1</div>
+    </div>
+    <div class="cell">
+      <svg width="200" height="150" viewBox="0 0 100 75" xmlns="http://www.w3.org/2000/svg">
+        <!-- 关键点：viewBox 只有视口一半大 → 内容被放大 2 倍填满视口 -->
+        <rect x="0" y="0" width="100" height="75" fill="#e8e3d7"/>
+        <circle cx="50" cy="37.5" r="25" fill="#c8401f"/>
+        <rect x="75" y="5" width="15" height="15" fill="#1c1b18"/>
+      </svg>
+      <div class="cap">viewBox="0 0 100 75"　放大 2×</div>
+    </div>
+    <div class="cell">
+      <svg width="200" height="150" viewBox="25 25 100 75" xmlns="http://www.w3.org/2000/svg">
+        <!-- 关键点：min-x/min-y=25 → 等价 translate(-25,-25)，内容被往左上推，右下角被裁 -->
+        <rect x="0" y="0" width="100" height="75" fill="#e8e3d7"/>
+        <circle cx="50" cy="37.5" r="25" fill="#c8401f"/>
+        <rect x="75" y="5" width="15" height="15" fill="#1c1b18"/>
+      </svg>
+      <div class="cap">viewBox="25 25 100 75"　平移 + 放大</div>
+    </div>
+  </div>
+  <p class="note" style="margin-top:14px">公式：缩放比 = 视口宽 ÷ viewBox 宽；非零 min-x/min-y 再补一次 <code class="k">translate(-minx -miny)</code>。</p>
+</section>
+
+<!-- ===================== 块 2：preserveAspectRatio ===================== -->
+<section>
+  <h2>2. preserveAspectRatio：meet 与 slice</h2>
+  <p class="note">视口 260×130、viewBox 是正方形 130×130 —— 宽高比不同时看它怎么处理。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="260" height="130" viewBox="0 0 130 130" preserveAspectRatio="xMidYMid meet"
+           xmlns="http://www.w3.org/2000/svg">
+        <!-- 关键点：meet=等比缩放到“完整装下”，图形全在，两侧留白（类似 contain） -->
+        <rect x="0" y="0" width="130" height="130" fill="#e8e3d7"/>
+        <circle cx="65" cy="65" r="58" fill="#c8401f"/>
+      </svg>
+      <div class="cap">xMidYMid meet　完整可见</div>
+    </div>
+    <div class="cell">
+      <svg width="260" height="130" viewBox="0 0 130 130" preserveAspectRatio="xMidYMid slice"
+           xmlns="http://www.w3.org/2000/svg">
+        <!-- 关键点：slice=等比缩放到“铺满视口”，多余部分被裁掉（类似 cover） -->
+        <rect x="0" y="0" width="130" height="130" fill="#e8e3d7"/>
+        <circle cx="65" cy="65" r="58" fill="#c8401f"/>
+      </svg>
+      <div class="cap">xMidYMid slice　铺满裁切</div>
+    </div>
+    <div class="cell">
+      <svg width="260" height="130" viewBox="0 0 130 130" preserveAspectRatio="none"
+           xmlns="http://www.w3.org/2000/svg">
+        <!-- 关键点：align="none" 是唯一允许非等比拉伸的值 → 圆被拉成椭圆 -->
+        <rect x="0" y="0" width="130" height="130" fill="#e8e3d7"/>
+        <circle cx="65" cy="65" r="58" fill="#c8401f"/>
+      </svg>
+      <div class="cap">none　非等比拉伸（变形）</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 块 3：嵌套 svg 的 x/y 陷阱 ===================== -->
+<section>
+  <h2>3. 嵌套 &lt;svg&gt; 不写 x/y 会落在父级原点</h2>
+  <p class="note">父级都是 300×200，虚线框标出“想让小红圆出现的位置”。内层 svg 只有 80×80。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="300" height="200" viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="300" height="200" fill="#e8e3d7"/>
+        <!-- 目标位置的虚线提示框 -->
+        <rect x="180" y="100" width="80" height="80" fill="none" stroke="#6b675e"
+              stroke-dasharray="5 5"/>
+        <!-- 关键点：写了 x/y，内层视口被摆到父级 (180,100)，落在虚线框里 -->
+        <svg x="180" y="100" width="80" height="80" viewBox="0 0 10 10">
+          <circle cx="5" cy="5" r="5" fill="#c8401f"/>
+        </svg>
+      </svg>
+      <div class="cap">✅ 写了 x="180" y="100"</div>
+    </div>
+    <div class="cell">
+      <svg width="300" height="200" viewBox="0 0 300 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="300" height="200" fill="#e8e3d7"/>
+        <rect x="180" y="100" width="80" height="80" fill="none" stroke="#6b675e"
+              stroke-dasharray="5 5"/>
+        <!-- 关键点：x/y 默认值都是 0，不写就永远贴父级左上角 (0,0)，跟虚线框毫无关系 -->
+        <svg width="80" height="80" viewBox="0 0 10 10">
+          <circle cx="5" cy="5" r="5" fill="#c8401f"/>
+        </svg>
+      </svg>
+      <div class="cap">❌ 省掉 x/y → 掉到 (0,0)</div>
+    </div>
+  </div>
+  <p class="note" style="margin-top:14px">要点：内层 <code class="k">x/y/width/height</code> 用父级用户单位，内层内容用自己的 viewBox 单位；内层视口默认 <code class="k">overflow: hidden</code>，想留白只能靠 x/y 位移，不能靠 margin。</p>
+</section>
+
+<details>
+  <summary>核心代码</summary>
+<pre><code>&lt;!-- 关键点：视口 200×150，三种 viewBox 只改第一个与后两个参数 --&gt;
+&lt;svg width="200" height="150" viewBox="0 0 200 150"&gt;
+  &lt;circle cx="100" cy="75" r="50" fill="#c8401f"/&gt;
+&lt;/svg&gt;
+
+&lt;svg width="200" height="150" viewBox="0 0 100 75"&gt;        &lt;!-- 放大 2× --&gt;
+&lt;svg width="200" height="150" viewBox="25 25 100 75"&gt;     &lt;!-- 平移+放大 --&gt;
+
+&lt;!-- 关键点：宽高比不同时，meet 完整装下 / slice 铺满裁切 / none 拉伸变形 --&gt;
+&lt;svg width="260" height="130" viewBox="0 0 130 130"
+     preserveAspectRatio="xMidYMid meet"&gt; ... &lt;/svg&gt;
+
+&lt;!-- 关键点：嵌套 svg 的 x/y 默认是 0，不写就贴在父级原点 --&gt;
+&lt;svg width="300" height="200" viewBox="0 0 300 200"&gt;
+  &lt;svg x="180" y="100" width="80" height="80" viewBox="0 0 10 10"&gt;
+    &lt;circle cx="5" cy="5" r="5" fill="#c8401f"/&gt;
+  &lt;/svg&gt;
+&lt;/svg&gt;</code></pre>
+</details>
+
+</body>
+</html>

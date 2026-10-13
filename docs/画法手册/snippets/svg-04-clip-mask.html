@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVG 04 · clipPath 与 mask</title>
+<style>
+  :root{ --bg:#faf9f6; --text:#1c1b18; --muted:#6b675e; --accent:#c8401f; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 24px 64px; background:var(--bg); color:var(--text);
+        font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  h1{ font-size:24px; margin:0 0 6px; color:var(--accent); }
+  .lead{ color:var(--muted); margin:0 0 34px; max-width:74ch; }
+  section{ margin:0 0 36px; }
+  h2{ font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .note{ color:var(--muted); font-size:13px; margin:0 0 14px 12px; max-width:78ch; }
+  .row{ display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start; }
+  .cell{ background:#fff; border:1px solid #e7e3da; border-radius:10px; padding:12px; }
+  .cap{ font-size:12px; color:var(--muted); margin-top:8px; text-align:center; max-width:230px; }
+  svg{ display:block; background:#f1efe9; border-radius:6px; }
+  code{ background:#f1efe9; padding:1px 5px; border-radius:4px; font-size:12.5px; color:var(--accent); }
+  details{ margin-top:16px; border:1px solid #e7e3da; border-radius:10px; background:#fff; padding:8px 14px; }
+  summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+  pre{ margin:12px 0 4px; padding:14px; background:#1c1b18; color:#f3f0e9; border-radius:8px;
+       overflow:auto; font:12.5px/1.6 "Consolas","Menlo",monospace; }
+</style>
+</head>
+<body>
+
+<h1>clipPath 与 mask</h1>
+<p class="lead">这个片段演示什么：同一块内容分别被 clipPath「硬边裁掉」和被 mask「软边遮罩」的差别，clipPathUnits 两种坐标系，以及 mask 的 luminance 与 alpha 两种模式。</p>
+
+<!-- ===== 1. clip vs mask 本质区别 ===== -->
+<section>
+  <h2>1. 硬裁剪 vs 软遮罩</h2>
+  <p class="note">同一张红→蓝渐变方块：左图被圆形 clipPath 剪掉外部（边缘是硬的），右图被径向渐变 mask 遮住（边缘是柔的）。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="220" height="150" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="paintA" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#c8401f"/><stop offset="100%" stop-color="#2b6cb0"/>
+          </linearGradient>
+          <!-- 关键点：clipPath 里放的是矢量路径，路径外一律透明，边缘硬 -->
+          <clipPath id="circleClip">
+            <circle cx="110" cy="75" r="58"/>
+          </clipPath>
+        </defs>
+        <rect x="10" y="10" width="200" height="130" fill="url(#paintA)" clip-path="url(#circleClip)"/>
+      </svg>
+      <div class="cap">clipPath：圆外被剪掉，边缘锐利</div>
+    </div>
+    <div class="cell">
+      <svg width="220" height="150" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="paintB" x1="0" x2="1" y1="0" y2="1">
+            <stop offset="0%" stop-color="#c8401f"/><stop offset="100%" stop-color="#2b6cb0"/>
+          </linearGradient>
+          <!-- 关键点：mask 里放的是图像/渐变，按亮度取值做软过渡 -->
+          <radialGradient id="softCircle">
+            <stop offset="0%" stop-color="#fff"/>
+            <stop offset="70%" stop-color="#fff"/>
+            <stop offset="100%" stop-color="#000"/>
+          </radialGradient>
+          <mask id="circleMask" maskUnits="userSpaceOnUse" x="0" y="0" width="220" height="150">
+            <rect x="0" y="0" width="220" height="150" fill="url(#softCircle)"/>
+          </mask>
+        </defs>
+        <rect x="10" y="10" width="200" height="130" fill="url(#paintB)" mask="url(#circleMask)"/>
+      </svg>
+      <div class="cap">mask：亮度决定可见度，边缘羽化</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 2. clipPathUnits ===== -->
+<section>
+  <h2>2. clipPathUnits：自动贴合 vs 钉在画布</h2>
+  <p class="note">同样的「圆形裁剪」，套在大矩形和小矩形上，两种坐标系结果完全不同。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="300" height="150" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：objectBoundingBox 用 0~1 分数坐标，圆心 0.5 = 各自元素中心 -->
+          <clipPath id="cpObb" clipPathUnits="objectBoundingBox">
+            <circle cx="0.5" cy="0.5" r="0.5"/>
+          </clipPath>
+        </defs>
+        <rect x="10" y="10" width="120" height="120" fill="#c8401f" clip-path="url(#cpObb)"/>
+        <rect x="150" y="35" width="70" height="70" fill="#2b6cb0" clip-path="url(#cpObb)"/>
+      </svg>
+      <div class="cap">objectBoundingBox：两个都被裁成贴着各自尺寸的圆</div>
+    </div>
+    <div class="cell">
+      <svg width="300" height="150" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：userSpaceOnUse（默认）用绝对坐标，圆心是画布上的固定点 (70,70) -->
+          <clipPath id="cpUser">
+            <circle cx="70" cy="70" r="60"/>
+          </clipPath>
+        </defs>
+        <rect x="10" y="10" width="120" height="120" fill="#c8401f" clip-path="url(#cpUser)"/>
+        <rect x="150" y="35" width="70" height="70" fill="#2b6cb0" clip-path="url(#cpUser)"/>
+      </svg>
+      <div class="cap">userSpaceOnUse：小矩形落在裁剪区外，整块消失</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 3. mask 的 luminance vs alpha ===== -->
+<section>
+  <h2>3. mask 的 luminance 与 alpha 两种模式</h2>
+  <p class="note">用同一张「白→黑」渐变当遮罩，只切换 mask-type：luminance 按亮度做透明，alpha 只认 alpha 通道（白与黑都不透明 → 没有渐隐）。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="230" height="150" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="wb" x1="0" x2="1">
+            <stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#000"/>
+          </linearGradient>
+          <!-- 关键点：luminance（SVG <mask> 默认）→ 白=完全显示，黑=完全隐藏，灰=半透明 -->
+          <mask id="mFade" maskUnits="userSpaceOnUse" x="0" y="0" width="230" height="150"
+                style="mask-type:luminance">
+            <rect x="0" y="0" width="230" height="150" fill="url(#wb)"/>
+          </mask>
+        </defs>
+        <rect x="10" y="10" width="210" height="130" fill="#c8401f" mask="url(#mFade)"/>
+      </svg>
+      <div class="cap">luminance：右侧渐隐（白端显示）</div>
+    </div>
+    <div class="cell">
+      <svg width="230" height="150" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="wb2" x1="0" x2="1">
+            <stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#000"/>
+          </linearGradient>
+          <!-- 关键点：alpha 模式只按 alpha 通道；白/黑 alpha 都是 1 → 整块全不透明，不渐隐 -->
+          <mask id="mAlpha" maskUnits="userSpaceOnUse" x="0" y="0" width="230" height="150"
+                style="mask-type:alpha">
+            <rect x="0" y="0" width="230" height="150" fill="url(#wb2)"/>
+          </mask>
+        </defs>
+        <rect x="10" y="10" width="210" height="130" fill="#c8401f" mask="url(#mAlpha)"/>
+      </svg>
+      <div class="cap">alpha：颜色无关紧要，白/黑都全不透明 → 没有渐隐</div>
+    </div>
+  </div>
+  <p class="note" style="margin-top:14px">想让 alpha 模式也有渐隐，遮罩里就要用 <code>stop-opacity</code> 从 1 到 0 的渐变——那时 alpha 才有变化。另外：<code>&lt;clipPath&gt;</code> 里不能放 <code>&lt;g&gt;</code> 分组，一放整个裁剪就失效。</p>
+</section>
+
+<details>
+  <summary>核心代码</summary>
+<pre><code>&lt;!-- 关键点：clipPath 放矢量路径 → 硬边裁剪（路径外透明） --&gt;
+&lt;clipPath id="circleClip"&gt;
+  &lt;circle cx="110" cy="75" r="58"/&gt;
+&lt;/clipPath&gt;
+&lt;rect fill="url(#paint)" clip-path="url(#circleClip)"/&gt;
+
+&lt;!-- 关键点：mask 放图像/渐变 → 按亮度做软过渡 --&gt;
+&lt;radialGradient id="softCircle"&gt;
+  &lt;stop offset="0%" stop-color="#fff"/&gt;
+  &lt;stop offset="70%" stop-color="#fff"/&gt;
+  &lt;stop offset="100%" stop-color="#000"/&gt;
+&lt;/radialGradient&gt;
+&lt;mask id="circleMask" maskUnits="userSpaceOnUse" x="0" y="0" width="220" height="150"&gt;
+  &lt;rect width="220" height="150" fill="url(#softCircle)"/&gt;
+&lt;/mask&gt;
+&lt;rect fill="url(#paint)" mask="url(#circleMask)"/&gt;
+
+&lt;!-- 关键点：objectBoundingBox 用 0~1 分数坐标，自动贴合各元素尺寸 --&gt;
+&lt;clipPath id="cpObb" clipPathUnits="objectBoundingBox"&gt;
+  &lt;circle cx="0.5" cy="0.5" r="0.5"/&gt;
+&lt;/clipPath&gt;
+
+&lt;!-- 关键点：mask-type 决定按亮度还是按 alpha 取可见度 --&gt;
+&lt;mask id="mFade" style="mask-type:luminance"&gt; ... &lt;/mask&gt;   &lt;!-- 白显黑隐 --&gt;
+&lt;mask id="mAlpha" style="mask-type:alpha"&gt; ... &lt;/mask&gt;       &lt;!-- 只认 alpha --&gt;</code></pre>
+</details>
+
+</body>
+</html>

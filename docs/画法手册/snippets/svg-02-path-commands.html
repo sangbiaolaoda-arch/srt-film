@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVG 02 · 路径命令逐条演示</title>
+<style>
+  :root{ --bg:#faf9f6; --text:#1c1b18; --muted:#6b675e; --accent:#c8401f; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 24px 64px; background:var(--bg); color:var(--text);
+        font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  h1{ font-size:24px; margin:0 0 6px; color:var(--accent); }
+  .lead{ color:var(--muted); margin:0 0 26px; max-width:74ch; }
+  .legend{ font-size:13px; color:var(--muted); margin:0 0 24px; }
+  .legend i{ font-style:normal; }
+  .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; vertical-align:middle; margin:0 3px 0 10px; }
+  .grid{ display:flex; flex-wrap:wrap; gap:18px; }
+  .cell{ background:#fff; border:1px solid #e7e3da; border-radius:10px; padding:12px; }
+  .cell h3{ font-size:14px; margin:0 0 8px; color:var(--accent); }
+  .cap{ font-size:12px; color:var(--muted); margin-top:8px; max-width:200px; }
+  svg{ display:block; background:#f1efe9; border-radius:6px; }
+  code{ background:#f1efe9; padding:1px 5px; border-radius:4px; font-size:12.5px; color:var(--accent); }
+  .handle{ fill:none; stroke:#6b675e; stroke-width:1.2; stroke-dasharray:4 4; }
+  .cp{ fill:#c8401f; }
+  .cp-alt{ fill:#2b6cb0; }
+  .lbl{ font:11px sans-serif; fill:#6b675e; }
+  .lbl-a{ font:11px sans-serif; fill:#2b6cb0; }
+  details{ margin-top:20px; border:1px solid #e7e3da; border-radius:10px; background:#fff; padding:8px 14px; }
+  summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+  pre{ margin:12px 0 4px; padding:14px; background:#1c1b18; color:#f3f0e9; border-radius:8px;
+       overflow:auto; font:12.5px/1.6 "Consolas","Menlo",monospace; }
+</style>
+</head>
+<body>
+
+<h1>路径命令逐条演示</h1>
+<p class="lead">这个片段演示什么：M / L / H / V / C / S / Q / T / A / Z 每条命令各画一张小图，标出参数含义与控制点的位置。大写=绝对坐标，小写=相对增量。</p>
+
+<p class="legend">控制点图例：
+  <i><span class="dot" style="background:#c8401f"></span>实际控制点</i>
+  <i><span class="dot" style="background:#2b6cb0"></span>自动推导出的控制点</i>
+  <i><span class="dot" style="background:#fff;border:1px solid #6b675e"></span>起点 / 终点</i>
+</p>
+
+<div class="grid">
+
+  <!-- M / L -->
+  <div class="cell">
+    <h3>M / L —— 折线</h3>
+    <svg width="200" height="140" viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 20 110 L 70 30 L 120 110 L 170 30"
+            fill="none" stroke="#c8401f" stroke-width="3" stroke-linejoin="round"/>
+      <!-- 关键点：M 只移动光标不画线，之后每对坐标都是一条 L 直线 -->
+      <circle cx="20" cy="110" r="4" class="cp"/>
+      <circle cx="70" cy="30"  r="4" class="cp"/>
+      <circle cx="120" cy="110" r="4" class="cp"/>
+      <circle cx="170" cy="30" r="4" class="cp"/>
+      <text x="24" y="126" class="lbl">M 20 110</text>
+      <text x="150" y="46" class="lbl">L 170 30</text>
+    </svg>
+    <div class="cap">M 起点 → L 直线。M 后可跟多组坐标，第一组只移动。</div>
+  </div>
+
+  <!-- H / V / Z -->
+  <div class="cell">
+    <h3>H / V / Z —— 直角闭合</h3>
+    <svg width="200" height="140" viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg">
+      <!-- 关键点：H 只吃一个 x、V 只吃一个 y；Z 从当前点直线回到子路径起点并闭合 -->
+      <path d="M 30 35 H 170 V 110 H 30 Z" fill="#c8401f" opacity="0.9"/>
+      <circle cx="30" cy="35" r="4" fill="#fff" stroke="#6b675e" stroke-width="1.5"/>
+      <text x="36" y="28" class="lbl">M 30 35</text>
+      <text x="120" y="132" class="lbl">H 170</text>
+      <text x="150" y="80" class="lbl">V 110</text>
+      <text x="10" y="80" class="lbl">H 30</text>
+      <text x="34" y="52" class="lbl">Z</text>
+    </svg>
+    <div class="cap">H 水平线到 x；V 垂直线到 y；Z 闭合回起点（大小写无别）。</div>
+  </div>
+
+  <!-- C / S -->
+  <div class="cell">
+    <h3>C / S —— 三次贝塞尔与平滑接续</h3>
+    <svg width="180" height="160" viewBox="0 0 180 160" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 15 95 C 35 45, 65 45, 90 95 S 150 155, 175 95"
+            fill="none" stroke="#c8401f" stroke-width="3"/>
+      <!-- 关键点：C 给两个控制点 —— 出发朝 P1、到达沿 P2 -->
+      <line x1="15" y1="95" x2="35" y2="45" class="handle"/>
+      <line x1="90" y1="95" x2="65" y2="45" class="handle"/>
+      <circle cx="35" cy="45" r="4" class="cp"/><text x="24" y="40" class="lbl">P1</text>
+      <circle cx="65" cy="45" r="4" class="cp"/><text x="58" y="40" class="lbl">P2</text>
+      <!-- 关键点：S 的第一控制点 = 上一控制点关于当前点的镜像，保证斜率连续 -->
+      <line x1="90" y1="95" x2="115" y2="145" class="handle"/>
+      <line x1="175" y1="95" x2="150" y2="155" class="handle"/>
+      <circle cx="115" cy="145" r="4" class="cp-alt"/><text x="104" y="159" class="lbl-a">镜像 P1′</text>
+      <circle cx="150" cy="155" r="4" class="cp"/><text x="142" y="152" class="lbl">P2</text>
+    </svg>
+    <div class="cap">C 两个控制点；S 只给第二控制点，第一控制点由上一段镜像推出。</div>
+  </div>
+
+  <!-- Q / T -->
+  <div class="cell">
+    <h3>Q / T —— 二次贝塞尔与接续</h3>
+    <svg width="180" height="160" viewBox="0 0 180 160" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 15 95 Q 55 40, 95 95 T 175 95"
+            fill="none" stroke="#c8401f" stroke-width="3"/>
+      <!-- 关键点：Q 只需一个控制点 + 终点 -->
+      <line x1="15" y1="95" x2="55" y2="40" class="handle"/>
+      <line x1="95" y1="95" x2="55" y2="40" class="handle"/>
+      <circle cx="55" cy="40" r="4" class="cp"/><text x="44" y="35" class="lbl">P1</text>
+      <!-- 关键点：T 的控制点由上一 Q/T 的控制点镜像得到；前面不是 Q/T 则退化为直线 -->
+      <line x1="95" y1="95" x2="135" y2="150" class="handle"/>
+      <line x1="175" y1="95" x2="135" y2="150" class="handle"/>
+      <circle cx="135" cy="150" r="4" class="cp-alt"/><text x="124" y="146" class="lbl-a">镜像 P1′</text>
+    </svg>
+    <div class="cap">Q 一个控制点；T 只给终点，控制点自动镜像 → 对称波浪。</div>
+  </div>
+
+  <!-- A -->
+  <div class="cell">
+    <h3>A —— 圆弧的 7 个参数</h3>
+    <svg width="200" height="150" viewBox="0 0 200 150" xmlns="http://www.w3.org/2000/svg">
+      <!-- 关键点：A rx ry 旋转角 large-arc-flag sweep-flag 终点x 终点y -->
+      <path d="M 30 110 A 60 60 0 0 1 150 110"
+            fill="none" stroke="#c8401f" stroke-width="3"/>
+      <line x1="30" y1="110" x2="150" y2="110" class="handle"/>
+      <circle cx="30" cy="110" r="4" fill="#fff" stroke="#6b675e" stroke-width="1.5"/>
+      <circle cx="150" cy="110" r="4" fill="#fff" stroke="#6b675e" stroke-width="1.5"/>
+      <text x="18" y="128" class="lbl">起点</text>
+      <text x="140" y="128" class="lbl">终点</text>
+      <text x="66" y="60" class="lbl">rx=ry=60</text>
+      <text x="176" y="104" class="lbl">0</text>
+      <text x="160" y="90" class="lbl">1</text>
+      <text x="120" y="140" class="lbl">large-arc / sweep</text>
+    </svg>
+    <div class="cap">A rx ry 旋转角 large-arc-flag sweep-flag x y。<br>整圆不能用一条 A 画（起终点重合 → 路径未定义）。</div>
+  </div>
+
+</div>
+
+<details>
+  <summary>核心代码</summary>
+<pre><code>&lt;!-- M/L：移动到起点后连续画线 --&gt;
+&lt;path d="M 20 110 L 70 30 L 120 110 L 170 30" fill="none" stroke="#c8401f"/&gt;
+
+&lt;!-- H/V/Z：只朝一个方向动，Z 回到子路径起点闭合 --&gt;
+&lt;path d="M 30 35 H 170 V 110 H 30 Z" fill="#c8401f"/&gt;
+
+&lt;!-- C：两个控制点；S：紧接其后，第一控制点自动取镜像 --&gt;
+&lt;path d="M 15 95 C 35 45, 65 45, 90 95 S 150 155, 175 95" fill="none" stroke="#c8401f"/&gt;
+
+&lt;!-- Q：一个控制点；T：控制点由上一 Q/T 镜像推出 --&gt;
+&lt;path d="M 15 95 Q 55 40, 95 95 T 175 95" fill="none" stroke="#c8401f"/&gt;
+
+&lt;!-- A：rx ry 旋转角 large-arc-flag sweep-flag 终点x 终点y --&gt;
+&lt;path d="M 30 110 A 60 60 0 0 1 150 110" fill="none" stroke="#c8401f"/&gt;
+
+&lt;!-- 相对写法：小写 = 相对上一点的增量 --&gt;
+&lt;path d="m 10 10 h 80 v 80 h -80 z" fill="#c8401f"/&gt;</code></pre>
+</details>
+
+</body>
+</html>

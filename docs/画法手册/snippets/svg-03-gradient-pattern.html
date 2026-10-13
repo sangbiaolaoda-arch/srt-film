@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SVG 03 · 渐变与 pattern</title>
+<style>
+  :root{ --bg:#faf9f6; --text:#1c1b18; --muted:#6b675e; --accent:#c8401f; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 24px 64px; background:var(--bg); color:var(--text);
+        font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  h1{ font-size:24px; margin:0 0 6px; color:var(--accent); }
+  .lead{ color:var(--muted); margin:0 0 34px; max-width:74ch; }
+  section{ margin:0 0 36px; }
+  h2{ font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .note{ color:var(--muted); font-size:13px; margin:0 0 14px 12px; max-width:76ch; }
+  .row{ display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start; }
+  .cell{ background:#fff; border:1px solid #e7e3da; border-radius:10px; padding:12px; }
+  .cap{ font-size:12px; color:var(--muted); margin-top:8px; text-align:center; }
+  svg{ display:block; background:#f1efe9; border-radius:6px; }
+  .warn{ background:#fff4f0; border:1px solid #f0c4b4; border-radius:8px; padding:10px 14px;
+         font-size:13px; color:#8a2f16; margin:12px 0; }
+  details{ margin-top:16px; border:1px solid #e7e3da; border-radius:10px; background:#fff; padding:8px 14px; }
+  summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+  pre{ margin:12px 0 4px; padding:14px; background:#1c1b18; color:#f3f0e9; border-radius:8px;
+       overflow:auto; font:12.5px/1.6 "Consolas","Menlo",monospace; }
+</style>
+</head>
+<body>
+
+<h1>渐变与 pattern</h1>
+<p class="lead">这个片段演示什么：线性/径向渐变的方向与焦点、spreadMethod 三种填充方式、gradientUnits 两种坐标系的对照、pattern 瓷砖，以及两个实例共用同一个 id 时第二个被第一个定义污染的坑。</p>
+
+<!-- ===== 1. 线性渐变方向 ===== -->
+<section>
+  <h2>1. linearGradient：方向由 x1/y1 → x2/y2 决定</h2>
+  <p class="note">默认是水平（左→右）；把两点设成 x1=x2、y1=0 y2=1 就是垂直。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="260" height="120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：不写 x1/x2/y1/y2 时默认 x1=0 x2=1 → 水平渐变 -->
+          <linearGradient id="gH">
+            <stop offset="0%" stop-color="#c8401f"/>
+            <stop offset="50%" stop-color="#f1c40f"/>
+            <stop offset="100%" stop-color="#1c1b18"/>
+          </linearGradient>
+          <!-- 关键点：x1=0 x2=0 y1=0 y2=1 → 垂直方向，颜色自上而下跑 -->
+          <linearGradient id="gV" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stop-color="#c8401f"/>
+            <stop offset="50%" stop-color="#f1c40f"/>
+            <stop offset="100%" stop-color="#1c1b18"/>
+          </linearGradient>
+        </defs>
+        <rect x="10" y="10" width="240" height="42" rx="8" fill="url(#gH)"/>
+        <rect x="10" y="64" width="240" height="46" rx="8" fill="url(#gV)"/>
+      </svg>
+      <div class="cap">上：水平　下：垂直</div>
+    </div>
+    <div class="cell">
+      <svg width="200" height="120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：中间 stop 用 stop-opacity=0 做「透过中间」的通明过渡 -->
+          <linearGradient id="gMid" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%"   stop-color="#c8401f"/>
+            <stop offset="50%"  stop-color="#1c1b18" stop-opacity="0"/>
+            <stop offset="100%" stop-color="#2b6cb0"/>
+          </linearGradient>
+        </defs>
+        <rect x="10" y="10" width="180" height="100" rx="8" fill="url(#gMid)"/>
+      </svg>
+      <div class="cap">中段 stop-opacity:0 → 中间透明</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 2. 径向渐变 + spreadMethod ===== -->
+<section>
+  <h2>2. radialGradient 与 spreadMethod</h2>
+  <p class="note">径向用「结束圆 cx/cy/r」+「焦点 fx/fy」两个点定义。渐变走完圆之后怎么继续，由 spreadMethod 决定。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="120" height="120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：fx/fy 挪到左上 0.25 → 高光偏移，像被侧光照亮 -->
+          <radialGradient id="rFocus" cx="0.5" cy="0.5" r="0.5" fx="0.25" fy="0.25">
+            <stop offset="0%" stop-color="#fff"/>
+            <stop offset="55%" stop-color="#c8401f"/>
+            <stop offset="100%" stop-color="#3a1208"/>
+          </radialGradient>
+        </defs>
+        <rect x="10" y="10" width="100" height="100" rx="10" fill="url(#rFocus)"/>
+      </svg>
+      <div class="cap">焦点偏移的球形高光</div>
+    </div>
+    <div class="cell">
+      <svg width="340" height="120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="sPad" cx="0.5" cy="0.5" r="0.4" fx="0.75" fy="0.75" spreadMethod="pad">
+            <stop offset="0%" stop-color="#c8401f"/><stop offset="100%" stop-color="#2b6cb0"/>
+          </radialGradient>
+          <radialGradient id="sRepeat" cx="0.5" cy="0.5" r="0.4" fx="0.75" fy="0.75" spreadMethod="repeat">
+            <stop offset="0%" stop-color="#c8401f"/><stop offset="100%" stop-color="#2b6cb0"/>
+          </radialGradient>
+          <radialGradient id="sReflect" cx="0.5" cy="0.5" r="0.4" fx="0.75" fy="0.75" spreadMethod="reflect">
+            <stop offset="0%" stop-color="#c8401f"/><stop offset="100%" stop-color="#2b6cb0"/>
+          </radialGradient>
+        </defs>
+        <!-- 关键点：pad=末端颜色填满剩余；repeat=跳回起点重跑；reflect=镜像往返 -->
+        <rect x="10" y="10" width="100" height="100" fill="url(#sPad)"/>
+        <rect x="120" y="10" width="100" height="100" fill="url(#sRepeat)"/>
+        <rect x="230" y="10" width="100" height="100" fill="url(#sReflect)"/>
+      </svg>
+      <div class="cap">pad（默认）　repeat　reflect</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 3. gradientUnits 对照 ===== -->
+<section>
+  <h2>3. gradientUnits：跟着元素走 vs 钉在画布上</h2>
+  <p class="note">同样一块渐变，套在「大矩形」和「小矩形」上，两种坐标系给出的结果完全不同。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="260" height="150" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：objectBoundingBox（默认）用 0~1 比例，自动贴合各自元素的包围盒 -->
+          <radialGradient id="uObb" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#c8401f"/>
+          </radialGradient>
+        </defs>
+        <rect x="10" y="10" width="120" height="120" fill="url(#uObb)"/>
+        <rect x="150" y="40" width="60" height="60" fill="url(#uObb)"/>
+      </svg>
+      <div class="cap">objectBoundingBox：两个都从各自中心发光</div>
+    </div>
+    <div class="cell">
+      <svg width="260" height="150" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：userSpaceOnUse 用绝对用户单位，(70,70) 是画布上的固定点 -->
+          <radialGradient id="uUser" cx="70" cy="70" r="60" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#fff"/><stop offset="100%" stop-color="#c8401f"/>
+          </radialGradient>
+        </defs>
+        <rect x="10" y="10" width="120" height="120" fill="url(#uUser)"/>
+        <rect x="150" y="40" width="60" height="60" fill="url(#uUser)"/>
+      </svg>
+      <div class="cap">userSpaceOnUse：小矩形只截到渐变的边缘</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 4. pattern ===== -->
+<section>
+  <h2>4. pattern：瓷砖平铺</h2>
+  <div class="row">
+    <div class="cell">
+      <svg width="220" height="120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：patternUnits=userSpaceOnUse → width/height 是用户单位（瓷砖 24×24） -->
+          <pattern id="pDots" width="24" height="24" patternUnits="userSpaceOnUse">
+            <circle cx="12" cy="12" r="4" fill="#c8401f"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="220" height="120" fill="url(#pDots)"/>
+      </svg>
+      <div class="cap">圆点瓷砖</div>
+    </div>
+    <div class="cell">
+      <svg width="220" height="120" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：patternTransform 对整块瓷砖做矩阵变换 → 斜条纹 -->
+          <pattern id="pStripe" width="16" height="16" patternUnits="userSpaceOnUse"
+                   patternTransform="rotate(45)">
+            <rect width="8" height="16" fill="#c8401f"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="220" height="120" fill="url(#pStripe)"/>
+      </svg>
+      <div class="cap">45° 斜纹瓷砖</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 5. id 冲突 ===== -->
+<section>
+  <h2>5. 坑：两个渐变实例共用同一个 id</h2>
+  <p class="note">下面两个 &lt;svg&gt; 各自定义了 id="conflict" 的渐变，但整个页面是同一份文档，<code>url(#conflict)</code> 只会解析到文档中第一次出现的那个定义。</p>
+  <div class="row">
+    <div class="cell">
+      <svg width="180" height="110" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：文档里第一个 id="conflict"：红→蓝 -->
+          <linearGradient id="conflict" x1="0" x2="1">
+            <stop offset="0%" stop-color="#c8401f"/><stop offset="100%" stop-color="#2b6cb0"/>
+          </linearGradient>
+        </defs>
+        <rect x="10" y="10" width="160" height="90" fill="url(#conflict)"/>
+      </svg>
+      <div class="cap">实例 1：红→蓝（期望）</div>
+    </div>
+    <div class="cell">
+      <svg width="180" height="110" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：第二个同名 id 被忽略，下面 fill 会拿到实例 1 的定义 -->
+          <linearGradient id="conflict" x1="0" x2="1">
+            <stop offset="0%" stop-color="#1abc9c"/><stop offset="100%" stop-color="#f1c40f"/>
+          </linearGradient>
+        </defs>
+        <rect x="10" y="10" width="160" height="90" fill="url(#conflict)"/>
+      </svg>
+      <div class="cap">实例 2：本该绿→黄，却仍渲染成红→蓝 ❌</div>
+    </div>
+    <div class="cell">
+      <svg width="180" height="110" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <!-- 关键点：修复办法 —— 每个实例用唯一 id（加后缀），互不干扰 -->
+          <linearGradient id="conflict-uid2" x1="0" x2="1">
+            <stop offset="0%" stop-color="#1abc9c"/><stop offset="100%" stop-color="#f1c40f"/>
+          </linearGradient>
+        </defs>
+        <rect x="10" y="10" width="160" height="90" fill="url(#conflict-uid2)"/>
+      </svg>
+      <div class="cap">修复：唯一 id → 绿→黄 ✅</div>
+    </div>
+  </div>
+  <div class="warn">组件化复用 SVG 时（图标、列表渲染多份），务必给 id 加实例唯一后缀，或用 CSS 变量 / currentColor 传色，别让多份实例抢同一个 id。</div>
+</section>
+
+<details>
+  <summary>核心代码</summary>
+<pre><code>&lt;!-- 关键点：linearGradient 方向由两点决定；默认水平，改成 x1=0 x2=0 y1=0 y2=1 即垂直 --&gt;
+&lt;linearGradient id="gV" x1="0" x2="0" y1="0" y2="1"&gt;
+  &lt;stop offset="0%" stop-color="#c8401f"/&gt;
+  &lt;stop offset="50%" stop-color="#1c1b18" stop-opacity="0"/&gt;
+  &lt;stop offset="100%" stop-color="#2b6cb0"/&gt;
+&lt;/linearGradient&gt;
+
+&lt;!-- 关键点：径向 = 结束圆(cx cy r) + 焦点(fx fy)；spreadMethod 决定走完圆之后怎么续 --&gt;
+&lt;radialGradient id="sRepeat" cx="0.5" cy="0.5" r="0.4" fx="0.75" fy="0.75"
+                spreadMethod="repeat"&gt; ... &lt;/radialGradient&gt;
+&lt;!-- pad 末端色填满 / repeat 跳回起点 / reflect 镜像往返 --&gt;
+
+&lt;!-- 关键点：objectBoundingBox 用 0~1 比例贴合各自元素；userSpaceOnUse 钉在画布固定坐标 --&gt;
+&lt;radialGradient id="uUser" cx="70" cy="70" r="60" gradientUnits="userSpaceOnUse"&gt; ... &lt;/radialGradient&gt;
+
+&lt;!-- 关键点：pattern 把内容当瓷砖，用 width/height 平铺 --&gt;
+&lt;pattern id="pDots" width="24" height="24" patternUnits="userSpaceOnUse"&gt;
+  &lt;circle cx="12" cy="12" r="4" fill="#c8401f"/&gt;
+&lt;/pattern&gt;
+&lt;rect width="220" height="120" fill="url(#pDots)"/&gt;
+
+&lt;!-- 关键点：id 必须文档级唯一，重复 id 时 url(#x) 只认第一个定义 --&gt;
+&lt;linearGradient id="grad-{{uid}}"&gt; ... &lt;/linearGradient&gt;
+&lt;rect fill="url(#grad-{{uid}})" /&gt;</code></pre>
+</details>
+
+</body>
+</html>

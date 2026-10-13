@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canvas 变换顺序与绕心旋转</title>
+<style>
+  :root { --bg:#faf9f6; --ink:#1c1b18; --muted:#6b675e; --accent:#c8401f; --line:#e4e0d8; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:36px 24px 72px; background:var(--bg); color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  .wrap { max-width:780px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 8px; }
+  .lede { color:var(--muted); margin:0; }
+  h2 { font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .cap { color:var(--muted); font-size:13px; margin:4px 0 14px; }
+  .block { margin-top:38px; }
+  .row { display:flex; gap:16px; flex-wrap:wrap; }
+  figure { margin:0; }
+  figure canvas { display:block; border:1px solid var(--line); border-radius:10px; background:#faf9f6; }
+  figcaption { margin-top:8px; font-size:13px; color:var(--muted); }
+  figcaption b { color:var(--accent); font-weight:600; }
+  .kbd { font-family:ui-monospace,Consolas,"Courier New",monospace; font-size:12.5px;
+         background:#f1efe9; padding:1px 5px; border-radius:4px; }
+  details { margin-top:44px; border:1px solid var(--line); border-radius:12px; padding:14px 18px; background:#fff; }
+  summary { cursor:pointer; font-weight:600; color:var(--accent); }
+  pre { margin:14px 0 0; overflow-x:auto; background:#f7f5f0; border-radius:8px; padding:14px; }
+  pre code { background:none; padding:0; font-size:12.5px; line-height:1.6;
+             font-family:ui-monospace,Consolas,"Courier New",monospace; }
+  code { font-family:ui-monospace,Consolas,"Courier New",monospace; font-size:12.5px;
+         background:#f1efe9; padding:1px 5px; border-radius:4px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Canvas 变换顺序对照</h1>
+  <p class="lede">这个片段演示什么：同一组 <span class="kbd">translate / rotate / scale</span>，只调换调用顺序，画出来的位置就完全不同；以及「绕自身中心旋转」的正确三步写法。</p>
+
+  <div class="block">
+    <h2>① 平移 × 缩放：平移量会不会被缩放</h2>
+    <p class="cap">两边都画同一个 <code>fillRect(10, 0, 20, 20)</code>。红点是调用完变换后「原点 (0,0)」落在哪。</p>
+    <div class="row">
+      <figure>
+        <canvas id="a1" width="300" height="140"></canvas>
+        <figcaption><b>先 translate(100,20) → 再 scale(2)</b><br>平移量不被缩放，方块 x = 100 + 10×2 = 120</figcaption>
+      </figure>
+      <figure>
+        <canvas id="a2" width="300" height="140"></canvas>
+        <figcaption><b>先 scale(2) → 再 translate(100,20)</b><br>平移量也被缩放，方块 x = (100+10)×2 = 220</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>② 平移 × 旋转：旋转枢轴先定还是后定</h2>
+    <p class="cap">同一条横杠，同样转 45°。左图先平移把原点搬到目标点再转；右图先转，之后写的平移是在已旋转的坐标系里发生，原点被甩到别处。</p>
+    <div class="row">
+      <figure>
+        <canvas id="b1" width="200" height="180"></canvas>
+        <figcaption><b>translate(90,85) → rotate(45°)</b><br>绕 (90,85) 转</figcaption>
+      </figure>
+      <figure>
+        <canvas id="b2" width="200" height="180"></canvas>
+        <figcaption><b>rotate(45°) → translate(90,50)</b><br>枢轴跑到左上，横杠位置完全不同</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <div class="block">
+    <h2>③ 绕自身中心旋转：正确三步</h2>
+    <p class="cap">唯一正确的写法是 <code>translate(中心)</code> → <code>rotate</code> → 用「以中心为原点」的坐标画（<code>-w/2, -h/2</code>）。右图漏掉了 translate，于是绕画布原点 (0,0) 转。</p>
+    <div class="row">
+      <figure>
+        <canvas id="c1" width="200" height="180"></canvas>
+        <figcaption><b>正确</b>：translate → rotate → fillRect(-w/2, -h/2, w, h)</figcaption>
+      </figure>
+      <figure>
+        <canvas id="c2" width="200" height="180"></canvas>
+        <figcaption><b>错误</b>：只 rotate，绕画布原点转，图形被甩出画面</figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <details>
+    <summary>核心代码</summary>
+    <pre><code>// 通用：按 dpr 建高清画布，返回已缩放的 ctx
+function setup(id, w, h) {
+  const c = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  c.width = w * dpr; c.height = h * dpr;          // 位图分辨率
+  c.style.width = w + "px"; c.style.height = h + "px";  // 显示尺寸
+  const ctx = c.getContext("2d");
+  ctx.scale(dpr, dpr);                            // 之后按 CSS 像素坐标画
+  return ctx;
+}
+
+// ① 顺序不同 → 平移量是否被缩放不同
+ctx.translate(100, 20); ctx.scale(2, 2); ctx.fillRect(10, 0, 20, 20); // x = 120
+ctx.scale(2, 2); ctx.translate(100, 20); ctx.fillRect(10, 0, 20, 20); // x = 220
+
+// ② 顺序不同 → 旋转枢轴不同
+ctx.translate(90, 85); ctx.rotate(Math.PI / 4); ctx.fillRect(-42, -9, 84, 18); // 绕 (90,85)
+ctx.rotate(Math.PI / 4); ctx.translate(90, 50); ctx.fillRect(-42, -9, 84, 18); // 枢轴被甩走
+
+// ③ 绕自身中心旋转的正确三步（★ 记这个）
+function drawRotatedRect(ctx, cx, cy, w, h, angle) {
+  ctx.save();
+  ctx.translate(cx, cy);        // 1) 原点搬到图形中心
+  ctx.rotate(angle);            // 2) 绕新原点（= 图形中心）旋转
+  ctx.fillRect(-w / 2, -h / 2, w, h);  // 3) 以中心为原点画
+  ctx.restore();
+}
+
+// 调用方零副作用：任何会改状态的绘制函数都用 save/restore 包裹
+// 别这样：ctx.rotate(a); ctx.fillRect(55, 73, 90, 24);  ← 绕 (0,0) 转，图形飞走</code></pre>
+  </details>
+</div>
+
+<script>
+  // 关键点：所有画布统一走 setup()，先按 dpr 放大位图再 scale 回来，保证清晰
+  function setup(id, w, h) {
+    const c = document.getElementById(id);
+    const dpr = window.devicePixelRatio || 1;
+    c.width = Math.round(w * dpr);
+    c.height = Math.round(h * dpr);
+    c.style.width = w + "px";
+    c.style.height = h + "px";
+    const ctx = c.getContext("2d");
+    ctx.scale(dpr, dpr);
+    return { ctx, w, h };
+  }
+
+  // 淡网格，便于看清坐标
+  function grid(ctx, w, h) {
+    ctx.strokeStyle = "#eeeadf";
+    ctx.lineWidth = 1;
+    for (let x = 0; x < w; x += 20) {
+      ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, h); ctx.stroke();
+    }
+    for (let y = 0; y < h; y += 20) {
+      ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(w, y + 0.5); ctx.stroke();
+    }
+  }
+  function origin(ctx, x, y) {
+    ctx.fillStyle = "#c8401f";
+    ctx.beginPath(); ctx.arc(x, y, 3.5, 0, Math.PI * 2); ctx.fill();
+  }
+  function shape(ctx) {
+    ctx.fillStyle = "rgba(0,120,255,0.85)";
+  }
+
+  /* ---------- ① 平移 × 缩放 ---------- */
+  (function () {
+    const A = setup("a1", 300, 140);
+    grid(A.ctx, 300, 140);
+    A.ctx.save();
+    A.ctx.translate(100, 20);          // 关键点：先平移
+    A.ctx.scale(2, 2);                 // 关键点：后缩放，平移量不被放大
+    shape(A.ctx);
+    A.ctx.fillRect(10, 0, 20, 20);
+    A.ctx.restore();
+    origin(A.ctx, 100, 20);
+
+    const B = setup("a2", 300, 140);
+    grid(B.ctx, 300, 140);
+    B.ctx.save();
+    B.ctx.scale(2, 2);                 // 关键点：先缩放
+    B.ctx.translate(100, 20);          // 关键点：后平移，平移量被放大 2 倍
+    shape(B.ctx);
+    B.ctx.fillRect(10, 0, 20, 20);
+    B.ctx.restore();
+    origin(B.ctx, 200, 40);
+  })();
+
+  /* ---------- ② 平移 × 旋转 ---------- */
+  (function () {
+    const A = setup("b1", 200, 180);
+    grid(A.ctx, 200, 180);
+    A.ctx.save();
+    A.ctx.translate(90, 85);           // 关键点：枢轴 = 原点先搬到 (90,85)
+    A.ctx.rotate(Math.PI / 4);
+    shape(A.ctx);
+    A.ctx.fillRect(-42, -9, 84, 18);
+    A.ctx.restore();
+    origin(A.ctx, 90, 85);
+
+    const B = setup("b2", 200, 180);
+    grid(B.ctx, 200, 180);
+    B.ctx.save();
+    B.ctx.rotate(Math.PI / 4);
+    B.ctx.translate(90, 50);           // 关键点：平移写在旋转之后 → 在旋转坐标系里偏移
+    shape(B.ctx);
+    B.ctx.fillRect(-42, -9, 84, 18);
+    B.ctx.restore();
+    // 原点被旋转矩阵搬到 (90,50) 转 45° 后的位置
+    const c = Math.SQRT1_2;
+    origin(B.ctx, 90 * c - 50 * c, 90 * c + 50 * c);
+  })();
+
+  /* ---------- ③ 绕自身中心旋转 ---------- */
+  (function () {
+    const A = setup("c1", 200, 180);
+    const B = setup("c2", 200, 180);
+    grid(A.ctx, 200, 180);
+    grid(B.ctx, 200, 180);
+
+    function frame(now) {
+      const angle = (now / 1400) * Math.PI * 2;
+
+      // 关键点：动画帧开头先清屏，否则上一帧残留会和这一帧叠在一起
+      A.ctx.clearRect(0, 0, A.w, A.h);
+      grid(A.ctx, A.w, A.h);
+      B.ctx.clearRect(0, 0, B.w, B.h);
+      grid(B.ctx, B.w, B.h);
+
+      // 正确：translate(中心) → rotate → 用中心原点坐标画
+      const a = A.ctx;
+      a.save();
+      a.translate(100, 90);            // 1) 原点搬到图形中心
+      a.rotate(angle);                 // 2) 绕该原点转
+      a.fillStyle = "rgba(200,64,31,0.9)";
+      a.fillRect(-46, -13, 92, 26);    // 3) 以中心为原点画
+      a.restore();
+      origin(a, 100, 90);
+
+      // 错误：漏了 translate，rotate 绕的是画布原点 (0,0)
+      const b = B.ctx;
+      // 画出「绕 (0,0) 转」的轨道虚线：解释为什么图形会转出画面
+      b.save();
+      b.setLineDash([4, 4]);
+      b.strokeStyle = "#d8d3c8";
+      b.beginPath();
+      b.arc(0, 0, Math.hypot(100, 90), 0, Math.PI * 2);
+      b.stroke();
+      b.restore();
+      b.save();
+      b.rotate(angle);                 // 关键点：绕 (0,0) 转，图形被甩到画布外
+      b.fillStyle = "rgba(0,120,255,0.85)";
+      b.fillRect(100 - 46, 90 - 13, 92, 26);
+      b.restore();
+      origin(b, 0, 0);
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
+</script>
+</body>
+</html>

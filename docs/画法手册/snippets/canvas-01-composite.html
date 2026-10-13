@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canvas 合成模式对照 · globalCompositeOperation</title>
+<style>
+  /* 关键点：全站只用这一套亮色变量，背景 #faf9f6 / 正文 #1c1b18 / 次要 #6b675e / 强调 #c8401f */
+  :root { --bg:#faf9f6; --ink:#1c1b18; --muted:#6b675e; --accent:#c8401f; --line:#e4e0d8; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:36px 24px 72px; background:var(--bg); color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  .wrap { max-width:780px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 8px; letter-spacing:.2px; }
+  .lede { color:var(--muted); margin:0; }
+  h2 { font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .cap { color:var(--muted); font-size:13px; margin:4px 0 14px; }
+  .block { margin-top:36px; }
+  .scroll { overflow-x:auto; padding-bottom:6px; }
+  canvas { display:block; border:1px solid var(--line); border-radius:10px; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; margin-top:8px; }
+  th, td { border-bottom:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  code {
+    font-family:ui-monospace,Consolas,"Courier New",monospace; font-size:12.5px;
+    background:#f1efe9; padding:1px 5px; border-radius:4px;
+  }
+  details { margin-top:44px; border:1px solid var(--line); border-radius:12px; padding:14px 18px; background:#fff; }
+  summary { cursor:pointer; font-weight:600; color:var(--accent); }
+  pre { margin:14px 0 0; overflow-x:auto; background:#f7f5f0; border-radius:8px; padding:14px; }
+  pre code { background:none; padding:0; font-size:12.5px; line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Canvas 合成模式对照</h1>
+  <p class="lede">这个片段演示什么：同一组「蓝色方块（目标 destination）+ 红色圆（源 source）」，在 26 种 <code>globalCompositeOperation</code> 下叠加出的不同结果。灰白棋盘格代表透明区域。</p>
+
+  <div class="block">
+    <h2>26 种叠加取值一览</h2>
+    <!-- 关键点：每格先画蓝方块当「目标」，再用被测模式画红圆当「源」 -->
+    <p class="cap">每格：蓝方块 = 画布上已有内容（目标），红圆 = 正在画的新内容（源）。看红圆和蓝方块怎么互相作用。</p>
+    <div class="scroll"><canvas id="grid"></canvas></div>
+  </div>
+
+  <div class="block">
+    <h2>三种最常用效果该用哪个</h2>
+    <table>
+      <tr><th>想要的效果</th><th>用哪个取值</th><th>原理</th></tr>
+      <tr><td>挖空 / 橡皮擦（把已有内容删掉一块）</td><td><code>destination-out</code></td><td>用源的形状去减目标，重叠处目标被清成透明</td></tr>
+      <tr><td>发光 / 叠加变亮</td><td><code>lighter</code></td><td>源与目标的颜色、alpha 相加，越叠越亮</td></tr>
+      <tr><td>只在已有图形内部上色（高光、花纹、遮罩填充）</td><td><code>source-atop</code></td><td>源只画在目标不透明的地方，不超出已有轮廓</td></tr>
+      <tr><td>反相遮罩（保留重叠处，形状取自目标）</td><td><code>destination-in</code></td><td>只留下目标与源重叠的部分</td></tr>
+      <tr><td>正片叠底阴影 / 压暗</td><td><code>multiply</code></td><td>逐通道相乘，结果只会更暗</td></tr>
+      <tr><td>整体重画（等价于先清屏再画）</td><td><code>copy</code></td><td>只显示源，画布其余位置被清空</td></tr>
+    </table>
+    <p class="cap">要点：<code>source-*</code> 取形状的「源」，<code>destination-*</code> 取形状的「目标」，<code>atop</code> = 只在目标不透明处、<code>in</code> = 只留重叠、<code>out</code> = 只留不重叠、<code>xor</code> = 只留不重叠两侧。</p>
+  </div>
+
+  <details>
+    <summary>核心代码</summary>
+    <pre><code>const OPS = [
+  "source-over", "source-in", "source-out", "source-atop",
+  "destination-over", "destination-in", "destination-out", "destination-atop",
+  "lighter", "copy", "xor",
+  "multiply", "screen", "overlay", "darken", "lighten",
+  "color-dodge", "color-burn", "hard-light", "soft-light",
+  "difference", "exclusion", "hue", "saturation", "color", "luminosity"
+];
+
+const CELL = 110, COLS = 6;
+const canvas = document.getElementById("grid");
+const ctx = canvas.getContext("2d");
+
+// 关键点：每个格子单独用一个离屏 canvas。
+// 若全画在一张画布上，copy / destination-* 会波及已经画好的其它格子。
+const off = document.createElement("canvas");
+off.width = off.height = CELL;
+const octx = off.getContext("2d");
+
+OPS.forEach((op, i) => {
+  const cx = (i % COLS) * CELL, cy = Math.floor(i / COLS) * CELL;
+
+  // 1) 目标：蓝方块（先画，用默认 source-over）
+  octx.globalCompositeOperation = "source-over";
+  octx.fillStyle = "rgba(0,120,255,0.9)";
+  octx.fillRect(22, 36, 60, 60);
+
+  // 2) 源：红圆，用被测的合成模式叠上去
+  octx.globalCompositeOperation = op;
+  octx.fillStyle = "rgba(255,60,60,0.9)";
+  octx.beginPath();
+  octx.arc(64, 72, 28, 0, Math.PI * 2);
+  octx.fill();
+
+  octx.globalCompositeOperation = "source-over";
+  ctx.drawImage(off, cx, cy);   // 贴回主画布
+
+  // 3) 标签
+  ctx.fillStyle = "#1c1b18";
+  ctx.font = "10px ui-monospace, Consolas, monospace";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText(op, cx + 9, cy + 8);
+});
+
+// 常用写法
+ctx.globalCompositeOperation = "destination-out";  // 挖空
+ctx.globalCompositeOperation = "lighter";          // 发光
+ctx.globalCompositeOperation = "source-atop";      // 只在已有图形内上色</code></pre>
+  </details>
+</div>
+
+<script>
+  const OPS = [
+    "source-over", "source-in", "source-out", "source-atop",
+    "destination-over", "destination-in", "destination-out", "destination-atop",
+    "lighter", "copy", "xor",
+    "multiply", "screen", "overlay", "darken", "lighten",
+    "color-dodge", "color-burn", "hard-light", "soft-light",
+    "difference", "exclusion", "hue", "saturation", "color", "luminosity"
+  ];
+
+  const CELL = 110, COLS = 6;
+  const ROWS = Math.ceil(OPS.length / COLS);
+  const W = CELL * COLS, H = CELL * ROWS;
+  const canvas = document.getElementById("grid");
+
+  // 关键点：位图分辨率 = CSS 尺寸 × dpr，避免高清屏发虚
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+
+  // 棋盘格：让「透明」这种结果可见（否则看不出 source-in / destination-in 的差异）
+  const CHK = 9;
+  for (let y = 0; y < H; y += CHK) {
+    for (let x = 0; x < W; x += CHK) {
+      ctx.fillStyle = ((x / CHK + y / CHK) % 2 === 0) ? "#f3f1ec" : "#faf9f6";
+      ctx.fillRect(x, y, CHK, CHK);
+    }
+  }
+
+  // 关键点：离屏 canvas 隔离每格，防止 copy 清空整张画布、destination-* 波及邻格
+  const off = document.createElement("canvas");
+  off.width = CELL;
+  off.height = CELL;
+  const octx = off.getContext("2d");
+
+  OPS.forEach((op, i) => {
+    const cx = (i % COLS) * CELL;
+    const cy = Math.floor(i / COLS) * CELL;
+
+    octx.clearRect(0, 0, CELL, CELL);
+
+    // 目标：蓝方块
+    octx.globalCompositeOperation = "source-over";
+    octx.fillStyle = "rgba(0,120,255,0.9)";
+    octx.fillRect(22, 36, 60, 60);
+
+    // 源：红圆，套用被测的合成模式
+    octx.globalCompositeOperation = op;
+    octx.fillStyle = "rgba(255,60,60,0.9)";
+    octx.beginPath();
+    octx.arc(64, 72, 28, 0, Math.PI * 2);
+    octx.fill();
+    octx.globalCompositeOperation = "source-over";
+
+    ctx.drawImage(off, cx, cy);
+
+    // 标签
+    ctx.fillStyle = "#1c1b18";
+    ctx.font = "10px ui-monospace, Consolas, monospace";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(op, cx + 9, cy + 8);
+  });
+
+  // 格线
+  ctx.strokeStyle = "#e4e0d8";
+  ctx.lineWidth = 1;
+  for (let c = 0; c <= COLS; c++) {
+    ctx.beginPath(); ctx.moveTo(c * CELL + 0.5, 0); ctx.lineTo(c * CELL + 0.5, H); ctx.stroke();
+  }
+  for (let r = 0; r <= ROWS; r++) {
+    ctx.beginPath(); ctx.moveTo(0, r * CELL + 0.5); ctx.lineTo(W, r * CELL + 0.5); ctx.stroke();
+  }
+</script>
+</body>
+</html>

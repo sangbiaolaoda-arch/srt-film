@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>零依赖手绘图表 · SVG</title>
+<style>
+  :root { --bg:#faf9f6; --ink:#1c1b18; --muted:#6b675e; --accent:#c8401f; --line:#e4e0d8; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:36px 24px 72px; background:var(--bg); color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  .wrap { max-width:780px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 8px; }
+  .lede { color:var(--muted); margin:0; }
+  h2 { font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .cap { color:var(--muted); font-size:13px; margin:4px 0 14px; }
+  .block { margin-top:38px; }
+  svg { display:block; max-width:100%; height:auto; overflow:visible; }
+
+  /* 关键点：柱子从底部生长 —— 必须加 transform-box:fill-box，
+     否则 SVG 元素的 transform-origin 默认相对整个画布(0,0)，柱子会飞出去 */
+  .bar {
+    transform-box: fill-box;
+    transform-origin: bottom;
+    transform: scaleY(0);
+    animation: growBar 900ms cubic-bezier(.22, 1, .36, 1) forwards;
+    animation-delay: calc(var(--i, 0) * 70ms);
+  }
+  @keyframes growBar { to { transform: scaleY(1); } }
+
+  .row { display:flex; gap:20px; flex-wrap:wrap; align-items:flex-start; }
+  .legend { font-size:13px; color:var(--ink); }
+  .legend div { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .legend i { width:12px; height:12px; border-radius:3px; display:inline-block; }
+  button { font:inherit; margin-top:14px; padding:7px 18px; border-radius:8px;
+           border:1px solid var(--line); background:#fff; color:var(--ink); cursor:pointer; }
+  button:hover { border-color:var(--accent); color:var(--accent); }
+  code { font-family:ui-monospace,Consolas,"Courier New",monospace; font-size:12.5px;
+         background:#f1efe9; padding:1px 5px; border-radius:4px; }
+  details { margin-top:44px; border:1px solid var(--line); border-radius:12px; padding:14px 18px; background:#fff; }
+  summary { cursor:pointer; font-weight:600; color:var(--accent); }
+  pre { margin:14px 0 0; overflow-x:auto; background:#f7f5f0; border-radius:8px; padding:14px; }
+  pre code { background:none; padding:0; font-size:12.5px; line-height:1.6;
+             font-family:ui-monospace,Consolas,"Courier New",monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>零依赖手绘图表</h1>
+  <p class="lede">这个片段演示什么：用一个 10 行的 <code>scaleLinear</code> 把数据坐标映射成屏幕坐标，手绘折线 / 柱状 / 饼图（纯 SVG，不引任何图表库）；再演示「线条生长」和「柱子生长」两种入场动画怎么实现。</p>
+
+  <div class="block">
+    <h2>① 折线图 + 线条生长</h2>
+    <p class="cap">用 <code>stroke-dashoffset</code> 从「整条路径长度」动画到 0，视觉上就是线在生长。给 path 加 <code>pathLength="1"</code> 就不用调 <code>getTotalLength()</code>。</p>
+    <svg id="lineChart" width="560" height="320" role="img" aria-label="折线图"></svg>
+  </div>
+
+  <div class="block">
+    <h2>② 柱状图 + 柱子生长</h2>
+    <p class="cap">柱子用 <code>scaleY(0) → scaleY(1)</code>，变形原点在底部；配合 <code>--i</code> 做依次登场。柱状图必须从 0 起，不能截断 y 轴。</p>
+    <svg id="barChart" width="560" height="320" role="img" aria-label="柱状图"></svg>
+  </div>
+
+  <div class="block">
+    <h2>③ 饼图 / 甜甜圈</h2>
+    <p class="cap">一条扇区 path 四段：外弧（sweep=1）→ 侧边 → 内弧（sweep=0）→ 闭合。整圆（Δθ=2π）时单段弧会失效，要拆两段；这里 4 片都小于半圈，安全。</p>
+    <div class="row">
+      <svg id="pieChart" width="380" height="300" role="img" aria-label="饼图"></svg>
+      <div class="legend" id="pieLegend"></div>
+    </div>
+  </div>
+
+  <div class="block">
+    <button id="replay">重播生长动画</button>
+  </div>
+
+  <details>
+    <summary>核心代码</summary>
+    <pre><code>// —— 10 行 scaleLinear：数据域 → 屏幕值域。值域写反序就自动翻转 y ——
+function scaleLinear(domain, range) {
+  const [d0, d1] = domain, [r0, r1] = range;
+  const k = (r1 - r0) / (d1 - d0);
+  const f = (v) =&gt; r0 + (v - d0) * k;      // 数据 → 屏幕
+  f.invert = (p) =&gt; d0 + (p - r0) / k;     // 屏幕 → 数据（做 hover 时要用）
+  return f;
+}
+
+// 柱状图的分类轴：算出每格起点与带宽
+function scaleBand(domain, range, pi = 0.3, po = 0.3) {
+  const n = domain.length, [s, e] = range;
+  const step = (e - s) / Math.max(1, n - pi + po * 2);
+  const bw = step * (1 - pi);
+  const idx = new Map(domain.map((d, i) =&gt; [d, i]));
+  const f = (d) =&gt; s + step * po + step * idx.get(d);
+  f.bandwidth = bw;
+  return f;
+}
+
+const M = { t: 28, r: 24, b: 44, l: 56 };
+const pw = 560 - M.l - M.r, ph = 320 - M.t - M.b;
+const y = scaleLinear([0, 80], [M.t + ph, M.t]);   // 值域反序 = y 轴翻转
+
+// 折线：M 起点 + 若干个 L
+const d = data.map((v, i) =&gt; `${i ? "L" : "M"}${x(i)},${y(v)}`).join(" ");
+
+// 线条生长：把虚线一段设成整条长度，偏移从全长动到 0
+// path 上写 pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"
+line.getAnimations().forEach((a) =&gt; a.cancel());
+line.animate(
+  [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
+  { duration: 1400, easing: "ease-out", fill: "forwards" }
+);
+
+// 柱子生长：transform-origin 必须在底部，且要 transform-box: fill-box
+// .bar { transform-box: fill-box; transform-origin: bottom;
+//        transform: scaleY(0); animation: growBar 900ms forwards; }
+// @keyframes growBar { to { transform: scaleY(1); } }
+
+// 两者共用同一套比例尺 → 动画期间形变不会脱轨</code></pre>
+  </details>
+</div>
+
+<script>
+  const C = {
+    accent:"#c8401f", ink:"#1c1b18", muted:"#6b675e",
+    gold:"#b98a26", teal:"#3f6f6b", grid:"#e8e4da", axis:"#c9c3b8"
+  };
+  const M = { t: 28, r: 24, b: 44, l: 56 };
+
+  // 关键点：10 行替代品，覆盖 90% 的笛卡尔图；值域反序即翻转 y
+  function scaleLinear(domain, range) {
+    const d0 = domain[0], d1 = domain[1], r0 = range[0], r1 = range[1];
+    const k = (r1 - r0) / (d1 - d0);
+    const f = (v) => r0 + (v - d0) * k;
+    f.invert = (p) => d0 + (p - r0) / k;
+    return f;
+  }
+  // 关键点：分类轴不能用 scaleLinear，否则柱宽和间隙全错
+  function scaleBand(domain, range, pi, po) {
+    pi = pi == null ? 0.3 : pi;
+    po = po == null ? 0.3 : po;
+    const n = domain.length, s = range[0], e = range[1];
+    const step = (e - s) / Math.max(1, n - pi + po * 2);
+    const bw = step * (1 - pi);
+    const idx = new Map(domain.map((d, i) => [d, i]));
+    const f = (d) => s + step * po + step * idx.get(d);
+    f.bandwidth = bw;
+    f.step = step;
+    return f;
+  }
+
+  function frameLines(M, pw, ph, ticks, y, labels, x) {
+    let g = "";
+    ticks.forEach((t) => {
+      const yy = y(t);
+      g += '<line x1="' + M.l + '" y1="' + yy + '" x2="' + (M.l + pw) + '" y2="' + yy +
+           '" stroke="' + C.grid + '" stroke-width="1"/>';
+      g += '<text x="' + (M.l - 10) + '" y="' + yy + '" text-anchor="end" dominant-baseline="middle" font-size="11" fill="' + C.muted + '">' + t + "</text>";
+    });
+    labels.forEach((lb, i) => {
+      g += '<text x="' + x(i) + '" y="' + (M.t + ph + 20) + '" text-anchor="middle" font-size="11" fill="' + C.muted + '">' + lb + "</text>";
+    });
+    g += '<line x1="' + M.l + '" y1="' + M.t + '" x2="' + M.l + '" y2="' + (M.t + ph) + '" stroke="' + C.axis + '" stroke-width="1"/>';
+    g += '<line x1="' + M.l + '" y1="' + (M.t + ph) + '" x2="' + (M.l + pw) + '" y2="' + (M.t + ph) + '" stroke="' + C.axis + '" stroke-width="1"/>';
+    return g;
+  }
+
+  /* ---------- ① 折线图 ---------- */
+  (function () {
+    const W = 560, H = 320;
+    const pw = W - M.l - M.r, ph = H - M.t - M.b;
+    const data = [12, 34, 28, 51, 43, 66, 58, 72];
+    const n = data.length;
+    const x = scaleLinear([0, n - 1], [M.l, M.l + pw]);
+    const y = scaleLinear([0, 80], [M.t + ph, M.t]);
+
+    let g = frameLines(M, pw, ph, [0, 20, 40, 60, 80],
+      y, data.map((_, i) => String(i + 1)), x);
+
+    const d = data.map((v, i) => (i ? "L" : "M") + x(i) + "," + y(v)).join(" ");
+    // 关键点：pathLength="1" + dasharray=1 + dashoffset=1 → 整条线先藏起来
+    g += '<path class="grow-line" d="' + d + '" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1" fill="none" stroke="' + C.accent + '" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>';
+    data.forEach((v, i) => {
+      g += '<circle cx="' + x(i) + '" cy="' + y(v) + '" r="3.5" fill="#fff" stroke="' + C.accent + '" stroke-width="2"/>';
+    });
+
+    const svg = document.getElementById("lineChart");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.innerHTML = g;
+  })();
+
+  /* ---------- ② 柱状图 ---------- */
+  (function () {
+    const W = 560, H = 320;
+    const pw = W - M.l - M.r, ph = H - M.t - M.b;
+    const labels = ["A", "B", "C", "D", "E", "F"];
+    const values = [12, 34, 28, 51, 43, 66];
+    const xb = scaleBand(labels, [0, pw]);
+    const y = scaleLinear([0, 70], [M.t + ph, M.t]);   // 必须从 0 起
+    const baseY = y(0);
+
+    let g = frameLines(M, pw, ph, [0, 20, 40, 60], y, labels, (i) => M.l + xb(labels[i]) + xb.bandwidth / 2);
+
+    labels.forEach((c, i) => {
+      const bx = M.l + xb(c);
+      const by = y(values[i]);
+      // 关键点：柱高 = 基线屏幕 y − 柱顶屏幕 y（别写反）
+      g += '<rect class="bar" style="--i:' + i + '" x="' + bx + '" y="' + by + '" width="' +
+           xb.bandwidth + '" height="' + (baseY - by) + '" rx="3" fill="' + C.teal + '"/>';
+    });
+
+    const svg = document.getElementById("barChart");
+    svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+    svg.innerHTML = g;
+  })();
+
+  /* ---------- ③ 饼图 / 甜甜圈 ---------- */
+  (function () {
+    function arcPath(cx, cy, R, r, a0, a1) {
+      const pt = (rad, ang) => [cx + rad * Math.cos(ang), cy + rad * Math.sin(ang)];
+      const large = (a1 - a0) > Math.PI ? 1 : 0;   // 超过半圈必须置 1
+      const p0 = pt(R, a0), p1 = pt(R, a1);
+      if (r === 0) {
+        return "M" + cx + "," + cy + "L" + p0[0] + "," + p0[1] +
+               "A" + R + "," + R + " 0 " + large + ",1 " + p1[0] + "," + p1[1] + "Z";
+      }
+      const p2 = pt(r, a1), p3 = pt(r, a0);
+      return "M" + p0[0] + "," + p0[1] +
+             "A" + R + "," + R + " 0 " + large + ",1 " + p1[0] + "," + p1[1] +   // 外弧
+             "L" + p2[0] + "," + p2[1] +                                         // 侧边
+             "A" + r + "," + r + " 0 " + large + ",0 " + p3[0] + "," + p3[1] +   // 内弧（sweep=0）
+             "Z";
+    }
+    function toAngles(values) {
+      const total = values.reduce((a, b) => a + b, 0);
+      let acc = -Math.PI / 2;                      // 从 12 点方向起、顺时针分配
+      return values.map((v) => {
+        const a0 = acc, a1 = acc + (v / total) * Math.PI * 2;
+        acc = a1;
+        return [a0, a1];
+      });
+    }
+
+    const items = [
+      { k: "直接访问", v: 42, color: C.accent },
+      { k: "搜索引擎", v: 30, color: C.teal },
+      { k: "社交媒体", v: 18, color: C.gold },
+      { k: "其它", v: 10, color: C.ink }
+    ];
+    const values = items.map((d) => d.v);
+    const angles = toAngles(values);
+    const cx = 190, cy = 150, R = 108, r = 58;
+
+    let g = "";
+    angles.forEach((a, i) => {
+      const mid = (a[0] + a[1]) / 2;
+      const lx = cx + Math.cos(mid) * ((R + r) / 2);
+      const ly = cy + Math.sin(mid) * ((R + r) / 2);
+      g += '<path d="' + arcPath(cx, cy, R, r, a[0], a[1]) + '" fill="' + items[i].color + '"/>';
+      g += '<text x="' + lx + '" y="' + ly + '" text-anchor="middle" dominant-baseline="middle" font-size="12" font-weight="600" fill="#fff">' +
+           Math.round(items[i].v / values.reduce((x, y2) => x + y2, 0) * 100) + "%</text>";
+    });
+    // 中心留白放总数（甜甜圈的好处）
+    g += '<text x="' + cx + '" y="' + (cy - 6) + '" text-anchor="middle" font-size="12" fill="' + C.muted + '">合计</text>';
+    g += '<text x="' + cx + '" y="' + (cy + 18) + '" text-anchor="middle" font-size="20" font-weight="600" fill="' + C.ink + '">100</text>';
+
+    const svg = document.getElementById("pieChart");
+    svg.setAttribute("viewBox", "0 0 380 300");
+    svg.innerHTML = g;
+
+    document.getElementById("pieLegend").innerHTML = items
+      .map((d) => '<div><i style="background:' + d.color + '"></i>' + d.k + " · " + d.v + "</div>")
+      .join("");
+  })();
+
+  /* ---------- 生长动画：线条用 dashoffset，柱子用 scaleY ---------- */
+  // 关键点：两种生长动画由同一套比例尺生成几何，节奏对齐
+  function play() {
+    const line = document.querySelector(".grow-line");
+    line.getAnimations().forEach((a) => a.cancel());
+    line.animate(
+      [{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }],
+      { duration: 1400, easing: "ease-out", fill: "forwards" }
+    );
+
+    document.querySelectorAll(".bar").forEach((b) => {
+      b.style.animation = "none";        // 关键点：先摘掉动画
+      void b.getBoundingClientRect();    // 强制回流，让浏览器承认已重置
+      b.style.animation = "";            // 恢复类上的动画 → 从头再播一次
+    });
+  }
+
+  document.getElementById("replay").addEventListener("click", play);
+  play();
+</script>
+</body>
+</html>

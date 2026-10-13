@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSS 01 · 纯 CSS 形状集</title>
+<style>
+  :root{ --bg:#faf9f6; --text:#1c1b18; --muted:#6b675e; --accent:#c8401f;
+         --blue:#2b6cb0; --teal:#1abc9c; --gold:#f1c40f; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 24px 64px; background:var(--bg); color:var(--text);
+        font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  h1{ font-size:24px; margin:0 0 6px; color:var(--accent); }
+  .lead{ color:var(--muted); margin:0 0 30px; max-width:74ch; }
+  h2{ font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .note{ color:var(--muted); font-size:13px; margin:0 0 16px 12px; max-width:76ch; }
+
+  /* ---------- 原理示意：四边等宽边框 → 4 个三角形 ---------- */
+  .principle{ display:flex; gap:26px; align-items:center; flex-wrap:wrap; margin-bottom:34px; }
+  .borderbox{
+    width:0; height:0;                    /* 关键点：宽高都是 0，四条边框各收成一个三角形 */
+    border-width:55px;
+    border-style:solid;
+    border-color:var(--accent) var(--blue) var(--teal) var(--gold); /* 上 右 下 左 */
+  }
+  .principle ul{ margin:0; padding-left:18px; font-size:13px; color:var(--muted); }
+
+  /* ---------- 形状卡片网格 ---------- */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(165px,1fr)); gap:16px; }
+  .card{ margin:0; background:#fff; border:1px solid #e7e3da; border-radius:12px; padding:14px 12px 12px; }
+  .stage{ height:110px; display:flex; align-items:center; justify-content:center; }
+  figcaption{ margin-top:10px; font-size:12px; color:var(--text); text-align:center; }
+  .props{ display:block; color:var(--muted); font-size:11px; margin-top:3px; line-height:1.5; }
+
+  /* ---------- 各形状 ---------- */
+  .tri-up{ width:0; height:0;                                   /* 关键点：尖朝上 → 涂下边框 */
+    border-left:45px solid transparent; border-right:45px solid transparent;
+    border-bottom:70px solid var(--accent); }
+  .tri-down{ width:0; height:0;                                 /* 关键点：尖朝下 → 涂上边框 */
+    border-left:45px solid transparent; border-right:45px solid transparent;
+    border-top:70px solid var(--accent); }
+  .tri-left{ width:0; height:0;                                 /* 关键点：尖朝左 → 涂右边框 */
+    border-top:45px solid transparent; border-bottom:45px solid transparent;
+    border-right:70px solid var(--accent); }
+  .tri-right{ width:0; height:0;                                /* 关键点：尖朝右 → 涂左边框 */
+    border-top:45px solid transparent; border-bottom:45px solid transparent;
+    border-left:70px solid var(--accent); }
+
+  .circle{ width:90px; height:90px; border-radius:50%; background:var(--blue); }
+  .oval{ width:130px; height:80px; border-radius:50%; background:#8e44ad; }
+
+  .trapezoid{ width:110px; height:0;                            /* 关键点：上窄下宽 = 下边框 + 两侧透明斜边 */
+    border-bottom:65px solid var(--teal);
+    border-left:28px solid transparent; border-right:28px solid transparent; }
+
+  .parallelogram{ width:120px; height:60px; background:var(--teal); transform:skewX(-20deg); }
+  .diamond{ width:64px; height:64px; background:var(--gold); transform:rotate(45deg); }
+
+  .heart{ position:relative; width:90px; height:82px; }         /* 关键点：一元素 + 两个伪元素拼心形 */
+  .heart::before, .heart::after{
+    content:""; position:absolute; top:0; width:45px; height:72px;
+    background:var(--accent); border-radius:45px 45px 0 0;
+    transform:rotate(-45deg); transform-origin:0 100%; }
+  .heart::after{ left:45px; transform:rotate(45deg); transform-origin:100% 100%; }
+
+  .bubble{ position:relative; padding:12px 16px; background:var(--text); color:#fff;
+    border-radius:12px; font-size:13px; }
+  .bubble::after{ content:""; position:absolute; left:20px; bottom:-13px;   /* 关键点：伪元素三角形当尾巴 */
+    border-left:8px solid transparent; border-right:8px solid transparent;
+    border-top:13px solid var(--text); }
+
+  details{ margin-top:28px; border:1px solid #e7e3da; border-radius:10px; background:#fff; padding:8px 14px; }
+  summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+  pre{ margin:12px 0 4px; padding:14px; background:#1c1b18; color:#f3f0e9; border-radius:8px;
+       overflow:auto; font:12.5px/1.6 "Consolas","Menlo",monospace; }
+</style>
+</head>
+<body>
+
+<h1>纯 CSS 形状集</h1>
+<p class="lead">这个片段演示什么：不用 SVG、不引图片，只用盒模型（border / border-radius / transform）就能画出的常见形状，每个都标注了用到的属性。</p>
+
+<h2>三角形原理：宽高为 0 + 四条粗边框</h2>
+<p class="note">一个 <code>width:0; height:0</code> 的元素配上等宽边框时，四条边各自收成一个三角形，在中心交汇。要哪个方向的三角，就只给对应那条边上色，其余三边设 transparent。</p>
+<div class="principle">
+  <div class="borderbox"></div>
+  <ul>
+    <li>上边框 = 尖朝下（红）</li>
+    <li>右边框 = 尖朝左（蓝）</li>
+    <li>下边框 = 尖朝上（绿）</li>
+    <li>左边框 = 尖朝右（黄）</li>
+  </ul>
+</div>
+
+<h2>形状一览</h2>
+<p class="note">每个卡片下方标注所用属性。</p>
+<div class="grid">
+
+  <figure class="card">
+    <div class="stage"><div class="tri-up"></div></div>
+    <figcaption>三角形（朝上）<span class="props">border-left/right: transparent<br>border-bottom: 上色</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="tri-down"></div></div>
+    <figcaption>三角形（朝下）<span class="props">border-left/right: transparent<br>border-top: 上色</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="tri-left"></div></div>
+    <figcaption>三角形（朝左）<span class="props">border-top/bottom: transparent<br>border-right: 上色</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="tri-right"></div></div>
+    <figcaption>三角形（朝右）<span class="props">border-top/bottom: transparent<br>border-left: 上色</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="circle"></div></div>
+    <figcaption>圆形<span class="props">width=height<br>border-radius: 50%</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="oval"></div></div>
+    <figcaption>椭圆<span class="props">width≠height<br>border-radius: 50%</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="trapezoid"></div></div>
+    <figcaption>梯形<span class="props">border-bottom 上色<br>左右透明斜边</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="parallelogram"></div></div>
+    <figcaption>平行四边形<span class="props">transform: skewX(-20deg)</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="diamond"></div></div>
+    <figcaption>菱形<span class="props">正方形 + rotate(45deg)</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="heart"></div></div>
+    <figcaption>心形<span class="props">::before / ::after 两个半圆<br>rotate(±45deg) 拼接</span></figcaption>
+  </figure>
+
+  <figure class="card">
+    <div class="stage"><div class="bubble">对话泡</div></div>
+    <figcaption>对话泡<span class="props">圆角矩形 + 伪元素三角形尾巴</span></figcaption>
+  </figure>
+
+</div>
+
+<details>
+  <summary>核心代码</summary>
+<pre><code>/* 关键点：四方向三角形 —— 宽高为 0，只给一条边上色，其余 transparent */
+.tri-up    { width:0; height:0;
+  border-left:45px solid transparent;
+  border-right:45px solid transparent;
+  border-bottom:70px solid #c8401f; }   /* 尖朝上 → 涂下边框 */
+
+/* 关键点：圆形 = 等宽高 + 50% 圆角；椭圆 = 宽高不等 + 50% 圆角 */
+.circle { width:90px; height:90px; border-radius:50%; }
+.oval   { width:130px; height:80px; border-radius:50%; }
+
+/* 关键点：梯形 = 下边框上色 + 两侧透明斜边 */
+.trapezoid { width:110px; height:0;
+  border-bottom:65px solid #1abc9c;
+  border-left:28px solid transparent; border-right:28px solid transparent; }
+
+/* 关键点：平行四边形与菱形靠 transform */
+.parallelogram { width:120px; height:60px; transform:skewX(-20deg); }
+.diamond       { width:64px;  height:64px; transform:rotate(45deg); }
+
+/* 关键点：心形 = 一个盒子 + 两个伪元素半圆，各自旋转 45° 咬合 */
+.heart { position:relative; width:90px; height:82px; }
+.heart::before, .heart::after {
+  content:""; position:absolute; top:0; width:45px; height:72px;
+  background:#c8401f; border-radius:45px 45px 0 0;
+  transform:rotate(-45deg); transform-origin:0 100%; }
+.heart::after { left:45px; transform:rotate(45deg); transform-origin:100% 100%; }
+
+/* 关键点：对话泡 = 圆角矩形 + 伪元素三角形尾巴 */
+.bubble { position:relative; padding:12px 16px; background:#1c1b18;
+  color:#fff; border-radius:12px; }
+.bubble::after { content:""; position:absolute; left:20px; bottom:-13px;
+  border-left:8px solid transparent; border-right:8px solid transparent;
+  border-top:13px solid #1c1b18; }</code></pre>
+</details>
+
+</body>
+</html>

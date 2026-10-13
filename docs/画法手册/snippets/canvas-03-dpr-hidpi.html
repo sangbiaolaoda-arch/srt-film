@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canvas 高清屏适配 · devicePixelRatio</title>
+<style>
+  :root { --bg:#faf9f6; --ink:#1c1b18; --muted:#6b675e; --accent:#c8401f; --line:#e4e0d8; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:36px 24px 72px; background:var(--bg); color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  .wrap { max-width:780px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 8px; }
+  .lede { color:var(--muted); margin:0; }
+  h2 { font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .cap { color:var(--muted); font-size:13px; margin:4px 0 14px; }
+  .block { margin-top:36px; }
+  .row { display:flex; gap:20px; flex-wrap:wrap; }
+  figure { margin:0; width:300px; }   /* 关键点：限定宽度，避免长标题把两个面板挤成上下排 */
+  /* 关键点：外层固定尺寸 + overflow:hidden，放大时看到的是被裁切的局部 */
+  .zoom { width:300px; height:200px; overflow:hidden; border:1px solid var(--line);
+          border-radius:10px; background:#faf9f6; }
+  .zoom canvas { display:block; transform-origin:0 0; }
+  figcaption { margin-top:8px; font-size:13px; color:var(--muted); }
+  figcaption b { color:var(--accent); font-weight:600; }
+  .ctl { margin-top:18px; display:flex; align-items:center; gap:12px; font-size:13.5px; color:var(--muted); }
+  input[type=range] { width:240px; accent-color:var(--accent); }
+  .pill { font-family:ui-monospace,Consolas,"Courier New",monospace; font-size:12.5px;
+          background:#f1efe9; padding:2px 8px; border-radius:999px; color:var(--ink); }
+  code { font-family:ui-monospace,Consolas,"Courier New",monospace; font-size:12.5px;
+         background:#f1efe9; padding:1px 5px; border-radius:4px; }
+  details { margin-top:44px; border:1px solid var(--line); border-radius:12px; padding:14px 18px; background:#fff; }
+  summary { cursor:pointer; font-weight:600; color:var(--accent); }
+  pre { margin:14px 0 0; overflow-x:auto; background:#f7f5f0; border-radius:8px; padding:14px; }
+  pre code { background:none; padding:0; font-size:12.5px; line-height:1.6;
+             font-family:ui-monospace,Consolas,"Courier New",monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Canvas 高清屏适配</h1>
+  <p class="lede">这个片段演示什么：同一个圆、同一段文字，不做 <code>devicePixelRatio</code> 缩放 vs 做了 DPR 缩放，在高清屏上的清晰度差别。拖动滑块把两边一起放大，边缘差异立刻看得出来。</p>
+
+  <div class="block">
+    <h2>并排对照</h2>
+    <p class="cap">你的屏幕 <code>devicePixelRatio</code> = <span class="pill" id="dprOut">1</span>。若为 1（普通屏），把浏览器缩放调到 150%+ 或换到高清屏，差异才明显。</p>
+    <div class="row">
+      <figure>
+        <div class="zoom"><canvas id="low"></canvas></div>
+        <figcaption><b>未做 DPR 处理</b>：位图只有 300×200，被屏幕放大 → 边缘发虚、文字毛糙</figcaption>
+      </figure>
+      <figure>
+        <div class="zoom"><canvas id="high"></canvas></div>
+        <figcaption><b>做了 DPR 处理</b>：位图 = CSS 尺寸 × dpr，再 scale 回来 → 边缘锐利</figcaption>
+      </figure>
+    </div>
+    <div class="ctl">
+      <label for="zoom">放大查看</label>
+      <input type="range" id="zoom" min="1" max="5" step="0.5" value="2">
+      <span class="pill" id="zoomOut">2.0×</span>
+    </div>
+  </div>
+
+  <details>
+    <summary>核心代码</summary>
+    <pre><code>const CSSW = 300, CSSH = 200;
+
+// ✗ 不处理：位图 = CSS 尺寸。高清屏上每个 CSS 像素要铺 dpr 个设备像素 → 放大失真
+canvas.width = CSSW;
+canvas.height = CSSH;
+
+// ✓ 处理：位图放大 dpr 倍，再把绘图坐标系 scale 回去
+const dpr = window.devicePixelRatio || 1;
+canvas.width  = Math.round(CSSW * dpr);   // 关键点：位图分辨率 = CSS 尺寸 × dpr
+canvas.height = Math.round(CSSH * dpr);
+canvas.style.width  = CSSW + "px";        // 关键点：显示尺寸仍是 CSS 像素
+canvas.style.height = CSSH + "px";
+const ctx = canvas.getContext("2d");
+ctx.scale(dpr, dpr);                      // 关键点：之后照常用 CSS 像素坐标画
+
+// 一句话可复用版
+function setupHiDPI(canvas, cssW, cssH) {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.round(cssW * dpr);
+  canvas.height = Math.round(cssH * dpr);
+  canvas.style.width  = cssW + "px";
+  canvas.style.height = cssH + "px";
+  const ctx = canvas.getContext("2d");
+  ctx.scale(dpr, dpr);
+  return ctx;
+}
+
+// 易错点：改 canvas.width/height 会清空画布并重置所有 context 状态，
+// 所以 ctx.scale(dpr, dpr) 必须在设置尺寸「之后」调用，且 resize 时要重新执行。</code></pre>
+  </details>
+</div>
+
+<script>
+  const CSSW = 300, CSSH = 200;
+  const dpr = window.devicePixelRatio || 1;
+  document.getElementById("dprOut").textContent = dpr;
+
+  // 关键点：用同一段绘制代码画两张画布，唯一区别是有没有按 dpr 放大位图
+  function draw(ctx) {
+    ctx.clearRect(0, 0, CSSW, CSSH);
+
+    // 细线：最容易被放大看出发虚
+    ctx.strokeStyle = "#eeeadf";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= CSSW; x += 20) {
+      ctx.beginPath(); ctx.moveTo(x + 0.5, 0); ctx.lineTo(x + 0.5, CSSH); ctx.stroke();
+    }
+
+    // 圆：填充 + 描边
+    ctx.beginPath();
+    ctx.arc(96, 92, 60, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(200,64,31,0.12)";
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#c8401f";
+    ctx.stroke();
+
+    // 圆环：半径相减，考验边缘
+    ctx.beginPath();
+    ctx.arc(96, 92, 34, 0, Math.PI * 2);
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "#1c1b18";
+    ctx.stroke();
+
+    // 小字号文字：DPR 差别最直观
+    ctx.fillStyle = "#1c1b18";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.font = "600 15px -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+    ctx.fillText("清晰度对照 Sharp", 176, 70);
+    ctx.font = "12px -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif";
+    ctx.fillStyle = "#6b675e";
+    ctx.fillText("小字看边缘", 176, 92);
+    ctx.fillText("1px 线看粗细", 176, 110);
+    ctx.fillText("圆看锯齿", 176, 128);
+  }
+
+  // 左：不做 DPR —— 位图 = CSS 尺寸
+  const low = document.getElementById("low");
+  low.width = CSSW;
+  low.height = CSSH;
+  low.style.width = CSSW + "px";
+  low.style.height = CSSH + "px";
+  draw(low.getContext("2d"));
+
+  // 右：做 DPR —— 位图 ×dpr，再 scale 回 CSS 坐标系
+  const high = document.getElementById("high");
+  high.width = Math.round(CSSW * dpr);
+  high.height = Math.round(CSSH * dpr);
+  high.style.width = CSSW + "px";
+  high.style.height = CSSH + "px";
+  const hctx = high.getContext("2d");
+  hctx.scale(dpr, dpr);   // 关键点：位图坐标 → CSS 坐标，绘制代码不用改
+  draw(hctx);
+
+  // 放大查看：只放大 CSS 显示，不改变位图，所以能把模糊感放大出来
+  const zoom = document.getElementById("zoom");
+  const zoomOut = document.getElementById("zoomOut");
+  function applyZoom() {
+    const z = parseFloat(zoom.value);
+    low.style.transform = "scale(" + z + ")";
+    high.style.transform = "scale(" + z + ")";
+    zoomOut.textContent = z.toFixed(1) + "×";
+  }
+  zoom.addEventListener("input", applyZoom);
+  applyZoom();
+</script>
+</body>
+</html>

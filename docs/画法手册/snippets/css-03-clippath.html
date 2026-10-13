@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSS 03 · clip-path</title>
+<style>
+  :root{ --bg:#faf9f6; --text:#1c1b18; --muted:#6b675e; --accent:#c8401f; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 24px 64px; background:var(--bg); color:var(--text);
+        font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  h1{ font-size:24px; margin:0 0 6px; color:var(--accent); }
+  .lead{ color:var(--muted); margin:0 0 30px; max-width:74ch; }
+  section{ margin:0 0 34px; }
+  h2{ font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .note{ color:var(--muted); font-size:13px; margin:0 0 16px 12px; max-width:78ch; }
+  .row{ display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; }
+  .sw{ text-align:center; }
+  .sw p{ margin:8px 0 0; font-size:11.5px; color:var(--muted); max-width:185px; line-height:1.5; }
+  .box{ width:185px; height:130px; background:linear-gradient(140deg, #c8401f, #2b6cb0); }
+  .box.sq{ width:130px; height:130px; }
+
+  /* ① 五种基本形状 */
+  .c-inset{ clip-path:inset(14px 26px 32px 42px); }
+  .c-inset-round{ clip-path:inset(14px 26px round 16px); }
+  .c-circle{ clip-path:circle(55px at 50% 50%); }
+  .c-ellipse{ clip-path:ellipse(80px 46px at 50% 50%); }
+  .c-poly{ clip-path:polygon(50% 0%, 100% 100%, 0% 100%); }
+  .c-path{ clip-path:path("M 10 12 L 172 24 L 122 114 L 34 92 Z"); }
+
+  /* ② 现成形状 */
+  .c-hex{ clip-path:polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%); }
+  .c-star{ clip-path:polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%,
+                             50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+  .c-oct{ clip-path:polygon(30% 0%, 70% 0%, 100% 30%, 100% 70%,
+                            70% 100%, 30% 100%, 0% 70%, 0% 30%); }
+
+  /* ③ 动画：同形状同点数才能补间 */
+  .morph{
+    /* 关键点：两端都是 polygon 且都是 3 个点 → 逐点连线补间，平滑 */
+    animation:morph 2.6s ease-in-out infinite;
+  }
+  @keyframes morph{
+    0%, 100% { clip-path:polygon(50% 5%, 0% 100%, 100% 100%); }
+    50%      { clip-path:polygon(50% 38%, 6% 100%, 94% 100%); }
+  }
+  .pulse{
+    /* 关键点：circle → circle，只改半径/圆心 → 同样能补间 */
+    animation:pulse 2.6s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%, 100% { clip-path:circle(28px at 50% 50%); }
+    50%      { clip-path:circle(60px at 50% 50%); }
+  }
+  .bad{
+    /* 关键点：polygon ↔ circle 类型不同，无法插值 → 直接跳变，看不见中间过程 */
+    animation:bad 2.4s steps(1, end) infinite;
+  }
+  @keyframes bad{
+    0%, 49%   { clip-path:polygon(50% 0%, 100% 100%, 0% 100%); }
+    50%, 100% { clip-path:circle(46% at 50% 50%); }
+  }
+  .badcount{
+    /* 关键点：polygon 3 点 ↔ polygon 4 点，点数不同 → 同样不补间 */
+    animation:badcount 2.4s steps(1, end) infinite;
+  }
+  @keyframes badcount{
+    0%, 49%   { clip-path:polygon(50% 5%, 100% 100%, 0% 100%); }
+    50%, 100% { clip-path:polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%); }
+  }
+
+  details{ margin-top:26px; border:1px solid #e7e3da; border-radius:10px; background:#fff; padding:8px 14px; }
+  summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+  pre{ margin:12px 0 4px; padding:14px; background:#1c1b18; color:#f3f0e9; border-radius:8px;
+       overflow:auto; font:12.5px/1.6 "Consolas","Menlo",monospace; }
+</style>
+</head>
+<body>
+
+<h1>clip-path 剪出任意形状</h1>
+<p class="lead">这个片段演示什么：五种基本形状 inset / circle / ellipse / polygon / path 的语法，几个现成的多边形（六边形、五角星、八边形），以及动画「只能同形状同点数之间插值」这条规则。</p>
+
+<section>
+  <h2>1. 五种基本形状</h2>
+  <p class="note">inset 用空格分隔（无逗号，序是上右下左）；circle / ellipse 用 <code>at x y</code> 定圆心；polygon 用逗号分组；path 用绝对 px 坐标、不随元素尺寸自适应。</p>
+  <div class="row">
+    <div class="sw"><div class="box c-inset"></div>
+      <p>inset(14px 26px 32px 42px)</p></div>
+    <div class="sw"><div class="box c-inset-round"></div>
+      <p>inset(14px 26px round 16px)</p></div>
+    <div class="sw"><div class="box c-circle"></div>
+      <p>circle(55px at 50% 50%)</p></div>
+    <div class="sw"><div class="box c-ellipse"></div>
+      <p>ellipse(80px 46px at 50% 50%)</p></div>
+    <div class="sw"><div class="box c-poly"></div>
+      <p>polygon(50% 0%, 100% 100%, 0% 100%)</p></div>
+    <div class="sw"><div class="box c-path"></div>
+      <p>path("M 10 12 L 172 24 L 122 114 L 34 92 Z")</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>2. 现成形状：六边形 / 五角星 / 八边形</h2>
+  <p class="note">把元素想成坐标系（左上 0%,0% → 右下 100%,100%），按顺时针依次写下每个顶点的 <code>x y</code> 即可。想算术就用 calc()。</p>
+  <div class="row">
+    <div class="sw"><div class="box sq c-hex"></div><p>六边形（平顶）</p></div>
+    <div class="sw"><div class="box sq c-star"></div><p>五角星（10 个点）</p></div>
+    <div class="sw"><div class="box sq c-oct"></div><p>八边形</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>3. 动画规则：只能同形状、同点数插值</h2>
+  <p class="note">浏览器要「逐点连线」做补间，所以形状类型或点数不一致时直接跳变、没有过渡。</p>
+  <div class="row">
+    <div class="sw" style="border-left:3px solid #1abc9c; padding-left:14px">
+      <div class="box sq morph"></div>
+      <p>✅ polygon(3 点) → polygon(3 点)：平滑变形</p>
+    </div>
+    <div class="sw" style="border-left:3px solid #1abc9c; padding-left:14px">
+      <div class="box sq pulse"></div>
+      <p>✅ circle → circle（改半径）：平滑缩放</p>
+    </div>
+    <div class="sw" style="border-left:3px solid var(--accent); padding-left:14px">
+      <div class="box sq bad"></div>
+      <p>❌ polygon ↔ circle：类型不同 → 直接跳</p>
+    </div>
+    <div class="sw" style="border-left:3px solid var(--accent); padding-left:14px">
+      <div class="box sq badcount"></div>
+      <p>❌ polygon(3 点) ↔ polygon(4 点)：点数不同 → 直接跳</p>
+    </div>
+  </div>
+  <p class="note" style="margin-top:16px">想让「三角变圆」有动画：保持点数不变只改坐标值；或改用两个元素叠加做透明度交叉淡入，或改用 mask + 径向渐变。另外 <code>clip-path: url(#id)</code> 引用型的裁剪不能用 CSS 过渡，要动就在 <code>&lt;clipPath&gt;</code> 内用 SMIL。</p>
+</section>
+
+<details>
+  <summary>核心代码</summary>
+<pre><code>/* 关键点：五种基本形状的语法差异 —— inset 无逗号，其余逗号分组 */
+.inset   { clip-path: inset(14px 26px 32px 42px); }          /* 上 右 下 左 */
+.inset-r { clip-path: inset(14px 26px round 16px); }         /* round 加圆角 */
+.circle  { clip-path: circle(55px at 50% 50%); }
+.ellipse { clip-path: ellipse(80px 46px at 50% 50%); }
+.polygon { clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
+.path    { clip-path: path("M 10 12 L 172 24 L 122 114 L 34 92 Z"); } /* 只能 px */
+
+/* 关键点：现成多边形 —— 顺时针依次写顶点 */
+.hexagon { clip-path: polygon(25% 0%, 75% 0%, 100% 50%,
+                              75% 100%, 25% 100%, 0% 50%); }
+.star    { clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%,
+                              50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+
+/* 关键点：能插值 —— 同形状、同点数，逐点连线补间 */
+@keyframes morph {
+  0%, 100% { clip-path: polygon(50% 5%, 0% 100%, 100% 100%); }
+  50%      { clip-path: polygon(50% 38%, 6% 100%, 94% 100%); }  /* 还是 3 点 */ }
+
+/* 关键点：不能插值 —— 类型不同（polygon↔circle）或点数不同 → 直接跳 */
+@keyframes bad {
+  0%, 49%   { clip-path: polygon(50% 0%, 100% 100%, 0% 100%); }
+  50%, 100% { clip-path: circle(46% at 50% 50%); } }</code></pre>
+</details>
+
+</body>
+</html>

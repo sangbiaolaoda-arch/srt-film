@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>确定性动画骨架 · 时间由外部给定</title>
+<style>
+  :root { --bg:#faf9f6; --ink:#1c1b18; --muted:#6b675e; --accent:#c8401f; --line:#e4e0d8; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:36px 24px 72px; background:var(--bg); color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  .wrap { max-width:780px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 8px; }
+  .lede { color:var(--muted); margin:0; }
+  h2 { font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .cap { color:var(--muted); font-size:13px; margin:4px 0 14px; }
+  .block { margin-top:38px; }
+  .note { background:#fff; border:1px solid var(--line); border-left:3px solid var(--accent);
+          border-radius:8px; padding:12px 16px; font-size:13.5px; color:var(--muted); }
+  .note b { color:var(--ink); }
+  #stage { position:relative; height:212px; background:#fff; border:1px solid var(--line);
+           border-radius:10px; overflow:hidden; }
+  #stage .lane { position:absolute; left:104px; right:16px; height:1px; background:#eeeadf; }
+  #stage .lbl { position:absolute; left:12px; width:86px; font-size:12px; color:var(--muted);
+                font-family:ui-monospace,Consolas,"Courier New",monospace; }
+  .box { position:absolute; width:40px; height:40px; border-radius:8px; will-change:transform; }
+  #box1 { background:#c8401f; }
+  #box2 { background:#1c1b18; }
+  #box3 { background:#b98a26; }
+  .ctl { margin-top:18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-size:13.5px; color:var(--muted); }
+  input[type=range] { flex:1; min-width:220px; accent-color:var(--accent); }
+  button { font:inherit; padding:6px 16px; border-radius:8px; border:1px solid var(--line);
+           background:#fff; color:var(--ink); cursor:pointer; }
+  button:hover { border-color:var(--accent); color:var(--accent); }
+  .read { margin-top:14px; display:flex; gap:10px; flex-wrap:wrap; font-size:12.5px;
+          font-family:ui-monospace,Consolas,"Courier New",monospace; }
+  .read span { background:#f1efe9; border-radius:6px; padding:5px 10px; }
+  .read b { color:var(--accent); font-weight:600; }
+  code { font-family:ui-monospace,Consolas,"Courier New",monospace; font-size:12.5px;
+         background:#f1efe9; padding:1px 5px; border-radius:4px; }
+  details { margin-top:44px; border:1px solid var(--line); border-radius:12px; padding:14px 18px; background:#fff; }
+  summary { cursor:pointer; font-weight:600; color:var(--accent); }
+  pre { margin:14px 0 0; overflow-x:auto; background:#f7f5f0; border-radius:8px; padding:14px; }
+  pre code { background:none; padding:0; font-size:12.5px; line-height:1.6;
+             font-family:ui-monospace,Consolas,"Courier New",monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>确定性动画骨架</h1>
+  <p class="lede">这个片段演示什么：动画不自己走时间，而是 <b>由外部给定一个 <code>t</code></b>。拖动滑块设定 <code>t</code>，画面就是 <code>f(t)</code> 的结果 —— 同一个 t 反复拖过去，渲染出的数值和画面完全一致。</p>
+
+  <div class="block">
+    <h2>① 拖动时间轴</h2>
+    <p class="cap">三个方块各有一条 tween（起点不同、时长不同、缓动不同）。拖到同一个位置，下面的「状态校验」每次都一样。</p>
+    <div id="stage">
+      <div class="lane" style="top:38px"></div>
+      <div class="lane" style="top:104px"></div>
+      <div class="lane" style="top:170px"></div>
+      <div class="lbl" style="top:24px">x 位移</div>
+      <div class="lbl" style="top:90px">rotation</div>
+      <div class="lbl" style="top:156px">scale</div>
+      <div class="box" id="box1" style="left:110px;top:18px"></div>
+      <div class="box" id="box2" style="left:110px;top:84px"></div>
+      <div class="box" id="box3" style="left:110px;top:150px"></div>
+    </div>
+
+    <div class="ctl">
+      <label for="time">t</label>
+      <input type="range" id="time" min="0" max="2.1" step="0.001" value="0">
+      <button id="play">自动播放</button>
+    </div>
+    <div class="read">
+      <span>t = <b id="tv">0.000</b> s</span>
+      <span>x = <b id="svx">0.00</b></span>
+      <span>rot = <b id="svr">0.00</b></span>
+      <span>scale = <b id="svs">0.00</b></span>
+      <span>状态校验 = <b id="hash">—</b></span>
+    </div>
+  </div>
+
+  <div class="block">
+    <div class="note">
+      <b>为什么这里不用 GSAP？</b> 这种「逐帧可复现」骨架的重点不是库，而是一个模式：<b>动画暂停，时间由外部给定</b>（GSAP 里就是 <code>timeline({paused:true})</code> + <code>tl.time(t)</code>）。下面用原生 JS 手写了一个约 20 行的等效时间轴来演示这个模式，所以本页不引任何 CDN。真实项目里两者可以互换。
+    </div>
+  </div>
+
+  <details>
+    <summary>核心代码</summary>
+    <pre><code>// —— 约 20 行的等效时间轴：只做「给定 t 就渲染那一帧」，自己绝不走时间 ——
+function createTimeline() {
+  const items = [];
+  let duration = 0;
+  return {
+    to(tween) {
+      const start = tween.at ?? duration;          // 不写 at 就接在末尾
+      items.push(Object.assign({ start }, tween));
+      duration = Math.max(duration, start + tween.duration);
+      return this;
+    },
+    get duration() { return duration; },
+    time(t) {                                       // 关键点：手动 seek，纯函数式渲染
+      for (const it of items) {
+        const p = Math.min(1, Math.max(0, (t - it.start) / it.duration));
+        const e = it.ease ? it.ease(p) : p;
+        it.apply(it.from + (it.to - it.from) * e);
+      }
+      return this;
+    }
+  };
+}
+
+// 缓动只依赖 p，不依赖真实时间
+const powerOut = (p) => 1 - Math.pow(1 - p, 3);
+const backOut  = (p) => 1 + 2.70158 * Math.pow(p - 1, 3) + 1.70158 * Math.pow(p - 1, 2);
+
+const tl = createTimeline();
+tl.to({ at: 0,    duration: 1.0, ease: powerOut, from: 0,   to: 300,
+        apply: (v) => { box1.style.transform = "translateX(" + v + "px)"; } })
+  .to({ at: 0.55, duration: 1.5, ease: (p) => p,  from: 0,   to: 360,
+        apply: (v) => { box2.style.transform = "rotate(" + v + "deg)"; } })
+  .to({ at: 1.1,  duration: 1.0, ease: backOut,  from: 0.4, to: 1,
+        apply: (v) => { box3.style.transform = "scale(" + v + ")"; } });
+
+// 拖动 = 设定 t；同一 t 永远渲染出同一帧
+slider.addEventListener("input", () => tl.time(parseFloat(slider.value)));
+
+// —— GSAP 的等价写法（同一模式，不需要手写上面的 time()）——
+// const tl = gsap.timeline({ paused: true });
+// tl.to("#box1", { x: 300, duration: 1, ease: "power2.out" })
+//   .to("#box2", { rotation: 360, duration: 1.5, ease: "none" }, "+=0.55");
+// gsap.ticker.lagSmoothing(0);   // 关掉掉帧补偿，时间只由我们说了算
+// tl.time(t);                    // 逐帧渲染：t = frame / FPS</code></pre>
+  </details>
+</div>
+
+<script>
+  /* ---------- 约 20 行的等效时间轴 ---------- */
+  // 关键点：时间由外部给定，timeline 不持有任何自己的时钟
+  function createTimeline() {
+    const items = [];
+    let duration = 0;
+    return {
+      to(tween) {
+        const start = tween.at != null ? tween.at : duration;
+        items.push(Object.assign({ start: start }, tween));
+        duration = Math.max(duration, start + tween.duration);
+        return this;
+      },
+      get duration() { return duration; },
+      time(t) {
+        for (const it of items) {
+          const p = Math.min(1, Math.max(0, (t - it.start) / it.duration));
+          const e = it.ease ? it.ease(p) : p;
+          it.apply(it.from + (it.to - it.from) * e);
+        }
+        return this;
+      }
+    };
+  }
+
+  // 关键点：缓动只吃 p（0..1），不吃真实时间 → 同一 t 必得同一结果
+  const powerOut = (p) => 1 - Math.pow(1 - p, 3);
+  const backOut = (p) => 1 + 2.70158 * Math.pow(p - 1, 3) + 1.70158 * Math.pow(p - 1, 2);
+
+  const box1 = document.getElementById("box1");
+  const box2 = document.getElementById("box2");
+  const box3 = document.getElementById("box3");
+
+  // 渲染状态全部收敛到一个对象，便于做一致性校验
+  const state = { x: 0, rot: 0, scale: 0.4 };
+
+  const tl = createTimeline();
+  tl.to({ at: 0, duration: 1.0, ease: powerOut, from: 0, to: 300,
+          apply: (v) => { state.x = v; box1.style.transform = "translateX(" + v + "px)"; } })
+    .to({ at: 0.55, duration: 1.5, ease: (p) => p, from: 0, to: 360,
+          apply: (v) => { state.rot = v; box2.style.transform = "rotate(" + v + "deg)"; } })
+    .to({ at: 1.1, duration: 1.0, ease: backOut, from: 0.4, to: 1,
+          apply: (v) => { state.scale = v; box3.style.transform = "scale(" + v + ")"; } });
+
+  /* ---------- UI ---------- */
+  const slider = document.getElementById("time");
+  const tv = document.getElementById("tv");
+  const svx = document.getElementById("svx");
+  const svr = document.getElementById("svr");
+  const svs = document.getElementById("svs");
+  const hashEl = document.getElementById("hash");
+
+  slider.max = tl.duration;
+
+  // 状态校验：对当前三个数值做 FNV-1a，同一 t → 同一串
+  function checksum() {
+    const str = state.x.toFixed(3) + "," + state.rot.toFixed(3) + "," + state.scale.toFixed(3);
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return (h >>> 0).toString(16).padStart(8, "0");
+  }
+
+  function render(t) {
+    tl.time(t);                          // 关键点：唯一驱动入口
+    tv.textContent = t.toFixed(3);
+    svx.textContent = state.x.toFixed(2);
+    svr.textContent = state.rot.toFixed(2);
+    svs.textContent = state.scale.toFixed(2);
+    hashEl.textContent = checksum();
+  }
+
+  slider.addEventListener("input", () => render(parseFloat(slider.value)));
+
+  // 自动播放也只是「不断给 tl.time 一个新 t」，渲染逻辑一字不改
+  let rafId = null, t0 = 0, from = 0;
+  document.getElementById("play").addEventListener("click", (ev) => {
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; ev.target.textContent = "自动播放"; return; }
+    ev.target.textContent = "暂停";
+    from = parseFloat(slider.value) >= tl.duration - 1e-6 ? 0 : parseFloat(slider.value);
+    t0 = performance.now() - from * 1000;
+    (function step(now) {
+      let t = (now - t0) / 1000;
+      if (t >= tl.duration) { t = tl.duration; }
+      slider.value = t;
+      render(t);
+      if (t >= tl.duration) { rafId = null; ev.target.textContent = "自动播放"; return; }
+      rafId = requestAnimationFrame(step);
+    })(t0);
+  });
+
+  render(0);
+</script>
+</body>
+</html>

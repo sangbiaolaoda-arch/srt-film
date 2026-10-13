@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>缓动曲线可视化 · easing</title>
+<style>
+  :root { --bg:#faf9f6; --ink:#1c1b18; --muted:#6b675e; --accent:#c8401f; --line:#e4e0d8; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; padding:36px 24px 72px; background:var(--bg); color:var(--ink);
+    font:15px/1.75 -apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  .wrap { max-width:780px; margin:0 auto; }
+  h1 { font-size:26px; margin:0 0 8px; }
+  .lede { color:var(--muted); margin:0; }
+  h2 { font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .cap { color:var(--muted); font-size:13px; margin:4px 0 14px; }
+  .block { margin-top:38px; }
+  canvas { display:block; border:1px solid var(--line); border-radius:10px; background:#fff; max-width:100%; }
+  .legend { display:flex; flex-wrap:wrap; gap:6px 18px; margin-top:14px; font-size:13px; color:var(--ink); }
+  .legend span { display:inline-flex; align-items:center; gap:7px; }
+  .legend i { width:18px; height:3px; border-radius:2px; display:inline-block; }
+  table { border-collapse:collapse; width:100%; font-size:13.5px; margin-top:8px; }
+  th, td { border-bottom:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top; }
+  th { color:var(--muted); font-weight:600; }
+  code { font-family:ui-monospace,Consolas,"Courier New",monospace; font-size:12.5px;
+         background:#f1efe9; padding:1px 5px; border-radius:4px; }
+  details { margin-top:44px; border:1px solid var(--line); border-radius:12px; padding:14px 18px; background:#fff; }
+  summary { cursor:pointer; font-weight:600; color:var(--accent); }
+  pre { margin:14px 0 0; overflow-x:auto; background:#f7f5f0; border-radius:8px; padding:14px; }
+  pre code { background:none; padding:0; font-size:12.5px; line-height:1.6;
+             font-family:ui-monospace,Consolas,"Courier New",monospace; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>缓动曲线可视化</h1>
+  <p class="lede">这个片段演示什么：8 种缓动函数画成「时间 → 进度」曲线，再让 8 个小球用各自曲线跑同一条赛道 —— 曲线形状和图上的快慢一眼就能对上。</p>
+
+  <div class="block">
+    <h2>① 曲线：横轴是时间，纵轴是完成进度</h2>
+    <p class="cap">纵轴超出 0~1 的部分就是「过冲」（back / elastic 靠它实现回弹）。注意 bounce / elastic 会反复穿越 0~1，所以没法用单条 cubic-bezier 表达。</p>
+    <canvas id="curves" width="560" height="360"></canvas>
+    <div class="legend" id="legend"></div>
+  </div>
+
+  <div class="block">
+    <h2>② 赛跑：同一时长，不同缓动</h2>
+    <p class="cap">所有小球时长相同，只是位移曲线不同。<code>ease-out</code> 起步最猛（立即响应），<code>ease-in</code> 起步最慢、末尾最快（适合退场）。</p>
+    <canvas id="race" width="560" height="290"></canvas>
+  </div>
+
+  <div class="block">
+    <h2>③ 什么时候用哪种</h2>
+    <table>
+      <tr><th>场景</th><th>用哪种</th><th>理由</th></tr>
+      <tr><td>元素进场（出现、弹出、淡入、滑入）</td><td><code>ease-out</code></td><td>起步快 = 立即响应，尾段慢 = 停在目标上显得「到位」</td></tr>
+      <tr><td>元素退场（关闭、消失、滑出）</td><td><code>ease-in</code> + 更短时长</td><td>慢起快走，让元素迅速离开而不是赖着不走</td></tr>
+      <tr><td>纯位移 / A→B（滑轨、指示器切换）</td><td><code>ease-in-out</code></td><td>两头慢中间快，符合物体加速再减速的直觉</td></tr>
+      <tr><td>持续循环（spinner、进度、呼吸）</td><td><code>linear</code></td><td>首尾无缝衔接，循环最稳</td></tr>
+      <tr><td>物理回弹 / 果冻感</td><td><code>back-out</code></td><td>冲过终点再收回来，有质量感</td></tr>
+      <tr><td>机械 / 数字跳变 / 逐格</td><td><code>steps()</code></td><td>一格一格跳，不做平滑插值</td></tr>
+    </table>
+    <p class="cap">两条硬规则：① 进场用 <code>ease-out</code>，退场用 <code>ease-in</code>；② 同一个动效里，进场的缓动 ≠ 退场的缓动。</p>
+  </div>
+
+  <details>
+    <summary>核心代码</summary>
+    <pre><code>// cubic-bezier(x1,y1,x2,y2) → 求值函数（牛顿迭代解 x(t)=x）
+function cubicBezier(x1, y1, x2, y2) {
+  const A = (a, b) => 1 - 3 * b + 3 * a;
+  const B = (a, b) => 3 * b - 6 * a;
+  const C = (a) => 3 * a;
+  const calc = (t, a, b) => ((A(a, b) * t + B(a, b)) * t + C(a)) * t;
+  return function (x) {
+    if (x <= 0) return 0;
+    if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) {
+      const g = calc(t, x1, x2) - x;
+      const d = 3 * A(x1, x2) * t * t + 2 * B(x1, x2) * t + C(x1);
+      if (Math.abs(g) < 1e-6 || Math.abs(d) < 1e-6) break;
+      t -= g / d;
+    }
+    return calc(t, y1, y2);
+  };
+}
+
+const easings = [
+  { name: "linear",      fn: (t) => t },
+  { name: "ease",        fn: cubicBezier(0.25, 0.1, 0.25, 1) },
+  { name: "ease-in",     fn: cubicBezier(0.42, 0, 1, 1) },
+  { name: "ease-out",    fn: cubicBezier(0, 0, 0.58, 1) },
+  { name: "ease-in-out", fn: cubicBezier(0.42, 0, 0.58, 1) },
+  { name: "back-out",    fn: cubicBezier(0.34, 1.56, 0.64, 1) },
+  // bounce / elastic 会多次穿越 0~1，只能用函数手写，无法用单条 bezier 表达
+  { name: "elastic-out", fn: (t) => t <= 0 ? 0 : t >= 1 ? 1
+      : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 3)) + 1 },
+  { name: "bounce-out",  fn: (t) => {
+      const n = 7.5625, d = 2.75;
+      if (t < 1 / d) return n * t * t;
+      if (t < 2 / d) { t -= 1.5 / d; return n * t * t + 0.75; }
+      if (t < 2.5 / d) { t -= 2.25 / d; return n * t * t + 0.9375; }
+      t -= 2.625 / d; return n * t * t + 0.984375;
+  } }
+];
+
+// 赛跑：所有球同一时长，ball.x = startX + ease(p) * trackWidth
+const p = Math.min(1, (now - t0) / 1700);
+ball.x = 110 + ease(p) * 380;</code></pre>
+  </details>
+</div>
+
+<script>
+  const C = {
+    linear:"#6b675e", ease:"#3f6f6b", easeIn:"#b98a26", easeOut:"#c8401f",
+    easeInOut:"#8f2c14", back:"#7a5c9e", elastic:"#2f6f9e", bounce:"#4c8c3f"
+  };
+
+  // 关键点：用 cubic-bezier 求值器把 CSS 关键字还原成可绘制的曲线
+  function cubicBezier(x1, y1, x2, y2) {
+    const A = (a, b) => 1 - 3 * b + 3 * a;
+    const B = (a, b) => 3 * b - 6 * a;
+    const Cc = (a) => 3 * a;
+    const calc = (t, a, b) => ((A(a, b) * t + B(a, b)) * t + Cc(a)) * t;
+    return function (x) {
+      if (x <= 0) return 0;
+      if (x >= 1) return 1;
+      let t = x;
+      for (let i = 0; i < 8; i++) {
+        const g = calc(t, x1, x2) - x;
+        const d = 3 * A(x1, x2) * t * t + 2 * B(x1, x2) * t + Cc(x1);
+        if (Math.abs(g) < 1e-6 || Math.abs(d) < 1e-6) break;
+        t -= g / d;
+      }
+      return calc(t, y1, y2);
+    };
+  }
+
+  const easings = [
+    { name: "linear",      color: C.linear,  fn: (t) => t },
+    { name: "ease",        color: C.ease,    fn: cubicBezier(0.25, 0.1, 0.25, 1) },
+    { name: "ease-in",     color: C.easeIn,  fn: cubicBezier(0.42, 0, 1, 1) },
+    { name: "ease-out",    color: C.easeOut, fn: cubicBezier(0, 0, 0.58, 1) },
+    { name: "ease-in-out", color: C.easeInOut, fn: cubicBezier(0.42, 0, 0.58, 1) },
+    { name: "back-out",    color: C.back,    fn: cubicBezier(0.34, 1.56, 0.64, 1) },
+    { name: "elastic-out", color: C.elastic, fn: (t) =>
+        t <= 0 ? 0 : t >= 1 ? 1 :
+        Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 3)) + 1 },
+    { name: "bounce-out",  color: C.bounce,  fn: (t) => {
+        const n = 7.5625, d = 2.75;
+        if (t < 1 / d) return n * t * t;
+        if (t < 2 / d) { t -= 1.5 / d; return n * t * t + 0.75; }
+        if (t < 2.5 / d) { t -= 2.25 / d; return n * t * t + 0.9375; }
+        t -= 2.625 / d; return n * t * t + 0.984375;
+    } }
+  ];
+
+  function hidpi(id, w, h) {
+    const c = document.getElementById(id);
+    const dpr = window.devicePixelRatio || 1;
+    c.width = Math.round(w * dpr);
+    c.height = Math.round(h * dpr);
+    c.style.width = w + "px";
+    c.style.height = h + "px";
+    const ctx = c.getContext("2d");
+    ctx.scale(dpr, dpr);
+    return ctx;
+  }
+
+  /* ---------- ① 曲线图 ---------- */
+  (function () {
+    const W = 560, H = 360;
+    const M = { t: 24, r: 22, b: 36, l: 46 };
+    const pw = W - M.l - M.r, ph = H - M.t - M.b;
+    const vMin = -0.45, vMax = 1.45;                 // 留出过冲空间
+    const X = (t) => M.l + t * pw;
+    const Y = (v) => M.t + ph - (v - vMin) / (vMax - vMin) * ph;
+
+    const ctx = hidpi("curves", W, H);
+
+    // 网格与刻度
+    const marks = [-0.25, 0, 0.5, 1, 1.25];
+    ctx.font = "11px ui-monospace, Consolas, monospace";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    marks.forEach((v) => {
+      const y = Y(v);
+      const isKey = (v === 0 || v === 1);
+      ctx.strokeStyle = isKey ? "#d8d3c8" : "#eeeadf";
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(M.l, y + 0.5); ctx.lineTo(M.l + pw, y + 0.5); ctx.stroke();
+      ctx.fillStyle = isKey ? "#6b675e" : "#b6b0a4";
+      ctx.fillText(v.toFixed(2), M.l - 8, y);
+    });
+
+    // 坐标轴
+    ctx.strokeStyle = "#c9c3b8";
+    ctx.beginPath(); ctx.moveTo(M.l + 0.5, M.t); ctx.lineTo(M.l + 0.5, M.t + ph); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(M.l, M.t + ph + 0.5); ctx.lineTo(M.l + pw, M.t + ph + 0.5); ctx.stroke();
+
+    ctx.fillStyle = "#6b675e";
+    ctx.textAlign = "center";
+    ctx.fillText("时间 t →", M.l + pw / 2, H - 12);
+    ctx.save();
+    ctx.translate(14, M.t + ph / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText("进度", 0, 0);
+    ctx.restore();
+
+    // 曲线
+    easings.forEach((e) => {
+      ctx.beginPath();
+      for (let i = 0; i <= 240; i++) {
+        const t = i / 240;
+        const v = e.fn(t);
+        const x = X(t), y = Y(v);
+        i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+      }
+      ctx.strokeStyle = e.color;
+      ctx.lineWidth = e.name === "ease-out" ? 2.6 : 2;
+      ctx.stroke();
+    });
+
+    // 图例
+    document.getElementById("legend").innerHTML = easings
+      .map((e) => '<span><i style="background:' + e.color + '"></i>' + e.name + "</span>")
+      .join("");
+  })();
+
+  /* ---------- ② 赛跑 ---------- */
+  (function () {
+    const W = 560, H = 290;
+    const ctx = hidpi("race", W, H);
+    const t0 = performance.now();
+    // 关键点：同一时长同一赛道，只有缓动函数不同 → 差别的唯一来源就是曲线
+    const DURATION = 1700, PAUSE = 700, CYCLE = DURATION + PAUSE;
+    const START_X = 110, TRACK_W = 380;
+    const R = 7;
+
+    function frame(now) {
+      const elapsed = (now - t0) % CYCLE;
+      const p = Math.min(1, elapsed / DURATION);
+
+      ctx.clearRect(0, 0, W, H);
+
+      easings.forEach((e, i) => {
+        const y = 26 + i * 32;
+
+        // 赛道
+        ctx.strokeStyle = "#eeeadf";
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(START_X, y + 0.5); ctx.lineTo(START_X + TRACK_W, y + 0.5); ctx.stroke();
+
+        // 起点/终点刻度
+        ctx.strokeStyle = "#d8d3c8";
+        [START_X, START_X + TRACK_W].forEach((x) => {
+          ctx.beginPath(); ctx.moveTo(x + 0.5, y - 6); ctx.lineTo(x + 0.5, y + 6); ctx.stroke();
+        });
+
+        // 名称
+        ctx.fillStyle = "#6b675e";
+        ctx.font = "12px ui-monospace, Consolas, monospace";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "middle";
+        ctx.fillText(e.name, 8, y);
+
+        // 小球：位置 = 缓动输出
+        const bx = START_X + e.fn(p) * TRACK_W;
+        ctx.fillStyle = e.color;
+        ctx.beginPath();
+        ctx.arc(bx, y, R, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // 进度条（真实时间，线性）
+      ctx.fillStyle = "#c8401f";
+      ctx.fillRect(START_X, H - 14, TRACK_W * p, 2);
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  })();
+</script>
+</body>
+</html>

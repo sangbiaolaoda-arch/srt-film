@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CSS 02 · 渐变当画笔</title>
+<style>
+  :root{ --bg:#faf9f6; --text:#1c1b18; --muted:#6b675e; --accent:#c8401f; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; padding:32px 24px 64px; background:var(--bg); color:var(--text);
+        font:15px/1.7 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif; }
+  h1{ font-size:24px; margin:0 0 6px; color:var(--accent); }
+  .lead{ color:var(--muted); margin:0 0 30px; max-width:74ch; }
+  section{ margin:0 0 34px; }
+  h2{ font-size:16px; margin:0 0 4px; padding-left:10px; border-left:3px solid var(--accent); }
+  .note{ color:var(--muted); font-size:13px; margin:0 0 16px 12px; max-width:76ch; }
+  .row{ display:flex; flex-wrap:wrap; gap:20px; align-items:flex-start; }
+  .sw{ text-align:center; }
+  .sw p{ margin:8px 0 0; font-size:12px; color:var(--muted); max-width:180px; }
+  .box{ width:180px; height:120px; border-radius:10px; border:1px solid #e7e3da; }
+
+  /* ① 硬中断：两个色标放同一位置 → 过渡宽度归零，得到锐利边界 */
+  .hard{ background:linear-gradient(90deg, var(--text) 0 50%, #f1efe9 50% 100%); }
+  .soft{ background:linear-gradient(90deg, var(--text) 0%, #f1efe9 100%); } /* 对照：默认插值 */
+
+  /* ② repeating 条纹：一个周期 = 末色标位置 − 首色标位置 */
+  .stripe-h{ background:repeating-linear-gradient(0deg, #1c1b18 0 12px, #f1efe9 12px 24px); }
+  .stripe-diag{ background:repeating-linear-gradient(45deg, var(--accent) 0 12px, #f1efe9 12px 24px); }
+
+  /* ③ 多层叠加棋盘格：两层 45° 对角方块错开半格交叉 */
+  .checker{
+    background-color:#fff;
+    background-image:
+      linear-gradient(45deg, var(--text) 25%, transparent 25% 75%, var(--text) 75%),
+      linear-gradient(45deg, var(--text) 25%, transparent 25% 75%, var(--text) 75%);
+    background-size:40px 40px;
+    background-position:0 0, 20px 20px;   /* 第二层错开半格 */
+  }
+
+  /* ④ conic 饼图：每段一个硬中断区间 */
+  .pie{ border-radius:50%; background:conic-gradient(
+      var(--accent) 0 40%, #f1c40f 40% 70%, #2b6cb0 70% 100%); }
+
+  /* ⑤ 甜甜圈：饼图 + mask 径向渐变挖空中心 */
+  .donut{ border-radius:50%; background:conic-gradient(var(--accent) 0 65%, #ecf0f1 65% 100%);
+    -webkit-mask:radial-gradient(circle, transparent 0 44%, #000 45%);
+            mask:radial-gradient(circle, transparent 0 44%, #000 45%); }
+  .circle-mask{ border-radius:50%; }
+
+  /* 彩虹色带：改正版写法，每个 stop 最多两个位置 */
+  .rainbow{ background:linear-gradient(90deg,
+      #c8401f 0 20%, #e67e22 20% 40%, #f1c40f 40% 60%, #1abc9c 60% 80%, #2b6cb0 80% 100%); }
+
+  .narrow{ width:130px; }
+
+  details{ margin-top:26px; border:1px solid #e7e3da; border-radius:10px; background:#fff; padding:8px 14px; }
+  summary{ cursor:pointer; font-weight:600; color:var(--accent); }
+  pre{ margin:12px 0 4px; padding:14px; background:#1c1b18; color:#f3f0e9; border-radius:8px;
+       overflow:auto; font:12.5px/1.6 "Consolas","Menlo",monospace; }
+</style>
+</head>
+<body>
+
+<h1>渐变当画笔</h1>
+<p class="lead">这个片段演示什么：把 background 渐变当像素用——硬中断造锐利边界、repeating 造条纹、多层叠加造棋盘格、conic 造饼图、再配合 mask 挖出甜甜圈。</p>
+
+<section>
+  <h2>1. 硬中断：锐利边界（最核心技巧）</h2>
+  <p class="note">把两个色标放在<strong>同一个位置</strong>，过渡宽度归零，就得到一条硬边；左图硬、右图是默认的模糊插值。</p>
+  <div class="row">
+    <div class="sw"><div class="box hard"></div><p>#000 0 50%, #f1efe9 50% 100%　硬边</p></div>
+    <div class="sw"><div class="box soft"></div><p>#000 0%, #f1efe9 100%　默认模糊过渡</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>2. repeating 条纹</h2>
+  <p class="note">一个重复周期 = 最后一个色标位置 − 第一个色标位置（下面都是 24px − 0 = 24px）。</p>
+  <div class="row">
+    <div class="sw"><div class="box stripe-h"></div><p>repeating-linear-gradient(0deg…)</p></div>
+    <div class="sw"><div class="box stripe-diag"></div><p>repeating-linear-gradient(45deg…)</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>3. 多层叠加：棋盘格</h2>
+  <p class="note">两层 45° 硬中断渐变各画一组对角方块，用 background-position 错开半格后交叉，正好拼成棋盘。</p>
+  <div class="row">
+    <div class="sw"><div class="box checker" style="width:200px;height:160px"></div>
+      <p>两层 linear-gradient(45deg) + background-size:40px</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>4. conic-gradient 饼图 / 进度环</h2>
+  <div class="row">
+    <div class="sw"><div class="box pie narrow" style="height:130px"></div>
+      <p>conic 三段硬中断：40% / 30% / 30%</p></div>
+    <div class="sw"><div class="box donut narrow" style="height:130px"></div>
+      <p>饼图 + mask 径向渐变挖空中心 → 甜甜圈/进度环</p></div>
+  </div>
+</section>
+
+<section>
+  <h2>5. 色带：多段硬中断拼彩虹</h2>
+  <p class="note">每个 stop 最多跟两个位置。写成 <code>yellow 0 40% 60%</code> 这种三个位置是非法的，会整条声明失效。</p>
+  <div class="row">
+    <div class="sw"><div class="box rainbow"></div>
+      <p>linear-gradient(90deg) 五段各占 20%</p></div>
+  </div>
+</section>
+
+<details>
+  <summary>核心代码</summary>
+<pre><code>/* 关键点：两个色标放同一位置 = 硬中断，边界锐利 */
+background: linear-gradient(90deg, #1c1b18 0 50%, #f1efe9 50% 100%);
+
+/* 关键点：repeating 造条纹，一个周期 = 末色标位置 − 首色标位置 */
+background: repeating-linear-gradient(0deg, #1c1b18 0 12px, #f1efe9 12px 24px);
+
+/* 关键点：两层 45° 对角方块错开半格 → 棋盘格 */
+.checker {
+  background-color:#fff;
+  background-image:
+    linear-gradient(45deg, #1c1b18 25%, transparent 25% 75%, #1c1b18 75%),
+    linear-gradient(45deg, #1c1b18 25%, transparent 25% 75%, #1c1b18 75%);
+  background-size:40px 40px;
+  background-position:0 0, 20px 20px; }
+
+/* 关键点：conic-gradient 每段一个硬中断区间 → 饼图 */
+.pie { border-radius:50%; background: conic-gradient(
+  #c8401f 0 40%, #f1c40f 40% 70%, #2b6cb0 70% 100%); }
+
+/* 关键点：饼图 + mask 径向渐变挖空中心 → 甜甜圈 */
+.donut {
+  border-radius:50%;
+  background: conic-gradient(#c8401f 0 65%, #ecf0f1 65% 100%);
+  mask: radial-gradient(circle, transparent 0 44%, #000 45%);
+  -webkit-mask: radial-gradient(circle, transparent 0 44%, #000 45%); }
+
+/* 关键点：色带每段用「色 起 止」两个位置，别写三个位置 */
+background: linear-gradient(90deg,
+  #c8401f 0 20%, #e67e22 20% 40%, #f1c40f 40% 60%, #1abc9c 60% 80%, #2b6cb0 80% 100%);</code></pre>
+</details>
+
+</body>
+</html>
