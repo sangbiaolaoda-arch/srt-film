@@ -108,9 +108,13 @@ export interface Seg {
   tone?: SemTone;
 }
 
-/** 扫描文本，按最长优先切出带语义标记的片段。 */
-export function emphasize(text: string): Seg[] {
-  const sorted = [...SEM_RULES].sort((a, b) => b.t.length - a.t.length);
+/**
+ * 扫描文本，按最长优先切出带语义标记的片段。
+ * `extra` 是**本片专属词表**：题材换了以后通用词表可能一条都不命中（实测《遗忘》
+ * 五句台词全空），此时按本片论题补词，语义色 token 不变。
+ */
+export function emphasize(text: string, extra: Rule[] = []): Seg[] {
+  const sorted = [...SEM_RULES, ...extra].sort((a, b) => b.t.length - a.t.length);
   const segs: Seg[] = [];
   let buf = "";
   let i = 0;

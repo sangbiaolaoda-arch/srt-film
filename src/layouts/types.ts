@@ -90,6 +90,12 @@ export interface Layout {
    * 不进自动挑选池，只被导演覆写点名。
    */
   custom?: string;
+  /** 本拍的入场转场 id（缺省按 stage 的轮转序列取） */
+  transition?: string;
+  /** 本拍的出场动效 id（缺省按 stage 的轮转序列取） */
+  exit?: string;
+  /** 是否绘制母版装饰层（点阵 / 四角角标 / 进度条）。专属场景片应关闭，缺省开启 */
+  decor?: boolean;
   /** 海报风的 canvas 特效（背景层） */
   fx?: FxKind;
   /** 特效强度 0..1，缺省 0.6 */

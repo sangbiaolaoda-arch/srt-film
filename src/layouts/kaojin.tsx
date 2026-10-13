@@ -175,7 +175,11 @@ const kj06: Scene = ({ text, style }) => (
 const kj07: Scene = ({ text, style, beat }) => (
   <g>
     <line x1={104} y1={112} x2={1176} y2={112} stroke="#1c1b18" strokeWidth={3} />
-    <text x={116} y={300} fontSize={190} fill="#ddd4bf" fontFamily={S}>“</text>
+    {/* 引文道：两道平行短竖（规则：上画面文字不带标点，故引文符号不用字形引号） */}
+    <g fill="#ddd4bf">
+      <rect x={116} y={182} width={24} height={124} rx={4} />
+      <rect x={164} y={182} width={24} height={124} rx={4} />
+    </g>
     <Emph data-anim data-motion="m-fade-up" x={640} y={408} size={fit(text, 74)} fill="#1c1b18" text={text} style={style} />
     <path data-anim data-motion="m-stroke-draw" d="M420 470 L860 470" stroke={sem(style, "warm")} strokeWidth={4} fill="none" />
     <text x={1176} y={664} textAnchor="end" fontSize={17} fill="#8a867c" fontFamily={S}>

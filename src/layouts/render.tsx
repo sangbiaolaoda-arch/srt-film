@@ -7,9 +7,11 @@ import { Chart } from "./charts";
 import { Asset } from "./assets";
 import { Figure } from "./figures";
 import { KAOJIN_SCENES } from "./kaojin";
+import { WANGJI_SCENES } from "./wangji";
 import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT, type Seg, type SemTone } from "./emphasis";
 import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
+import { stripPunct } from "../core/text";
 
 /** 编辑风色板：纸白 + 朱红。 */
 export const COLORS: Record<Tone, string> = {
@@ -181,7 +183,7 @@ function slotText(slot: Slot, ctx: RenderContent): string {
     case "bignum": return bignum ?? "";
     case "unit": return unit ?? "";
     case "caption": return caption ?? headline;
-    case "attribution": return caption ?? "— 旁白";
+    case "attribution": return caption ?? "旁白";
     case "source": return "数据来自旁白";
     default: return headline;
   }
@@ -279,7 +281,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       );
     }
     case "bullets": case "listnum": case "checklist": {
-      const list = items(ctx.content, slot.k === "bullets" ? 3 : 4);
+      const list = items(ctx.content, slot.k === "bullets" ? 3 : 4).map(stripPunct);
       const lineH = Math.min(size * 2.1, h / list.length);
       return g(
         <g>
@@ -287,6 +289,8 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
             <Fragment key={i}>
               {slot.k === "listnum" && <text x={x} y={y + lineH * (i + 0.85)} fontSize={size * 0.7} fill={C.dim} fontFamily={SANS}>{`${i + 1}.`}</text>}
               {slot.k === "checklist" && <circle cx={x + 9} cy={y + lineH * (i + 0.72)} r={7} fill="none" stroke={C.accent} strokeWidth={2} />}
+              {/* 项目符号用图形画，不用「—」字符 —— 画面文字零标点（见 core/text.ts） */}
+              {slot.k === "bullets" && <rect x={x + 3} y={y + lineH * (i + 0.72) - 4} width={8} height={8} fill={fill} />}
               <text
                 x={slot.k === "bullets" ? x + 18 : x + (slot.k === "checklist" ? 26 : 34)}
                 y={y + lineH * (i + 0.85)}
@@ -295,7 +299,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
                 fontFamily={SANS}
                 data-part=""
               >
-                {slot.k === "bullets" ? `— ${t.slice(0, 22)}` : t.slice(0, 22)}
+                {t.slice(0, 22)}
               </text>
             </Fragment>
           ))}
@@ -303,7 +307,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       );
     }
     case "tags": case "pills": {
-      const list = items(ctx.content, 4);
+      const list = items(ctx.content, 4).map(stripPunct);
       const cw = w / Math.max(list.length, 1);
       return g(
         <g>
@@ -336,7 +340,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       );
     }
     case "literal": case "badge": case "kicker": case "label": case "meta": {
-      const t = slotText(slot, ctx.content);
+      const t = stripPunct(slotText(slot, ctx.content));
       if (!t) return g(<g />);
       return g(
         <text x={tx} y={y + h * 0.72} fontSize={size} fill={fill} fontFamily={SANS} textAnchor={anchor} letterSpacing={slot.k === "kicker" || slot.k === "badge" ? 2 : 0}>
@@ -348,7 +352,8 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       // 文本类：headline / text / quote / caption / subhead / attribution / source / unit
       const raw = slotText(slot, ctx.content);
       const isHeadlineLike = slot.k === "headline" || slot.k === "text" || slot.k === "quote";
-      const t = isHeadlineLike ? displayHeadline(raw) : raw;
+      // 先按标点截断（displayHeadline），再净化标点 —— 顺序反了会让截断失效。
+      const t = isHeadlineLike ? stripPunct(displayHeadline(raw)) : stripPunct(raw);
       if (!t) return g(<g />);
       const family = slot.k === "source" || slot.k === "attribution" || slot.k === "caption" ? SANS : SERIF;
       const weight = isHeadlineLike ? 600 : 400;
@@ -429,12 +434,12 @@ export interface LayoutSVGProps {
 
 /** 版式图层：只有槽位，不带 <svg> 外壳与背景 —— 供播放器把多拍叠在同一张 SVG 里。 */
 export function LayoutLayer({ layout, content }: { layout: Layout; content: RenderContent }): JSX.Element {
-  // 专属场景（kaojin.tsx）：整拍由手绘画面渲染，槽位机制被绕过。
-  const scene = layout.custom ? KAOJIN_SCENES[layout.custom] : undefined;
+  // 专属场景（kaojin.tsx / wangji.tsx）：整拍由手绘画面渲染，槽位机制被绕过。
+  const scene = layout.custom ? (KAOJIN_SCENES[layout.custom] ?? WANGJI_SCENES[layout.custom]) : undefined;
   if (scene) {
     return (
       <g data-layout={layout.id}>
-        {scene({ text: content.headline, beat: content.beat, style: layout.style ?? "editorial" })}
+        {scene({ text: stripPunct(content.headline), beat: content.beat, style: layout.style ?? "editorial" })}
       </g>
     );
   }

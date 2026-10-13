@@ -9,6 +9,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { plan } from "../src/core/plan";
 import { displayHeadline, displayWidth } from "../src/core/compose";
+import { stripPunct } from "../src/core/text";
 import { STAGE_FPS } from "../src/render/frame";
 
 const root = resolve(import.meta.dirname, "..");
@@ -43,9 +44,9 @@ const rows = shots.map((shot, i) => {
 });
 
 for (const { i, at, dur, shot } of rows) {
-  const h = displayHeadline(shot.content.headline);
+  const h = stripPunct(displayHeadline(shot.content.headline));
   const w = displayWidth(h);
-  const over = w > 16 ? " ⚠超宽" : "";
+  const over = !shot.layout.custom && w > 16 ? " ⚠超宽" : "";
   console.log(
     `${String(i + 1).padStart(2, "0")}  ` +
       `${at.toFixed(2).padStart(6)}–${(at + dur).toFixed(2).padStart(6)}s  ` +

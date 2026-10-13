@@ -10,6 +10,9 @@ import { APPLIED_MOTION_IDS } from "../src/motion/apply";
 import { decideStyle, eligible, pickLayout, planStyles } from "../src/layouts/pick";
 import { CHART_KINDS } from "../src/layouts/charts";
 import { ASSET_IDS } from "../src/layouts/assets";
+import { KAOJIN_SCENES } from "../src/layouts/kaojin";
+import { WANGJI_SCENES } from "../src/layouts/wangji";
+import { hasPunct } from "../src/core/text";
 import { shotAt } from "../src/render/frame";
 import { parseSRT } from "../src/core/srt";
 import { planBeats } from "../src/core/beats";
@@ -31,6 +34,15 @@ const demoContent = (beat = 1): RenderContent => ({
   numbers: [120, 85, 3],
   beat,
 });
+
+/** 数值槽（+3% / 120）与拍号角标是数据与元信息，不是文案 —— 允许含 + - % 等符号。 */
+const DATA_NODE = /^[+\-±]?[\d.,]+\s*[%‰]?$|^BEAT\s+\d+$/;
+
+/** 画面文字零标点规则：返回首个含标点的文案节点（跳过数据节点）。 */
+function punctIn(html: string): string {
+  const texts = [...html.matchAll(/<(?:text|tspan)\b[^>]*>([^<]*)<\/(?:text|tspan)>/g)].map((m) => m[1]!);
+  return texts.find((t) => !DATA_NODE.test(t.trim()) && hasPunct(t)) ?? "";
+}
 
 const EDITORIAL = LAYOUTS.filter((l) => (l.style ?? "editorial") === "editorial");
 const POSTER = LAYOUTS.filter((l) => l.style === "poster");
@@ -185,6 +197,32 @@ describe("渲染与 canvas 安全", () => {
     const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent() }));
     expect(html.includes("data-char")).toBe(false);
   });
+  it("版式渲染的文案不含标点（画面文字零标点规则）", () => {
+    for (const l of LAYOUTS) {
+      const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent(LAYOUTS.indexOf(l) + 1) }));
+      const bad = punctIn(html);
+      expect(bad, `${l.id} 画面文字含标点：${bad}`).toBe("");
+    }
+  });
+  it("版式自带装饰字（literal）不含标点 —— 否则净化会把它吃成空槽", () => {
+    for (const l of LAYOUTS) {
+      for (const slot of l.slots) {
+        if (!slot.literal) continue;
+        expect(hasPunct(slot.literal), `${l.id} 的装饰字「${slot.literal}」含标点`).toBe(false);
+      }
+    }
+  });
+});
+
+describe("专属场景", () => {
+  const SCENES = { ...KAOJIN_SCENES, ...WANGJI_SCENES };
+  it("画面文字（含硬编码装饰字）不含标点", () => {
+    for (const [id, scene] of Object.entries(SCENES)) {
+      const html = renderToStaticMarkup(createElement(scene, { text: "测试台词 无标点", beat: 1, style: "editorial" as Style }));
+      const bad = punctIn(html);
+      expect(bad, `${id} 画面文字含标点：${bad}`).toBe("");
+    }
+  });
 });
 
 describe("风格判定", () => {
@@ -227,7 +265,11 @@ describe("全片风格规划（planStyles）", () => {
       const poster = d.filter((x) => x.style === "poster").length;
       expect(poster, `${f} 一个海报风都没选出来`).toBeGreaterThanOrEqual(1);
       expect(poster, `${f} 海报风过多，重音变底色`).toBeLessThanOrEqual(4);
-      expect(poster / d.length, `${f} 海报风占比过高`).toBeLessThanOrEqual(0.25);
+      // 占比断言只对拍数够多的语料成立：开场与定版是 planStyles 设计上的双锚点（各 +1.0 分），
+      // 短片（n < 8）里这两拍本身就超过 25% —— 那是锚点，不是「重音变底色」。
+      if (d.length >= 8) {
+        expect(poster / d.length, `${f} 海报风占比过高`).toBeLessThanOrEqual(0.25);
+      }
     }
   });
 

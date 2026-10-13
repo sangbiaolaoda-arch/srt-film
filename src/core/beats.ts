@@ -33,6 +33,16 @@ function isPauseEnd(text: string): boolean {
   return last.length > 0 && PAUSE_ENDS.includes(last);
 }
 
+/**
+ * cue 里是否含任何切拍标点。
+ * 项目规则（2026-10-14）：SRT 台词的一切标点都换成空格 → 标点不再是切拍依据，
+ * 此时**一条 cue 即一拍**（作者用 cue 边界表达分拍）。含标点的 SRT 走原有逻辑，行为不变。
+ */
+function hasSplitPunct(text: string): boolean {
+  for (const ch of text) if (SENTENCE_ENDS.includes(ch) || PAUSE_ENDS.includes(ch)) return true;
+  return false;
+}
+
 export function planBeats(cues: Cue[]): Beat[] {
   const beats: Beat[] = [];
   let current: Cue[] = [];
@@ -60,6 +70,7 @@ export function planBeats(cues: Cue[]): Beat[] {
     const dur = cue.end - (current[0]!.start);
     const len = current.map((c) => c.text).join("").length;
     if (isSentenceEnd(cue.text)) flush(); // 句末：必收
+    else if (!hasSplitPunct(cue.text)) flush(); // 无标点 SRT：一条 cue 即一拍
     else if (dur >= MAX_BEAT_SECONDS && isPauseEnd(cue.text)) flush(); // 长拍：停顿处收
     else if (len >= MAX_BEAT_CHARS) flush(); // 超长：按 cue 边界硬切
   }

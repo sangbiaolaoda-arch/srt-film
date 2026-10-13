@@ -32,7 +32,7 @@ export function plan(srt: string, ovRaw: string): PlanResult {
     const ovr = ov[String(beat.index)];
     const scene: BeatScene = composeScenes([beat])[0]!;
     const applied = ovr ? applyOverride(scene, ovr) : scene;
-    problems.push(...validateScene(applied, ovr?.source));
+    problems.push(...validateScene(applied, ovr?.source, Boolean(ovr?.layout?.custom)));
 
     const content = buildContent(applied, beat, false);
     if (ovr?.headline) content.headline = ovr.headline;

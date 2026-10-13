@@ -4,6 +4,7 @@ import { planBeats } from "../src/core/beats";
 import { extractNumbers, isTraceable } from "../src/core/trace";
 import { composeScene, validateScene } from "../src/core/compose";
 import { applyOverride } from "../src/core/overrides";
+import { stripPunct } from "../src/core/text";
 
 const SRT = `1
 00:00:00,000 --> 00:00:02,000
@@ -37,12 +38,42 @@ describe("parseSRT", () => {
   });
 });
 
+const NO_PUNCT_SRT = `1
+00:00:00,000 --> 00:00:02,000
+遗忘 不是记忆的故障
+
+2
+00:00:02,000 --> 00:00:04,000
+它是筛选 大脑每天都在做
+`;
+
 describe("planBeats", () => {
   it("按句末标点收拍", () => {
     const beats = planBeats(parseSRT(SRT));
     expect(beats).toHaveLength(2); // 前2条合并为一拍（无句末标点），第3条一拍
     expect(beats[0]!.cues.map((c) => c.id)).toEqual([1]);
     expect(beats[1]!.text).toContain("85%");
+  });
+  it("无标点 SRT：一条 cue 即一拍（标点全换空格后，cue 边界就是拍边界）", () => {
+    const beats = planBeats(parseSRT(NO_PUNCT_SRT));
+    expect(beats).toHaveLength(2);
+    expect(beats[0]!.text).toContain("遗忘");
+    expect(beats[1]!.text).toContain("筛选");
+  });
+});
+
+describe("stripPunct（画面文字零标点规则）", () => {
+  it("半角标点换空格", () => {
+    expect(stripPunct("Forgotten, not broken.")).toBe("Forgotten not broken");
+  });
+  it("全角与 CJK 标点换空格", () => {
+    expect(stripPunct("遗忘，不是记忆的故障。")).toBe("遗忘 不是记忆的故障");
+  });
+  it("引号、书名号、破折号、省略号都在净化范围", () => {
+    expect(stripPunct("「靠近」——还是…远离？")).toBe("靠近 还是 远离");
+  });
+  it("保留字母与数字，压连续空格并去首尾", () => {
+    expect(stripPunct("  耗时 120 毫秒 ，  提升 85 倍  ")).toBe("耗时 120 毫秒 提升 85 倍");
   });
 });
 
@@ -95,5 +126,14 @@ describe("compose + gate", () => {
       headline: "这句话非常长已经超过了十六个字的安全区限制",
     });
     expect(validateScene(scene).some((e) => e.includes("安全区"))).toBe(true);
+  });
+  it("专属场景（custom）跳过安全区 —— 它自己断行与自适应字号", () => {
+    const beats = planBeats(parseSRT(SRT));
+    const scene = applyOverride(composeScene(beats[0]!), {
+      headline: "这句话非常长已经超过了十六个字的安全区限制",
+      layout: { id: "wj-01", name: "wj-01", group: "statement", custom: "wj-01", enter: ["m-fade-up"], slots: [] },
+    });
+    expect(validateScene(scene, undefined, false).some((e) => e.includes("安全区"))).toBe(true);
+    expect(validateScene(scene, undefined, true).some((e) => e.includes("安全区"))).toBe(false);
   });
 });

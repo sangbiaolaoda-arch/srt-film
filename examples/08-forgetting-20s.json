@@ -1,0 +1,47 @@
+{
+  "1": {
+    "layout": {
+      "id": "wj-01", "name": "遗忘≠故障", "group": "statement",
+      "custom": "wj-01", "enter": ["m-fade-up"],
+      "style": "editorial", "paper": "#f2efe8", "decor": false, "fx": "none",
+      "transition": "m-mask-circle", "exit": "m-dissolve-up",
+      "slots": []
+    }
+  },
+  "2": {
+    "layout": {
+      "id": "wj-02", "name": "筛选", "group": "statement",
+      "custom": "wj-02", "enter": ["m-fade-up"],
+      "style": "editorial", "paper": "#0e1114", "decor": false, "fx": "none",
+      "transition": "m-split-open", "exit": "m-dissolve-up",
+      "slots": []
+    }
+  },
+  "3": {
+    "layout": {
+      "id": "wj-03", "name": "闸口提问", "group": "statement",
+      "custom": "wj-03", "enter": ["m-fade-up"],
+      "style": "editorial", "paper": "#f5f2ea", "decor": false, "fx": "none",
+      "transition": "m-push-left", "exit": "m-mask-close",
+      "slots": []
+    }
+  },
+  "4": {
+    "layout": {
+      "id": "wj-04", "name": "分流", "group": "statement",
+      "custom": "wj-04", "enter": ["m-fade-up"],
+      "style": "editorial", "paper": "#0f1216", "decor": false, "fx": "none",
+      "transition": "m-wipe-diagonal", "exit": "m-dissolve-up",
+      "slots": []
+    }
+  },
+  "5": {
+    "layout": {
+      "id": "wj-05", "name": "最常用的路", "group": "statement",
+      "custom": "wj-05", "enter": ["m-fade-up"],
+      "style": "editorial", "paper": "#f2efe8", "decor": false, "fx": "none",
+      "transition": "m-sweep-light", "exit": "m-fade-out",
+      "slots": []
+    }
+  }
+}

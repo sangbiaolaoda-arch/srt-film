@@ -51,7 +51,9 @@ function Stage({ shots }: { shots: Shot[] }): JSX.Element {
         <g key={i} data-layer={i} data-shot={shot.layout.id}>
           <LayoutLayer layout={shot.layout} content={shot.content} />
           <BeatMark beat={shot.content.beat} style={shot.layout.style} />
-          <DecorLayer beat={shot.content.beat} total={shots.length} style={shot.layout.style} />
+          {shot.layout.decor !== false && (
+            <DecorLayer beat={shot.content.beat} total={shots.length} style={shot.layout.style} />
+          )}
         </g>
       ))}
     </svg>
@@ -101,8 +103,10 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
     const at = i === 0 ? 0 : Math.max(tl.duration() - 0.25, 0);
     shot.tlStart = at;
 
-    const trans = ENTER_TRANSITIONS[i % ENTER_TRANSITIONS.length]!;
-    applyMotion(trans, { tl, el: layer, at, dur: MOTION_BY_ID.get(trans)!.dur });
+    // 转场：导演指定优先，否则按轮转序列
+    const transId = shot.layout.transition ?? ENTER_TRANSITIONS[i % ENTER_TRANSITIONS.length]!;
+    const transDef = MOTION_BY_ID.get(transId) ?? MOTION_BY_ID.get(ENTER_TRANSITIONS[0]!)!;
+    applyMotion(transDef.id, { tl, el: layer, at, dur: transDef.dur });
 
     const slots = Array.from(layer.querySelectorAll<SVGGElement>("[data-anim]"));
     slots.forEach((slotEl, k) => {
@@ -130,9 +134,9 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
       if (ambDef) applyMotion(ambDef.id, { tl, el: layer, at, dur });
     }
 
-    const exitId = EXIT_MOTIONS[i % EXIT_MOTIONS.length]!;
-    const exitDef = MOTION_BY_ID.get(exitId)!;
-    applyMotion(exitId, { tl, el: layer, at: at + Math.max(dur - exitDef.dur, 0.6), dur: exitDef.dur });
+    const exitId = shot.layout.exit ?? EXIT_MOTIONS[i % EXIT_MOTIONS.length]!;
+    const exitDef = MOTION_BY_ID.get(exitId) ?? MOTION_BY_ID.get("m-fade-out")!;
+    applyMotion(exitDef.id, { tl, el: layer, at: at + Math.max(dur - exitDef.dur, 0.6), dur: exitDef.dur });
   });
 
   const duration = tl.duration();

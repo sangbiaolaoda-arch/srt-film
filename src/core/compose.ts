@@ -3,6 +3,7 @@
 
 import type { Beat } from "./beats";
 import { extractNumbers, isTraceable } from "./trace";
+import { stripPunct } from "./text";
 
 export type Layout =
   | "statement" // 大字陈述：整拍只有一句话
@@ -55,13 +56,19 @@ export function composeScene(beat: Beat): BeatScene {
   return { beat, layout: "statement", headline: beat.text };
 }
 
-// 门禁：场景数字必须可溯源；headline 超长给出警告
-export function validateScene(scene: BeatScene, overrideSource?: string): string[] {
+/**
+ * 门禁：场景数字必须可溯源；headline 超长给出警告。
+ * `skipHeadlineWidth`：专属场景（layouts/*.tsx 的 custom）自己做断行与字号自适应，
+ * 不受槽位安全区约束 —— 否则「SRT 标点全换空格」后的整句台词会被误判超宽。
+ */
+export function validateScene(scene: BeatScene, overrideSource?: string, skipHeadlineWidth = false): string[] {
   const errors: string[] = [];
   if (scene.bigNumber && !isTraceable(scene.bigNumber.raw, scene.beat.text, overrideSource)) {
     errors.push(`拍 ${scene.beat.index}：画面数字「${scene.bigNumber.raw}」在旁白中不存在（不可溯源）`);
   }
-  const h = displayHeadline(scene.headline);
+  if (skipHeadlineWidth) return errors;
+  // 与渲染同序：先按标点截断，再净化 —— 门禁检查的必须是「实际会上画面的那串字」
+  const h = stripPunct(displayHeadline(scene.headline));
   if (displayWidth(h) > HEADLINE_MAX) {
     errors.push(`拍 ${scene.beat.index}：headline「${h}」显示宽度 ${displayWidth(h)} 超出安全区（${HEADLINE_MAX}），需缩短或分拍`);
   }

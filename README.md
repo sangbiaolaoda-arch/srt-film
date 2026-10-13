@@ -12,11 +12,14 @@
 > （110 套排版蓝图 / Visual DSL / 可验证渲染闭环）。
 > 本仓库是**浏览器内运行的 TypeScript 参考实现**：零后端、打开页面即用、播放与导出同源。
 
-三条核心理念：
+四条核心理念：
 
 1. **诚实约束** — 画面里出现的每个数字都必须能在旁白原文中找到，机器门禁强制执行，违规则拒绝播放。
 2. **逐拍导演稿** — 每拍一个画面。自动规划可以被导演覆写，覆写永远优先。
 3. **机器门禁** — 违反诚实约束或安全区（headline 显示宽度 > 16）即构建失败，不静默降级。
+4. **画面零标点** — 上画面的一切文字不带标点符号。SRT 里的标点在渲染层统一换成空格
+   （**源文件可以照常带标点**），空格成为天然的断行与停顿点。槽位版式与专属场景都在覆盖范围内，
+   测试逐版式、逐场景断言。
 
 ## 用法
 
@@ -40,16 +43,27 @@ key 为拍序号（从 1 开始）。覆写永远优先于自动规划。
 | 字段 | 作用 |
 | --- | --- |
 | `layoutId` | 指定版式 id（见 `src/layouts/catalog.ts`，如 `st-huge-word` / `nm-big-number` / `ch-bar-v`），覆写自动挑选 |
-| `layout` | 内联完整版式对象（专属场景的壳版式），**优先级高于 `layoutId`** —— `custom` 字段命中 `src/layouts/kaojin.tsx` 的场景注册表时，整拍由该场景渲染、`slots` 被绕过 |
+| `layout` | 内联完整版式对象（专属场景的壳版式），**优先级高于 `layoutId`** —— `custom` 字段命中 `src/layouts/kaojin.tsx` / `wangji.tsx` 的场景注册表时，整拍由该场景渲染、`slots` 被绕过 |
 | `slots` | 槽级覆写 `{ 槽序号: 要合并进该槽的字段 }`：放大图形槽的 `box`、换 `figure` 种类、改字号等。只作用于本拍的版式副本，不写回 `LAYOUT_BY_ID` |
 | `animations` | 槽级入场动效覆写 `{ 槽序号: 动效 id }`（id 见 `src/motion/catalog.ts`，共 60 个）。缺省的槽仍按版式自带 `enter` 池轮转 |
 | `style` | 强制视觉风格：`editorial`（纸白朱红）/ `poster`（暗底电光青绿）。会写进渲染用的 `layout.style`，底色与调色板随之切换 |
 | `headline` / `bigNumber` / `source` / `left` / `right` | 文案与画面主数字 |
 
+内联 `layout` 对象里另可写（专属场景片用）：
+
+| 字段 | 作用 |
+| --- | --- |
+| `custom` | 场景 id。命中注册表 → 整拍交给该场景，画面与断行由场景自己负责 |
+| `paper` | 底色（场景自绘 surface 时作为兜底） |
+| `decor` | `false` 关掉母版装饰层（点阵 / 四角角标 / 底部进度条）。专属场景片应关 |
+| `fx` | canvas 粒子特效，`"none"` 关闭 |
+| `transition` / `exit` | 本拍的入场转场与出场动效 id（缺省按 `stage` 的轮转序列取） |
+
 - 覆写 `bigNumber` 时必须给 `source`（包含该数字的原文片段），否则门禁拒绝
 
 样例：`examples/01-overrides.json`（最简）/ `examples/05-overrides.json`（60 秒样片，槽级动效覆写）/
-`examples/06-kaojin-v6.json`（图形当主角 + 转海报风）/ `examples/07-kaojin-v7.json`（23 拍全点名专属场景）。
+`examples/06-kaojin-v6.json`（图形当主角 + 转海报风）/ `examples/07-kaojin-v7.json`（23 拍全点名专属场景）/
+`examples/08-forgetting-20s.json`（5 拍全手绘，关装饰层 + 按语义指定转场）。
 
 ## 分拍规则（可解释，无黑箱）
 
@@ -57,6 +71,8 @@ key 为拍序号（从 1 开始）。覆写永远优先于自动规划。
 2. 拍时长 ≥ 6 秒且 cue 以停顿标点收尾 → 收拍
 3. cue 间隔 > 0.5 秒 → 换景收拍
 4. 拍正文 ≥ 28 字 → 按 cue 边界硬切
+5. **无标点的 cue → 一条 cue 即一拍**（配合「画面零标点」：标点全换空格后，
+   cue 边界就是拍边界，作者用空行分拍）
 
 ## 测试与检查
 
@@ -118,3 +134,7 @@ CI 跑两件事（`.github/workflows/qa.yml`）：上表这套「代码层门禁
   演示「一拍一幅手绘满版画面 + 内联 `layout` 覆写」这条通路。同题的
   `05-overrides.json`（槽级动效覆写）、`06-kaojin-v6.json`（图形放大 + 转海报风）
   记录了从「图形浮在纸上」到「图形当主角」的两次改法。
+- **`examples/08-forgetting-20s.srt` + `.json`** — 20 秒抽象概念片（《遗忘》）：5 拍全点名
+  `src/layouts/wangji.tsx` 的手绘场景，关掉母版装饰层与粒子特效，转场按语义逐拍指定
+  （裂缝展开 / 关合 / 光扫）。SRT 故意保留标点，用来验证「源带标点 → 画面零标点」。
+  语义色不命中通用词表，走片级词表（`emphasize(text, extra)`）。
