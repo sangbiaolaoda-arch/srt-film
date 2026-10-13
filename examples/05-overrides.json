@@ -1,25 +1,95 @@
 {
-  "1": { "layoutId": "pf-converge-center" },
-  "2": { "layoutId": "st-question" },
-  "3": { "layoutId": "st-two-line-tension" },
-  "4": { "layoutId": "st-question" },
+  "1": {
+    "layoutId": "fg-curve-pain",
+    "animations": { "0": "m-stroke-draw", "1": "m-char-rise" }
+  },
+  "2": {
+    "layoutId": "fg-fork",
+    "animations": { "0": "m-blur-in", "1": "m-rise-lines" }
+  },
+  "3": {
+    "layoutId": "st-two-line-tension",
+    "animations": { "0": "m-type-on", "1": "m-slide-right" }
+  },
+  "4": {
+    "layoutId": "st-question",
+    "animations": { "0": "m-stagger-words", "1": "m-scale-soft" }
+  },
   "5": { "layoutId": "pf-vortex-quote" },
   "6": { "layoutId": "pg-poly-center" },
-  "7": { "layoutId": "st-h1-left" },
-  "8": { "layoutId": "ls-numbered" },
-  "9": { "layoutId": "st-h1-center" },
-  "10": { "layoutId": "qt-pull-quote", "headline": "这些人真的过得更好吗" },
-  "11": { "layoutId": "cp-now-then", "headline": "不是不疼", "left": "保持距离", "right": "把疼换了形态" },
-  "12": { "layoutId": "im-full-bleed", "headline": "没有尽头" },
-  "13": { "layoutId": "cp-versus", "left": "不会失恋", "right": "不会心动" },
-  "14": { "layoutId": "pg-crosshair", "headline": "不下注的赌局" },
-  "15": { "layoutId": "bk-chapter" },
+  "7": {
+    "layoutId": "fg-balance",
+    "animations": { "0": "m-stroke-draw", "1": "m-clip-reveal" }
+  },
+  "8": {
+    "layoutId": "fg-checklist",
+    "animations": { "0": "m-tick-pulse", "1": "m-slide-left" }
+  },
+  "9": {
+    "layoutId": "st-h1-center",
+    "animations": { "0": "m-wipe-left", "1": "m-scale-soft" }
+  },
+  "10": {
+    "layoutId": "qt-pull-quote",
+    "headline": "这些人真的过得更好吗",
+    "animations": { "0": "m-fade-up", "1": "m-stagger-words" }
+  },
+  "11": {
+    "layoutId": "cp-now-then",
+    "headline": "不是不疼",
+    "left": "保持距离",
+    "right": "把疼换了形态",
+    "animations": { "0": "m-slide-left", "1": "m-blur-in", "2": "m-slide-right", "3": "m-fade-down" }
+  },
+  "12": {
+    "layoutId": "fg-corridor",
+    "headline": "没有尽头",
+    "animations": { "0": "m-zoom-in", "1": "m-rotate-in" }
+  },
+  "13": {
+    "layoutId": "fg-dim",
+    "animations": { "0": "m-bar-sweep", "1": "m-fade-down" }
+  },
+  "14": {
+    "layoutId": "pg-crosshair",
+    "headline": "不下注的赌局",
+    "animations": { "0": "m-clip-reveal", "1": "m-skew-in" }
+  },
+  "15": {
+    "layoutId": "bk-chapter",
+    "animations": { "0": "m-scale-soft", "1": "m-type-on" }
+  },
   "16": { "layoutId": "pn-tunnel-quote", "headline": "离你越远 我就越爱你" },
-  "17": { "layoutId": "cp-strikethrough-old", "left": "守住了纯粹", "right": "守住了孤独" },
-  "18": { "layoutId": "st-h1-left" },
-  "19": { "layoutId": "cp-myth-fact", "left": "丢一百块", "right": "记住的是丢的那次" },
-  "20": { "layoutId": "pr-cause-effect", "headline": "同一个源头", "left": "痛苦和幸福", "right": "同一个源头 你在乎" },
-  "21": { "layoutId": "cp-versus", "left": "价格可以付", "right": "亏损必须停" },
+  "17": {
+    "layoutId": "cp-strikethrough-old",
+    "left": "守住了纯粹",
+    "right": "守住了孤独",
+    "animations": { "0": "m-slide-left", "1": "m-wipe-right", "2": "m-slide-right" }
+  },
+  "18": {
+    "layoutId": "fg-scurve",
+    "animations": { "0": "m-stroke-draw", "1": "m-char-type" }
+  },
+  "19": {
+    "layoutId": "fg-weigh-bars",
+    "headline": "记住的是丢的那一次",
+    "animations": { "0": "m-bar-sweep", "1": "m-count-pop" }
+  },
+  "20": {
+    "layoutId": "fg-converge",
+    "headline": "同一个源头",
+    "animations": { "0": "m-slide-right", "1": "m-rise-lines" }
+  },
+  "21": {
+    "layoutId": "cp-versus",
+    "left": "价格可以付",
+    "right": "亏损必须停",
+    "animations": { "0": "m-slide-left", "1": "m-flip-x", "2": "m-slide-right" }
+  },
   "22": { "layoutId": "pf-burst-word", "headline": "我在乎 但我不怕" },
-  "23": { "layoutId": "pn-tunnel-end", "headline": "你在乎过的收据" }
+  "23": {
+    "layoutId": "fg-receipt",
+    "headline": "你在乎过的收据",
+    "animations": { "0": "m-stroke-draw", "1": "m-char-rise" }
+  }
 }
