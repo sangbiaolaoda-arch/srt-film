@@ -8,8 +8,8 @@
     "animations": { "0": "m-blur-in", "1": "m-rise-lines" }
   },
   "3": {
-    "layoutId": "st-two-line-tension",
-    "animations": { "0": "m-type-on", "1": "m-slide-right" }
+    "layoutId": "fg-flatline",
+    "animations": { "0": "m-stroke-draw", "1": "m-fade-up" }
   },
   "4": {
     "layoutId": "st-question",
@@ -26,8 +26,8 @@
     "animations": { "0": "m-tick-pulse", "1": "m-slide-left" }
   },
   "9": {
-    "layoutId": "st-h1-center",
-    "animations": { "0": "m-wipe-left", "1": "m-scale-soft" }
+    "layoutId": "fg-door",
+    "animations": { "0": "m-type-on", "1": "m-stroke-draw" }
   },
   "10": {
     "layoutId": "qt-pull-quote",
@@ -81,10 +81,10 @@
     "animations": { "0": "m-slide-right", "1": "m-rise-lines" }
   },
   "21": {
-    "layoutId": "cp-versus",
+    "layoutId": "fg-clash",
     "left": "价格可以付",
     "right": "亏损必须停",
-    "animations": { "0": "m-slide-left", "1": "m-flip-x", "2": "m-slide-right" }
+    "animations": { "0": "m-slide-left", "1": "m-stroke-draw", "2": "m-fade-up", "3": "m-fade-up" }
   },
   "22": { "layoutId": "pf-burst-word", "headline": "我在乎 但我不怕" },
   "23": {

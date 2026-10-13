@@ -913,6 +913,20 @@ export const LAYOUTS: Layout[] = [
     [s("figure", 0.9, 1, 4.6, 6, { figure: "fig-receipt", m: "m-stroke-draw" }),
      s("headline", 6.2, 3, 5.4, 2.6, { size: "huge", align: "start", m: "m-char-rise", mx: "m-highlight-sweep" })],
     { note: "收束：把疼结算成一张凭条", fxStrength: 0.4, ambient: "m-float" }),
+  L("fg-flatline", "平线对照 + 文字", "figure", ["m-stroke-draw", "m-fade-up"],
+    [s("figure", 0.8, 0.9, 10.4, 4.4, { figure: "fig-flatline", m: "m-stroke-draw" }),
+     s("headline", 0.8, 5.5, 10.4, 2.1, { size: "xl", align: "start", m: "m-fade-up", mx: "m-underline-draw" })],
+    { note: "从未疼过：一条平线对照一条起伏线" }),
+  L("fg-door", "后门 + 文字", "figure", ["m-type-on", "m-stroke-draw"],
+    [s("headline", 0.8, 0.7, 10.4, 2.3, { size: "xl", align: "start", m: "m-type-on" }),
+     s("figure", 3.7, 3.1, 5.4, 4.5, { figure: "fig-door", m: "m-stroke-draw" })],
+    { note: "先在心里留个后门：墙 + 敞开的门缝" }),
+  L("fg-clash", "价格撞止损 + 文字", "figure", ["m-slide-left", "m-stroke-draw", "m-fade-up", "m-fade-up"],
+    [s("headline", 0.8, 0.6, 10.4, 2.1, { size: "xl", align: "start", m: "m-slide-left" }),
+     s("figure", 0.8, 2.7, 10.4, 4.3, { figure: "fig-clash", m: "m-stroke-draw" }),
+     s("label", 0.8, 6.9, 4.4, 0.8, { src: "left", size: "s", tone: "dim", align: "start", m: "m-fade-up" }),
+     s("label", 8.0, 6.9, 3.6, 0.8, { src: "right", size: "s", tone: "accent", align: "end", m: "m-fade-up" })],
+    { note: "价格可以付，亏损必须停：箭头撞上止损闸" }),
 ];
 
 export const LAYOUT_BY_ID = new Map(LAYOUTS.map((l) => [l.id, l]));

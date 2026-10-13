@@ -7,6 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { flushSync } from "react-dom";
 import gsap from "gsap";
 import { BeatMark, LayoutLayer } from "../layouts/render";
+import { DecorLayer } from "../layouts/decor";
 import { applyMotion } from "../motion/apply";
 import { MOTION_BY_ID } from "../motion/catalog";
 import type { Shot } from "../core/shot";
@@ -50,6 +51,7 @@ function Stage({ shots }: { shots: Shot[] }): JSX.Element {
         <g key={i} data-layer={i} data-shot={shot.layout.id}>
           <LayoutLayer layout={shot.layout} content={shot.content} />
           <BeatMark beat={shot.content.beat} style={shot.layout.style} />
+          <DecorLayer beat={shot.content.beat} total={shots.length} style={shot.layout.style} />
         </g>
       ))}
     </svg>
