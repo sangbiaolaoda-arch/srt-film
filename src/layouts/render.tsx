@@ -6,6 +6,7 @@ import { Fragment } from "react";
 import { Chart } from "./charts";
 import { Asset } from "./assets";
 import { Figure } from "./figures";
+import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT, type Seg, type SemTone } from "./emphasis";
 import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
 
@@ -91,6 +92,66 @@ function wrapText(text: string, sizePx: number, maxWidth: number): string[] {
 
 function textAnchor(align: Slot["align"]): "start" | "middle" | "end" {
   return align === "center" ? "middle" : align === "end" ? "end" : "start";
+}
+
+/** 带语义标记的字符。headline 类文字先经 emphasize() 拆片段，再逐字带上 tone 参与换行。 */
+interface MChar {
+  ch: string;
+  tone?: SemTone;
+}
+
+/** 带标记的换行：强调段按放大后的字宽计（否则放大后溢出槽位），孤字平衡与 wrapText 同策略。 */
+function wrapMarked(chars: MChar[], sizePx: number, maxWidth: number): MChar[][] {
+  const maxUnits = maxWidth / sizePx;
+  const wOf = (c: MChar) => charWidth(c.ch) * (c.tone ? SEM_SCALE : 1);
+
+  const greedy: MChar[][] = [];
+  let line: MChar[] = [];
+  let used = 0;
+  for (const c of chars) {
+    const cw = wOf(c);
+    if (used + cw > maxUnits && line.length) {
+      greedy.push(line);
+      line = [c];
+      used = cw;
+    } else {
+      line.push(c);
+      used += cw;
+    }
+  }
+  if (line.length) greedy.push(line);
+
+  const lastLen = greedy[greedy.length - 1]?.length ?? 0;
+  if (greedy.length < 2 || lastLen > 2) return greedy;
+
+  const n = greedy.length;
+  const balanced: MChar[][] = [];
+  let at = 0;
+  for (let ln = 0; ln < n; ln++) {
+    const want = Math.max(1, Math.round((chars.length - at) / (n - ln)));
+    let u = 0;
+    let k = 0;
+    while (k < want && at + k < chars.length && u + wOf(chars[at + k]!) <= maxUnits + 1e-9) {
+      u += wOf(chars[at + k]!);
+      k++;
+    }
+    if (k === 0) return greedy;
+    balanced.push(chars.slice(at, at + k));
+    at += k;
+  }
+  if (at < chars.length) return greedy;
+  return balanced;
+}
+
+/** 行内相邻同色调片段合并成一个 <tspan>，减少节点数。 */
+function mergeTones(row: MChar[]): Seg[] {
+  const out: Seg[] = [];
+  for (const c of row) {
+    const last = out[out.length - 1];
+    if (last && last.tone === c.tone) last.text += c.ch;
+    else out.push({ text: c.ch, tone: c.tone });
+  }
+  return out;
 }
 
 interface Ctx {
@@ -288,38 +349,65 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       const isHeadlineLike = slot.k === "headline" || slot.k === "text" || slot.k === "quote";
       const t = isHeadlineLike ? displayHeadline(raw) : raw;
       if (!t) return g(<g />);
-      const lines = wrapText(t, size, w);
-      const lineH = size * 1.32;
-      const startY = y + Math.min(h * 0.5 + (lines.length - 1) * lineH * 0.5, h * 0.9) - (lines.length - 1) * lineH + size * 0.18;
       const family = slot.k === "source" || slot.k === "attribution" || slot.k === "caption" ? SANS : SERIF;
       const weight = isHeadlineLike ? 600 : 400;
+      // 标题类先做语义强调：把「疼 / 代价 / 在乎」这类强词切出来，行内换色放大加粗。
+      // 非标题小字（出处、注释）保持单一色调 —— 满屏都强调等于没有强调。
+      const rows: MChar[][] = isHeadlineLike
+        ? wrapMarked(
+            emphasize(t).flatMap((s) => Array.from(s.text).map((ch) => ({ ch, tone: s.tone }))),
+            size,
+            w,
+          )
+        : wrapText(t, size, w).map((ln) => Array.from(ln).map((ch) => ({ ch })));
+      const lineH = size * 1.32;
+      const startY = y + Math.min(h * 0.5 + (rows.length - 1) * lineH * 0.5, h * 0.9) - (rows.length - 1) * lineH + size * 0.18;
+      const sem = SEM_COLORS[ctx.layout.style ?? "editorial"];
       // 海报风大字拆成逐字符独立 <text>：这样逐字动效（上浮／打出）才有对象，
       // 每个字也都是可以单独做变换的图形。编辑风保持整行，不动既有视觉。
       const splitChars = isHeadlineLike && size >= 24 && ctx.layout.style === "poster";
       return g(
         <g>
-          {lines.map((ln, i) => {
+          {rows.map((row, i) => {
             const yLine = startY + i * lineH;
             if (!splitChars) {
               return (
                 <text key={i} x={tx} y={yLine} fontSize={size} fill={fill} fontFamily={family} fontWeight={weight} textAnchor={anchor} data-line="">
-                  {ln}
+                  {mergeTones(row).map((s, j) =>
+                    s.tone ? (
+                      <tspan key={j} fill={sem[s.tone]} fontWeight={SEM_WEIGHT} fontSize={size * SEM_SCALE}>
+                        {s.text}
+                      </tspan>
+                    ) : (
+                      <tspan key={j}>{s.text}</tspan>
+                    ),
+                  )}
                 </text>
               );
             }
-            const chars = Array.from(ln);
-            const widths = chars.map((ch) => charWidth(ch) * size);
+            const widths = row.map((c) => charWidth(c.ch) * size * (c.tone ? SEM_SCALE : 1));
             const total = widths.reduce((a, b) => a + b, 0);
             let cx = anchor === "middle" ? tx - total / 2 : anchor === "end" ? tx - total : tx;
             return (
               <g key={i} data-line="">
-                {chars.map((ch, j) => {
+                {row.map((c, j) => {
                   const cw = widths[j]!;
                   const at = cx + cw / 2;
                   cx += cw;
                   return (
-                    <text key={j} x={at} y={yLine} fontSize={size} fill={fill} fontFamily={family} fontWeight={weight} textAnchor="middle" data-char="">
-                      {ch}
+                    <text
+                      key={j}
+                      x={at}
+                      y={yLine}
+                      fontSize={c.tone ? size * SEM_SCALE : size}
+                      fill={c.tone ? sem[c.tone] : fill}
+                      fontFamily={family}
+                      fontWeight={c.tone ? SEM_WEIGHT : weight}
+                      textAnchor="middle"
+                      data-char=""
+                      data-tone={c.tone ?? ""}
+                    >
+                      {c.ch}
                     </text>
                   );
                 })}
