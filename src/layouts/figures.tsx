@@ -26,12 +26,16 @@ export type FigureKind =
   | "fig-receipt"      // 收据
   | "fig-flatline"     // 从未疼过的心电图：一条平线 vs 一条起伏线
   | "fig-door"         // 心里的后门：墙 + 开着的门缝 + 透出的光
-  | "fig-clash";       // 价格向前 vs 止损闸
+  | "fig-clash"        // 价格向前 vs 止损闸
+  | "fig-question"     // 设问：大问号 + 分叉轴 + 未选中的两端
+  | "fig-path-end"     // 路走到尽头：透视路径 + 终点标记
+  | "fig-quote-frame"; // 引语：成对的大引号 + 引用范围框
 
 export const FIGURE_KINDS: FigureKind[] = [
   "fig-curve-pain", "fig-fork", "fig-balance", "fig-checklist", "fig-corridor",
   "fig-dim", "fig-scurve", "fig-weigh-bars", "fig-converge", "fig-receipt",
   "fig-flatline", "fig-door", "fig-clash",
+  "fig-question", "fig-path-end", "fig-quote-frame",
 ];
 
 interface Palette {
@@ -495,6 +499,85 @@ function figClash(c: FigCtx): JSX.Element {
   );
 }
 
+// ───────────────────────── 14 设问 ─────────────────────────
+// 语义：拍 04「还是这辈子从来没真正在乎过什么」。大问号压在上方，下面一条
+// 分叉轴 —— 两种人生摆在轴的两端，问号悬在中间：这就是那个没有答案的设问。
+function figQuestion(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent, hairline } = c;
+  const cx = w * 0.5;
+  const r = Math.min(w, h) * 0.22;
+  const cy = h * 0.34;
+  // 问号的钩：3/4 圆弧 + 向下的短竖
+  const hook = `M${cx - r} ${cy} A${r} ${r} 0 1 1 ${cx + r * 0.35} ${cy + r * 0.62}`;
+  const stem = `M${cx + r * 0.35} ${cy + r * 0.62} L${cx + r * 0.35} ${cy + r * 1.05}`;
+  const axY = h * 0.82;
+  return (
+    <g>
+      <path d={hook} fill="none" stroke={ink} strokeWidth={7} strokeLinecap="round" data-part="" />
+      <path d={stem} fill="none" stroke={ink} strokeWidth={7} strokeLinecap="round" data-part="" />
+      <circle cx={cx + r * 0.35} cy={cy + r * 1.5} r={7} fill={ink} data-part="" />
+      {/* 分叉轴：两端各一个候选，中间悬空 */}
+      <line x1={w * 0.08} y1={axY} x2={w * 0.92} y2={axY} stroke={hairline} strokeWidth={2} data-part="" />
+      <circle cx={w * 0.14} cy={axY} r={6} fill={dim} data-part="" />
+      <circle cx={w * 0.86} cy={axY} r={6} fill={accent} data-part="" />
+      <line x1={w * 0.5} y1={axY - 14} x2={w * 0.5} y2={axY + 14} stroke={accent} strokeWidth={3} data-part="" />
+    </g>
+  );
+}
+
+// ───────────────────────── 15 路到尽头 ─────────────────────────
+// 语义：拍 15「文学里有人把这条路走到了头」。透视路面收束到尽头的门框
+// —— 路不是断了，是走到了一块到头的墙。
+function figPathEnd(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent, hairline } = c;
+  const vx = w * 0.5, vy = h * 0.3;      // 尽头（灭点）
+  const bw = w * 0.42, by = h * 0.96;    // 近端路面宽度与位置
+  const gw = w * 0.1, gh = h * 0.14;     // 尽头门框
+  const ties = 7;
+  return (
+    <g>
+      <line x1={vx - bw / 2} y1={by} x2={vx} y2={vy} stroke={dim} strokeWidth={2.5} data-part="" />
+      <line x1={vx + bw / 2} y1={by} x2={vx} y2={vy} stroke={dim} strokeWidth={2.5} data-part="" />
+      {Array.from({ length: ties }, (_, i) => {
+        const t = (i + 1) / (ties + 1);
+        const y = by + (vy - by) * t;
+        const hw = (bw / 2) * (1 - t);
+        return <line key={i} x1={vx - hw} y1={y} x2={vx + hw} y2={y} stroke={hairline} strokeWidth={2} data-part="" />;
+      })}
+      <rect x={vx - gw / 2} y={vy - gh} width={gw} height={gh} fill="none" stroke={accent} strokeWidth={4} data-part="" />
+      <line x1={vx - gw * 0.9} y1={vy - gh} x2={vx + gw * 0.9} y2={vy - gh} stroke={ink} strokeWidth={3} data-part="" />
+    </g>
+  );
+}
+
+// ───────────────────────── 16 引语框 ─────────────────────────
+// 语义：拍 10「这些人真的过得更好吗」—— 这是被引述的设问，不是叙述者的判断。
+// 成对的大引号把一个空的引用范围框起来：答案不在画面里。
+function figQuoteFrame(c: FigCtx): JSX.Element {
+  const { w, h, dim, accent, hairline } = c;
+  // 逗号形引号：小圆 + 下垂尾
+  const mark = (x: number, y: number, s: number, fill: string) =>
+    `M${x} ${y} c 0 ${-s * 0.52} ${s * 0.36} ${-s * 0.86} ${s * 0.86} ${-s * 0.86} ` +
+    `l 0 ${s * 0.42} c ${-s * 0.3} 0 ${-s * 0.46} ${s * 0.18} ${-s * 0.46} ${s * 0.44} ` +
+    `l ${s * 0.46} 0 l 0 ${s * 0.44} l ${-s * 0.86} 0 z`;
+  const s = Math.min(w * 0.16, h * 0.3);
+  const rx = w * 0.88 - s * 2.05; // 右引号锚点
+  return (
+    <g>
+      <path d={mark(w * 0.12, h * 0.42, s, dim)} fill={dim} data-part="" />
+      <path d={mark(w * 0.12 + s * 1.05, h * 0.42, s, dim)} fill={dim} data-part="" />
+      {/* 右引号 = 左引号绕自身中心旋转 180°（下引号 ” 的形态） */}
+      <path
+        d={mark(rx, h * 0.42, s, accent)}
+        fill={accent}
+        transform={`rotate(180 ${rx + s * 0.43} ${h * 0.42 - s * 0.2})`}
+        data-part=""
+      />
+      <rect x={w * 0.08} y={h * 0.56} width={w * 0.84} height={h * 0.36} fill="none" stroke={hairline} strokeWidth={2} strokeDasharray="8 6" data-part="" />
+    </g>
+  );
+}
+
 function render(c: FigCtx, kind: FigureKind): JSX.Element {
   switch (kind) {
     case "fig-curve-pain": return figCurvePain(c);
@@ -510,6 +593,9 @@ function render(c: FigCtx, kind: FigureKind): JSX.Element {
     case "fig-flatline": return figFlatline(c);
     case "fig-door": return figDoor(c);
     case "fig-clash": return figClash(c);
+    case "fig-question": return figQuestion(c);
+    case "fig-path-end": return figPathEnd(c);
+    case "fig-quote-frame": return figQuoteFrame(c);
   }
 }
 

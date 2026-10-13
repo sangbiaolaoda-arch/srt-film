@@ -12,8 +12,8 @@
     "animations": { "0": "m-stroke-draw", "1": "m-fade-up" }
   },
   "4": {
-    "layoutId": "st-question",
-    "animations": { "0": "m-stagger-words", "1": "m-scale-soft" }
+    "layoutId": "fg-question",
+    "animations": { "0": "m-stroke-draw", "1": "m-stagger-words" }
   },
   "5": { "layoutId": "pf-vortex-quote" },
   "6": { "layoutId": "pg-poly-center" },
@@ -30,9 +30,9 @@
     "animations": { "0": "m-type-on", "1": "m-stroke-draw" }
   },
   "10": {
-    "layoutId": "qt-pull-quote",
+    "layoutId": "fg-quote-frame",
     "headline": "这些人真的过得更好吗",
-    "animations": { "0": "m-fade-up", "1": "m-stagger-words" }
+    "animations": { "0": "m-stroke-draw", "1": "m-fade-up" }
   },
   "11": {
     "layoutId": "cp-now-then",
@@ -56,8 +56,8 @@
     "animations": { "0": "m-clip-reveal", "1": "m-skew-in" }
   },
   "15": {
-    "layoutId": "bk-chapter",
-    "animations": { "0": "m-scale-soft", "1": "m-type-on" }
+    "layoutId": "fg-path-end",
+    "animations": { "0": "m-type-on", "1": "m-stroke-draw" }
   },
   "16": { "layoutId": "pn-tunnel-quote", "headline": "离你越远 我就越爱你" },
   "17": {

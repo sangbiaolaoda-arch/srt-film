@@ -927,6 +927,18 @@ export const LAYOUTS: Layout[] = [
      s("label", 0.8, 6.9, 4.4, 0.8, { src: "left", size: "s", tone: "dim", align: "start", m: "m-fade-up" }),
      s("label", 8.0, 6.9, 3.6, 0.8, { src: "right", size: "s", tone: "accent", align: "end", m: "m-fade-up" })],
     { note: "价格可以付，亏损必须停：箭头撞上止损闸" }),
+  L("fg-question", "问号 + 设问", "figure", ["m-stroke-draw", "m-stagger-words"],
+    [s("figure", 0.7, 1.0, 4.8, 5.4, { figure: "fig-question", m: "m-stroke-draw" }),
+     s("headline", 5.9, 2.9, 5.5, 2.6, { size: "xl", align: "start", m: "m-stagger-words" })],
+    { note: "没有答案的设问：问号悬在两种人生之间" }),
+  L("fg-path-end", "路到尽头 + 文字", "figure", ["m-type-on", "m-stroke-draw"],
+    [s("headline", 0.8, 0.6, 10.4, 2.0, { size: "xl", align: "start", m: "m-type-on" }),
+     s("figure", 2.6, 2.6, 7.2, 4.9, { figure: "fig-path-end", m: "m-stroke-draw" })],
+    { note: "把这条路走到了头：透视路收束到尽头的门" }),
+  L("fg-quote-frame", "引语框 + 文字", "figure", ["m-stroke-draw", "m-fade-up"],
+    [s("figure", 0.8, 1.0, 10.4, 4.2, { figure: "fig-quote-frame", m: "m-stroke-draw" }),
+     s("headline", 1.2, 5.5, 9.6, 2.1, { size: "xxl", align: "center", m: "m-fade-up" })],
+    { note: "被引述的设问：答案不在画面里" }),
 ];
 
 export const LAYOUT_BY_ID = new Map(LAYOUTS.map((l) => [l.id, l]));
