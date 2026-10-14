@@ -1,30 +1,4 @@
-# 依赖
-node_modules/
-
-# 构建产物
-dist/
-
-# 临时目录
-.tmp/
-
-# 本机专用调试脚本（含本机绝对路径，对使用者无价值）
-tools/probe/
-
-# 编辑器 / 系统
-.vscode/*
-!.vscode/extensions.json
-.idea/
-.DS_Store
-Thumbs.db
-
-# 日志
-*.log
-npm-debug.log*
-
-# 环境变量
-.env
-.env.local
-.env.*.local
 vite.config.ts.timestamp-*.mjs
+vitest.config.ts.timestamp-*.mjs
 src/layouts/render.patched.tsx
 src/layouts/sedIofnPI
