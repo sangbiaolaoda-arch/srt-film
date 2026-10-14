@@ -22,6 +22,11 @@ const demo: RenderContent = {
   right: "现在",
   bullets: ["输入网址按下回车", "翻译成 IP 地址", "服务器返回页面"],
   numbers: [37, 12, 3],
+  numberTokens: [
+    { raw: "37 次", value: 37, kind: "measure" },
+    { raw: "12 秒", value: 12, kind: "span" },
+    { raw: "3 步", value: 3, kind: "measure" },
+  ],
   beat: 3,
 };
 
@@ -41,4 +46,16 @@ shots.forEach((s, i) => {
   ids.push(`${i + 1}:${s.layout.id}`);
 });
 console.log(ids.join("\n"));
-console.log(`done boards=${V2_LAYOUTS.length} corpus=${shots.length}`);
+
+// 03 数据语料：bars 的主场 —— 验证满版数据条与组级帽
+mkdirSync(`${out}/corpus03`, { recursive: true });
+const srt3 = readFileSync("examples/03-data-comparison.srt", "utf-8");
+const { shots: shots3 } = plan(srt3, "");
+const ids3: string[] = [];
+shots3.forEach((s, i) => {
+  const svg = renderToStaticMarkup(React.createElement(LayoutSVG, { layout: s.layout, content: s.content }));
+  writeFileSync(`${out}/corpus03/${String(i + 1).padStart(2, "0")}-${s.layout.id}.svg`, svg);
+  ids3.push(`${i + 1}:${s.layout.id}`);
+});
+console.log(ids3.join("\n"));
+console.log(`done boards=${V2_LAYOUTS.length} corpus02=${shots.length} corpus03=${shots3.length}`);

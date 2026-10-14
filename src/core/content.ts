@@ -29,6 +29,7 @@ export function buildContent(scene: BeatScene, beat: Beat, illustrative = false)
     right: splitBullets(beat.text, 4)[1],
     bullets: splitBullets(beat.text, 4),
     numbers: nums.map((n) => n.value),
+    numberTokens: nums,
     beat: beat.index,
     illustrative,
   };

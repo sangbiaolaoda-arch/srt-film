@@ -10,6 +10,7 @@ import { applyOverride, type OverrideMap } from "./overrides";
 import type { Shot } from "./shot";
 import { LAYOUT_BY_ID } from "../layouts/catalog";
 import { eligible, pickLayout, planStyles } from "../layouts/pick";
+import type { Group } from "../layouts/types";
 import { MOTION_BY_ID, validateMotionSet } from "../motion/catalog";
 
 export interface PlanResult {
@@ -51,6 +52,10 @@ export function plan(srt: string, ovRaw: string): PlanResult {
   // 第三遍：风格内挑版式 + 资格/动效门禁
   const out: Shot[] = [];
   let prevLayout: string | undefined;
+  // 组级帽的跨拍记忆：同组板式出镜封顶（见 pick.ts groupCap），
+  // 覆写指定的版式也计数 —— 导演钉了的构图同样占这支片的构图配额。
+  const used = new Map<Group, number>();
+  const bump = (g: Group) => used.set(g, (used.get(g) ?? 0) + 1);
 
   prepared.forEach(({ beat, ovr, content }, i) => {
     const decision = decisions[i]!;
@@ -59,7 +64,8 @@ export function plan(srt: string, ovRaw: string): PlanResult {
     if (ovr?.layoutId && !ovr.layout && !layout) {
       problems.push(`拍 ${beat.index}：覆写的版式 id「${ovr.layoutId}」不存在`);
     }
-    layout = layout ?? pickLayout(content, decision.style, prevLayout);
+    layout = layout ?? pickLayout(content, decision.style, prevLayout, { used, total: prepared.length });
+    bump(layout.group);
 
     // 显式风格覆写灌进 layout：底色 / 图形调色板 / 特效路径全部由 layout.style 驱动，
     // 不灌的话 ovr.style 只影响挑选、不影响渲染（编辑版式在海报拍会黑底黑线）。

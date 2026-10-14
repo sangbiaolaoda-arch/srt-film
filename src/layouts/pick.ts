@@ -6,6 +6,14 @@ import { V2_LAYOUTS } from "./v2";
 import type { Group, Layout, RenderContent, Style } from "./types";
 import { displayWidth } from "../core/compose";
 
+/** 度量值数量：token 分层缺失的老 content（测试 / 手工构造）按 numbers.length 老规矩。
+ *  管线产出的 content 必带 numberTokens（见 core/content.ts），享受分层保护。 */
+function measureCount(content: RenderContent): number {
+  return content.numberTokens
+    ? content.numberTokens.filter((t) => t.kind === "measure").length
+    : content.numbers.length;
+}
+
 /** 资格门禁：图表版式必须有足够多可溯源数字；否则该版式对本拍不合格。 */
 export function eligible(layout: Layout, content: RenderContent): boolean {
   if (layout.needs !== undefined && content.numbers.length < layout.needs) return false;
@@ -13,6 +21,9 @@ export function eligible(layout: Layout, content: RenderContent): boolean {
     if (slot.k !== "chart") continue;
     const need = slot.needs ?? layout.needs ?? 3;
     if (content.numbers.length < need) return false;
+    // chart 的资格按**度量值**数算：span（十年/四十秒）与 ordinal（第七次）
+    // 进对比条是量纲崩坏 —— numbers 池含全部 kind，图表门禁必须只认 measure。
+    if (measureCount(content) < need) return false;
   }
   // 极短句（≤4 字宽，如「说」「他问」）只允许进「有大主槽」的版式：
   // 渲染器会把极短句放大到贴满主槽（见 render.tsx 短句放大），主槽太小的话
@@ -159,13 +170,19 @@ function preferredGroups(content: RenderContent, style: Style): Group[] {
   if (style === "poster") {
     if (content.numbers.length >= 1) out.push("poster-geo", "poster-focus");
     if (/[?？]$|怎么|为什么|如何/.test(text)) out.push("poster-field");
-    out.push("poster-focus", "poster-nest", "poster-field", "poster-geo");
+    // 兜底把 poster-field 提前：氛围场（strata）是海报风的语言底座，
+    // 排后会被「海报拍本来就少」饿死（实测 97 拍里 strata×0）。
+    // 不担心刷屏 —— 组级帽让 field 达 25% 自动沉底让位。
+    out.push("poster-field", "poster-focus", "poster-nest", "poster-geo");
     return out;
   }
   if (/[?？]$|怎么|为什么|如何/.test(text)) out.push("quote", "statement");
   if (/因为|所以|于是|导致|结果/.test(text)) out.push("process");
   if (/不是|而是|相比|比起|反之|却/.test(text)) out.push("compare");
-  if (content.numbers.length >= 3) out.push("chart");
+  // 口语旁白一句很少塞 3 个数字（数据对比语料实测 12 拍里只有 1 拍 nums≥3），
+  // chart 门槛定 2 —— 两个度量值就是一组对比，满版数据条成立。
+  // 只数度量值：「85%」+「十年」是量纲混搭，画进同一张对比条必崩（03 拍 5 实测）。
+  if (measureCount(content) >= 2) out.push("chart");
   else if (content.numbers.length >= 1) out.push("number");
   if (content.bullets.length >= 3) out.push("list");
   out.push("statement", "timeline", "image", "bookend");
@@ -188,11 +205,28 @@ function interleaveFlagship(pool: Layout[]): Layout[] {
   return out;
 }
 
+/** 选版的跨拍记忆：组级帽要知道本片已经用过哪些组、这支片多长。 */
+export interface PickCtx {
+  /** 本片已落版式的 group 计数（覆写指定的也计入——它占了构图配额） */
+  used: Map<Group, number>;
+  /** 本片总拍数 */
+  total: number;
+}
+
+/** 组级帽：同组板式在一支片里的出镜上限（约 25%，短片保底 2 次）。
+ * 数字/图表组没有帽时，「数字拍走组内轮转」会让 03 语料 8/12 拍全是巨号数字、
+ * 04 长片 16/29 —— 满屏同一种主角比没有主角更糟。
+ * 帽只做沉底不设闸门：达帽组让位未达帽组，数字仍在句子里
+ * （quote/chapter 等板式照显示整句），只是不再独占画面。 */
+function groupCap(total: number): number {
+  return Math.max(2, Math.round(total * 0.25));
+}
+
 /** 确定性挑选：在指定池内、按拍序轮转优先组，组内避开上一拍用过的版式。
  * requireFirst：内容的第一优先组必须在本池内（如数字丰富拍首选 chart），
  * 否则返回 undefined 整拍让位 —— 防止「v2 没有图表组就降级画数字卡」这种隐性覆盖不足。
  * 池内找不到合格优先组时返回 undefined（调用方决定回退）。 */
-function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?: string, requireFirst = false): Layout | undefined {
+function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?: string, requireFirst = false, ctx?: PickCtx): Layout | undefined {
   if (pool.length === 0) return undefined;
   const ofStyle = pool.filter((l) => (l.style ?? "editorial") === style);
   const pool0 = ofStyle.length > 0 ? ofStyle : pool;
@@ -204,20 +238,30 @@ function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?:
   // 排名表被后写覆盖会让优先级颠倒（geo 被推到 focus 后面）。
   const groups = [...new Set(wanted.filter((g) => base.some((l) => l.group === g)))];
   if (groups.length === 0) return undefined;
+  const cap = ctx ? groupCap(ctx.total) : Infinity;
+  const usedOf = (g: Group) => ctx?.used.get(g) ?? 0;
+  const capped = (g: Group) => usedOf(g) >= cap;
   // 排名轮换，不按组硬分区取模：单组单板式时（list→list-marks、bookend→chapter），
   // 组内取模会让该组一被轮中就原样复现 —— 02 语料 16 拍因此只看到 5 套板式。
   // 改为全池按组优先级排序后整池轮转：优先级变成次序而不是闸门，
   // 重复周期从「组内长度」拉到「池长」，首选组的板式仍排在轮转最前面。
+  // 第三键「组已用次数」做帽内均摊：同优先级的组（如 statement 的 ink-line/vertical）
+  // 按已用轮转，没用过的组先上 —— 05 语料 strata×0 就是这样被饿死的。
   const rank = new Map<Group, number>();
   groups.forEach((g, i) => rank.set(g, i));
   const ranked = [...base].sort(
-    (a, b) => (rank.get(a.group) ?? 99) - (rank.get(b.group) ?? 99) || a.id.localeCompare(b.id),
+    (a, b) =>
+      Number(capped(a.group)) - Number(capped(b.group)) ||
+      (rank.get(a.group) ?? 99) - (rank.get(b.group) ?? 99) ||
+      usedOf(a.group) - usedOf(b.group) ||
+      a.id.localeCompare(b.id),
   );
   // 数据拍（number/chart 首选）：数字主角是这一拍的内容主体（旁白里真有数量词），
   // 在首选组内轮转 —— 全池轮转会把 13 套池里的数字板式饿死
   // （02 语料一半拍有数量词，旧轮转下数字板式零命中）。
+  // 但带帽：达帽后沉到全池排名轮换，数字拍让位给 quote/chapter 等句内显示。
   const head = groups[0]!;
-  if (head === "number" || head === "chart") {
+  if ((head === "number" || head === "chart") && !capped(head)) {
     const headPool = interleaveFlagship(ranked.filter((l) => l.group === head && l.id !== prevId));
     if (headPool.length > 0) return headPool[(content.beat - 1) % headPool.length]!;
   }
@@ -232,7 +276,8 @@ function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?:
 /**
  * 默认选版入口：v2 满版构图池优先，挑不出合格优先组（如图表拍 v2 首批无 chart 组）
  * 才落回旧 catalog 槽位库。旧的 162 套保留为回退，不再是被修补的主场。
+ * ctx 带本片已用组直方图（plan.ts 维护），组级帽靠它生效；不传则无帽（单拍挑选/测试）。
  */
-export function pickLayout(content: RenderContent, style: Style, prevId?: string): Layout {
-  return pickFrom(V2_LAYOUTS, content, style, prevId, true) ?? pickFrom(LAYOUTS, content, style, prevId) ?? LAYOUTS[0]!;
+export function pickLayout(content: RenderContent, style: Style, prevId?: string, ctx?: PickCtx): Layout {
+  return pickFrom(V2_LAYOUTS, content, style, prevId, true, ctx) ?? pickFrom(LAYOUTS, content, style, prevId, false, ctx) ?? LAYOUTS[0]!;
 }

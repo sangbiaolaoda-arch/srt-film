@@ -101,8 +101,18 @@ describe("trace", () => {
     expect(extractNumbers("第七次，他自己退回去了")[0]!.value).toBe(7);
   });
   it("中文数字：量纲（四十秒/半个小时），值走 cn2num", () => {
-    expect(extractNumbers("一条能说四十秒")[0]).toEqual({ raw: "四十秒", value: 40, unit: "秒" });
+    expect(extractNumbers("一条能说四十秒")[0]).toEqual({ raw: "四十秒", value: 40, unit: "秒", kind: "span" });
     expect(extractNumbers("我教了你半个小时")[0]!.value).toBe(0.5);
+  });
+  it("kind 分层：时段/序数 ≠ 度量值（图表门禁只认 measure）", () => {
+    // 「十年」是时段短语，「85%」是度量值 —— 同池会让数据条量纲崩坏（03 拍 5 实测）。
+    // 顺序即扫描层序：阿拉伯度量层先，中文 span 层后。
+    expect(extractNumbers("十年，光伏从 4 倍贵变成更便宜").map((t) => `${t.raw}/${t.kind}`))
+      .toEqual(["4 倍/measure", "十年/span"]);
+    expect(extractNumbers("第七次，他自己退回去了")[0]!.kind).toBe("ordinal");
+    expect(extractNumbers("增长85%，耗时120毫秒").every((t) => t.kind === "measure")).toBe(true);
+    // 数字与单位间的排版空格不放行就会漏抽（「每度大约 0.09 美元」）；raw 保留原文
+    expect(extractNumbers("每度大约 0.09 美元")[0]).toEqual({ raw: "0.09 美元", value: 0.09, unit: "美元", kind: "measure" });
   });
   it("语气 filler 不当数字（念一遍/一条语音/那年）", () => {
     expect(extractNumbers("错一次，他就自己念一遍")).toHaveLength(0);

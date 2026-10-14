@@ -4,6 +4,7 @@
 import type { ChartKind } from "./charts";
 import type { AssetId } from "./assets";
 import type { FigureKind } from "./figures";
+import type { NumToken } from "../core/trace";
 
 export type Group =
   // 编辑风（纸白 + 朱红）
@@ -156,6 +157,9 @@ export interface RenderContent {
   bullets: string[];
   /** 旁白中提取到的数字（可溯源） */
   numbers: number[];
+  /** 数字原文 token（raw 含单位与中文数字写法，如「四十秒」「120毫秒」）。
+   *  numbers 只留 value 会丢掉写法 —— 满版数据条要显示原文才溯源。 */
+  numberTokens?: NumToken[];
   /** 拍序号（角标用） */
   beat: number;
   /** 导演是否显式标注为示意图形（唯一允许无数据画图的入口） */

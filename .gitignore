@@ -1,4 +1,12 @@
+# 依赖与构建产物
+node_modules/
+dist/
+# 验收渲染中间产物（SVG/截图印相，动辄数百 M）
+.tmp/
+tools/probe/
+# vite/vitest 时间戳临时文件
 vite.config.ts.timestamp-*.mjs
 vitest.config.ts.timestamp-*.mjs
+# 历史上误提交过的补丁副本与 sed 残留
 src/layouts/render.patched.tsx
 src/layouts/sedIofnPI

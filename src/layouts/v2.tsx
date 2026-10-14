@@ -420,6 +420,79 @@ const v2Dust: Board = ({ content, style }) => {
   );
 };
 
+/* ── 04b 满版数据条（chart 组，数据语料的图形主角）─────────────────
+   2~4 条水平条顶到画布两边，条长 ∝ 数值，第一条朱红其余墨/靛。
+   条右端显示数字原文（raw 含单位）—— 条与数是同一事物的两种度量，不重复；
+   左端只放印刷序号，不放标签（旁白里没有项目名，硬造标签就是编内容）。 */
+const v2Bars: Board = ({ content, style }) => {
+  // 只收度量值：span（十年/四十秒）跟百分比画同一张对比条是量纲崩坏
+  const nums = (content.numberTokens ?? []).filter((n) => n.kind === "measure" && Number.isFinite(n.value) && n.value > 0).slice(0, 4);
+  const joined = nums.map((n) => n.raw).join(" ");
+  const kick = foot(content.caption, joined);
+  const footT = foot(content.subhead, joined);
+  const max = nums.reduce((m, n) => Math.max(m, n.value), 0);
+  const top = 220;
+  const rowH = 88;
+  const barH = 46;
+  return (
+    <g>
+      {kick && <VText x={110} y={120} size={26} fill={INK} text={kick} style={style} anchor="start" spacing={6} opacity={0.7} motion="m-fade-up" />}
+      <rect x={-40} y={150} width={1360} height={2} fill={INK} opacity={0.5} data-anim data-motion="m-bar-sweep" />
+      {nums.map((n, i) => {
+        const w = Math.max(140, Math.round((n.value / max) * 720));
+        const y = top + i * rowH;
+        const fill = i === 0 ? VERMILION : i === 1 ? INDIGO : INK;
+        return (
+          <g key={i}>
+            <VText x={110} y={y + barH - 8} size={22} fill={INK} text={String(i + 1).padStart(2, "0")} style={style} anchor="start" opacity={0.45} motion="m-fade-up" />
+            <rect x={170} y={y} width={w} height={barH} fill={fill} opacity={i >= 2 ? 0.5 : 1} data-anim data-motion="m-bar-sweep" />
+            <VText x={170 + w + 24} y={y + barH - 6} size={48} fill={fill} text={n.raw} style={style} anchor="start" motion="m-fade-up" />
+          </g>
+        );
+      })}
+      {footT && <VText x={1170} y={640} size={22} fill={INK} text={footT} style={style} anchor="end" opacity={0.55} motion="m-fade-up" />}
+      <circle cx={1170} cy={120} r={5} fill={VERMILION} data-anim data-motion="m-tick-pulse" />
+    </g>
+  );
+};
+
+/* ── 04c 水平时间线（timeline 组，叙事语料的阶段语言）──────────────
+   主线横贯中部，节点上下交替出标签；首节点朱红大圆 + 大字（起点即主角）。 */
+const v2Timeline: Board = ({ content, style }) => {
+  const items = content.bullets.length >= 3
+    ? content.bullets.map(clean).filter(Boolean).slice(0, 5)
+    : wrap(stripPunct(content.headline), 4);
+  const joined = items.join("");
+  const kick = foot(content.caption, joined);
+  const footT = foot(content.subhead, joined);
+  const n = items.length;
+  const y = 400;
+  const x0 = 150;
+  const x1 = 1130;
+  const step = n > 1 ? (x1 - x0) / (n - 1) : 0;
+  return (
+    <g>
+      {kick && <VText x={110} y={120} size={26} fill={INK} text={kick} style={style} anchor="start" spacing={6} opacity={0.7} motion="m-fade-up" />}
+      <path d={`M${x0 - 60} ${y} L${x1 + 60} ${y}`} stroke={INK} strokeWidth={3} fill="none" opacity={0.85} data-anim data-motion="m-stroke-draw" />
+      {items.map((t, i) => {
+        const x = x0 + i * step;
+        const up = i % 2 === 0;
+        const main = i === 0;
+        const size = main ? 38 : Math.min(28, fitW(t, step - 30, 28));
+        return (
+          <g key={i} data-anim data-motion="m-fade-up">
+            <circle cx={x} cy={y} r={main ? 16 : 10} fill={main ? VERMILION : INK} />
+            <VText x={i === 0 ? x0 - 60 : i === n - 1 ? x1 + 60 : x} y={up ? y - 56 : y + 90}
+              size={size} fill={main ? VERMILION : INK} text={t} style={style}
+              anchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"} />
+          </g>
+        );
+      })}
+      {footT && <VText x={1170} y={640} size={22} fill={INK} text={footT} style={style} anchor="end" opacity={0.55} motion="m-fade-up" />}
+    </g>
+  );
+};
+
 /* ══ 注册表 ═══════════════════════════════════════════════════════ */
 
 export const V2_BOARDS: Record<string, Board> = {
@@ -427,6 +500,8 @@ export const V2_BOARDS: Record<string, Board> = {
   "v2:ink-line": v2InkLine,
   "v2:num-giant": v2NumGiant,
   "v2:num-band": v2NumBand,
+  "v2:bars": v2Bars,
+  "v2:timeline": v2Timeline,
   "v2:quote-card": v2QuoteCard,
   "v2:list-marks": v2ListMarks,
   "v2:vertical": v2Vertical,
@@ -459,6 +534,8 @@ export const V2_LAYOUTS: Layout[] = [
   B("ink-line", "情绪一笔", "statement", { note: "大字 + 底部墨线", enter: ["m-char-rise", "m-stroke-draw"] }),
   B("num-giant", "巨号数字", "number", { note: "需要 1 个可溯源数字", needs: 1, enter: ["m-scale-soft", "m-bar-sweep"] }),
   B("num-band", "数字色带", "number", { note: "需要 1 个可溯源数字", needs: 1, enter: ["m-slide-right", "m-scale-soft"] }),
+  B("bars", "数据条", "chart", { note: "需要 ≥2 个可溯源数字", needs: 2, slots: [{ k: "chart", box: [1, 1, 10, 6], needs: 2 }], enter: ["m-bar-sweep", "m-fade-up"] }),
+  B("timeline", "时间线", "timeline", { note: "bullets ≥3 或长句分段", enter: ["m-stroke-draw", "m-fade-up"] }),
   B("quote-card", "引语卡", "quote", { note: "金句 / 设问", enter: ["m-char-rise", "m-fade-up"] }),
   B("list-marks", "清单刻度", "list", { note: "bullets ≥ 3", enter: ["m-fade-up"] }),
   B("vertical", "竖排大字", "statement", { note: "短句（≤9 字）最佳", enter: ["m-fade-up", "m-scale-soft"] }),
