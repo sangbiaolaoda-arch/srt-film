@@ -524,7 +524,7 @@ export function LayoutSVG({ layout, content, paper }: LayoutSVGProps): JSX.Eleme
       {layout.decor !== false && !layout.custom && (
         <DecorLayer beat={content.beat} style={layout.style} />
       )}
-      <BeatMark beat={content.beat} style={layout.style} />
+      {layout.decor !== false && <BeatMark beat={content.beat} style={layout.style} />}
     </svg>
   );
 }
