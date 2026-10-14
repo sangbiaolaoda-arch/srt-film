@@ -27,3 +27,4 @@ npm-debug.log*
 .env.*.local
 vite.config.ts.timestamp-*.mjs
 src/layouts/render.patched.tsx
+src/layouts/sedIofnPI
