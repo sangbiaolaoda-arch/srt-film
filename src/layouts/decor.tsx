@@ -35,6 +35,26 @@ function CornerMarks({ stroke }: { stroke: string }): JSX.Element {
   );
 }
 
+/** 左缘竖排刻度：等分 8 格的短横线 + 一根通长细线，「仪器面板」的秩序感。 */
+function SideRuler({ stroke }: { stroke: string }): JSX.Element {
+  const x = 30;
+  const y0 = 88;
+  const y1 = 720 - 88;
+  const n = 8;
+  const ticks = [];
+  for (let i = 0; i <= n; i++) {
+    const y = y0 + ((y1 - y0) * i) / n;
+    const long = i % 2 === 0;
+    ticks.push(<line key={i} x1={x} y1={y} x2={x + (long ? 10 : 5)} y2={y} />);
+  }
+  return (
+    <g stroke={stroke} strokeWidth={1} opacity={0.7}>
+      <line x1={x} y1={y0} x2={x} y2={y1} />
+      {ticks}
+    </g>
+  );
+}
+
 export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
   const c = colorsOf(style);
   const poster = style === "poster";
@@ -46,17 +66,46 @@ export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
 
   return (
     <g data-decor="">
-      {!poster && (
+      {poster ? (
         <>
+          {/* 半调暗角（画法 A03 + vignette）：四角压暗聚焦中心，海报风的「舞台灯」 */}
+          <defs>
+            <radialGradient id={`decor-vig-${beat}`} cx="50%" cy="46%" r="78%">
+              <stop offset="55%" stopColor="#000" stopOpacity={0} />
+              <stop offset="100%" stopColor="#000" stopOpacity={0.4} />
+            </radialGradient>
+          </defs>
+          <rect x={0} y={0} width={1280} height={720} fill={`url(#decor-vig-${beat})`} />
+        </>
+      ) : (
+        <>
+          {/* 加号对位栅格（画法 A16）：印刷制版标记语汇，比圆点更像「被装帧的纸」。
+              seed 固定：纹理是同一张纸，逐拍不跳变。 */}
           <defs>
             <pattern id={pid} width={48} height={48} patternUnits="userSpaceOnUse">
-              <circle cx={24} cy={24} r={1.1} fill={c.dim} opacity={0.16} />
+              <path
+                d="M24 21 L24 27 M21 24 L27 24"
+                stroke={c.dim}
+                strokeWidth={0.9}
+                opacity={0.22}
+                fill="none"
+              />
             </pattern>
+            <filter id={`decor-grain-${beat}`} x="0" y="0" width="100%" height="100%">
+              <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves={2} seed={7} stitchTiles="stitch" />
+              <feColorMatrix type="saturate" values="0" />
+              <feComponentTransfer>
+                <feFuncA type="linear" slope="0.04" intercept="0" />
+              </feComponentTransfer>
+            </filter>
           </defs>
           <rect x={0} y={0} width={1280} height={720} fill={`url(#${pid})`} />
+          {/* 纸纹颗粒：极低透明度的分形噪声，给纯色底一点「纤维」 */}
+          <rect x={0} y={0} width={1280} height={720} filter={`url(#decor-grain-${beat})`} />
         </>
       )}
       <CornerMarks stroke={c.hairline} />
+      {!poster && <SideRuler stroke={c.hairline} />}
       {!poster && (
         <g>
           {/* 右上角同心圆环：与右下角标呼应的几何锚点 */}

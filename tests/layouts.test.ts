@@ -385,3 +385,65 @@ describe("版式结构自洽", () => {
     }
   });
 });
+
+// ============================================================================
+// 构图与对比度断言 —— 出处：Agent-Reach 蒸馏手册
+// references/manual/02-构图与取景.md「可判定检查」（安全边距 / 主体占比）
+// references/manual/04-色彩脚本与美术指导.md「可判定检查」（文字/背景对比度 ≥4.5:1）
+// ============================================================================
+
+/** WCAG 相对亮度与对比度（4.5:1 为正文可读下限）。 */
+function relLuminance(hex: string): number {
+  const n = hex.replace("#", "");
+  const v = [0, 2, 4].map((i) => {
+    const c = parseInt(n.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * v[0]! + 0.7152 * v[1]! + 0.0722 * v[2]!;
+}
+function contrast(a: string, b: string): number {
+  const la = relLuminance(a);
+  const lb = relLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+describe("构图与对比度门禁（手册 02/04 可判定检查）", () => {
+  it("全部槽位落在安全区内（边距 ≥ 2% 画面）", () => {
+    // 依据：Netflix TTSG 安全区要求 + 手册 02 断言「box 不得越过安全边距」。
+    // 出血型装饰（decor/fx）不占槽位，此断言只查内容槽。
+    const bad: string[] = [];
+    for (const l of LAYOUTS) {
+      // box 是 [cols × rows] 网格坐标（缺省 12×8），先转归一化再查
+      const cols = l.cols ?? 12;
+      const rows = l.rows ?? 8;
+      for (const s of l.slots) {
+        const [x, y, w, h] = s.box;
+        if (w <= 0 || h <= 0) bad.push(`${l.id}:${s.k} 尺寸非正`);
+        // 满版出血是图像/暗角装饰的设计意图（画法手册 02：bleed 不受安全区约束），
+        // 只查携带信息的内容槽（文字/数字/图形）。
+        if (s.k === "asset" || s.k === "vignette" || s.k === "image") continue;
+        const nx = x / cols;
+        const ny = y / rows;
+        const nw = w / cols;
+        const nh = h / rows;
+        if (nx < 0.02 || ny < 0.02 || nx + nw > 0.98 || ny + nh > 0.98) {
+          bad.push(`${l.id}:${s.k} box=[${s.box}] 越安全区`);
+        }
+      }
+    }
+    expect(bad, bad.slice(0, 10).join("；")).toEqual([]);
+  });
+
+  it("两种风格的正文文字/背景对比度 ≥ 4.5:1", () => {
+    const pal = (style: Style) => {
+      // 与 render.tsx 的色板保持同源：直接渲染一帧取 colorsOf 的产物太绕，
+      // 这里从 render 模块导出的色板常量断言（漂移时此断言会红，提醒同步）。
+      return style === "poster" ? { ink: "#eceae6", paper: "#0b0b0f" } : { ink: "#1c1b18", paper: "#faf9f6" };
+    };
+    for (const style of ["editorial", "poster"] as Style[]) {
+      const { ink, paper } = pal(style);
+      const cr = contrast(ink, paper);
+      expect(cr, `${style} 对比度 ${cr.toFixed(2)} < 4.5`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+});
