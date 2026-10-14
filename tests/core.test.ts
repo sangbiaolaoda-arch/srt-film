@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { parseSRT } from "../src/core/srt";
 import { planBeats } from "../src/core/beats";
 import { extractNumbers, isTraceable } from "../src/core/trace";
 import { composeScene, validateScene } from "../src/core/compose";
 import { applyOverride } from "../src/core/overrides";
+import { plan } from "../src/core/plan";
 import { stripPunct } from "../src/core/text";
 
 const SRT = `1
@@ -160,5 +163,24 @@ describe("compose + gate", () => {
     });
     expect(validateScene(scene, undefined, false).some((e) => e.includes("安全区"))).toBe(true);
     expect(validateScene(scene, undefined, true).some((e) => e.includes("安全区"))).toBe(false);
+  });
+});
+
+describe("plan 宽度门禁的版式分流", () => {
+  const srt01 = readFileSync(resolve(import.meta.dirname, "../examples/01-explanatory-tech.srt"), "utf8");
+
+  it("custom 满版版式（v2）不受安全区约束 —— 它自管断行与字号自适应", () => {
+    // 拍 5 原句「这一步通常在 20 到 120 毫秒之间结束」17.5 宽，被自动选为 v2-bars（custom）。
+    // 旧实现第一遍版式未定就查宽度，误报；修复后版式确定时按 custom 豁免。
+    const { problems } = plan(srt01, "");
+    expect(problems.filter((p) => p.includes("安全区"))).toHaveLength(0);
+  });
+
+  it("槽位版式仍查安全区 —— 豁免不放松槽位", () => {
+    const ov = JSON.stringify({
+      "5": { "layoutId": "st-h1-left", "headline": "这一步通常在 20 到 120 毫秒之间结束" },
+    });
+    const { problems } = plan(srt01, ov);
+    expect(problems.some((p) => p.includes("拍 5") && p.includes("安全区"))).toBe(true);
   });
 });

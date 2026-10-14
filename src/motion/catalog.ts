@@ -109,21 +109,29 @@ export function conflictsOf(id: string): string[] {
   return [...new Set([...direct, ...mirror])];
 }
 
-/** 组合校验：返回问题列表（空 = 合法）。 */
-export function validateMotionSet(ids: string[]): string[] {
+/**
+ * 组合校验：返回问题列表（空 = 合法）。
+ * groups 按元素分组——同一子数组内的动效作用在**同一个元素**上，冲突只查组内。
+ * 不同元素各滑一边（如双圆对滑）是合法设计，组间不查。
+ * 依据：render.tsx 槽位入场动效取 `enter[index % enter.length]`，池内各项分给不同槽。
+ */
+export function validateMotionSet(groups: string[][]): string[] {
   const errs: string[] = [];
+  const ids = groups.flat();
   if (ids.length > MAX_MOTIONS_PER_BEAT) {
     errs.push(`单拍动效 ${ids.length} 个，超出上限 ${MAX_MOTIONS_PER_BEAT}`);
   }
   for (const id of ids) {
     if (!MOTION_BY_ID.has(id)) errs.push(`未知动效 ${id}`);
   }
-  for (let i = 0; i < ids.length; i++) {
-    const a = ids[i]!;
-    const conflicts = conflictsOf(a);
-    if (conflicts.length === 0) continue;
-    for (let j = i + 1; j < ids.length; j++) {
-      if (conflicts.includes(ids[j]!)) errs.push(`动效冲突：${a} × ${ids[j]}`);
+  for (const group of groups) {
+    for (let i = 0; i < group.length; i++) {
+      const a = group[i]!;
+      const conflicts = conflictsOf(a);
+      if (conflicts.length === 0) continue;
+      for (let j = i + 1; j < group.length; j++) {
+        if (conflicts.includes(group[j]!)) errs.push(`动效冲突：${a} × ${group[j]}`);
+      }
     }
   }
   return errs;

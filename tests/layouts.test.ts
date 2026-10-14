@@ -119,14 +119,27 @@ describe("动效目录完整性", () => {
     for (const l of LAYOUTS) {
       const ids = [...l.enter, ...(l.emphasis ? [l.emphasis] : []), ...l.slots.flatMap((s) => [s.m, s.mx].filter(Boolean) as string[])];
       for (const id of ids) expect(MOTION_BY_ID.has(id), `${l.id} → ${id}`).toBe(true);
-      expect(validateMotionSet([...l.enter, ...(l.emphasis ? [l.emphasis] : [])]), l.id).toHaveLength(0);
+      // enter 池第 i 项分给第 i 个槽（render.tsx:226），池内各项异元素 → 逐项单独成组
+      const groups = l.enter.map((id) => [id]);
+      if (l.emphasis) groups.push([l.emphasis]);
+      expect(validateMotionSet(groups), l.id).toHaveLength(0);
       expect(l.enter.length, `${l.id} 入场动效数`).toBeLessThanOrEqual(4);
     }
   });
-  it("冲突检测生效（左滑 × 右滑、翻面 × 擦除）", () => {
-    expect(validateMotionSet(["m-slide-left", "m-slide-right"]).length).toBeGreaterThan(0);
-    expect(validateMotionSet(["m-flip-x", "m-wipe-left"]).length).toBeGreaterThan(0);
-    expect(validateMotionSet(["m-fade-up", "m-underline-draw"])).toHaveLength(0);
+  it("enter 池内含同轴对滑对是合法的（池内各项分给不同元素，如 v2 duo 双圆对滑）", () => {
+    const duo = V2_LAYOUTS.find((l) => l.id === "v2-duo");
+    expect(duo).toBeDefined();
+    expect(duo!.enter).toContain("m-slide-left");
+    expect(duo!.enter).toContain("m-slide-right");
+    expect(validateMotionSet(duo!.enter.map((id) => [id])), duo!.id).toHaveLength(0);
+  });
+  it("冲突检测生效（同元素内：左滑 × 右滑、翻面 × 擦除）", () => {
+    expect(validateMotionSet([["m-slide-left", "m-slide-right"]]).length).toBeGreaterThan(0);
+    expect(validateMotionSet([["m-flip-x", "m-wipe-left"]]).length).toBeGreaterThan(0);
+    expect(validateMotionSet([["m-fade-up", "m-underline-draw"]])).toHaveLength(0);
+  });
+  it("不同元素上的同轴对滑不算冲突", () => {
+    expect(validateMotionSet([["m-slide-left"], ["m-slide-right"]])).toHaveLength(0);
   });
   it("冲突声明是对称的（任一方声明即算冲突）", () => {
     expect(conflictsOf("m-slide-left")).toContain("m-slide-right");

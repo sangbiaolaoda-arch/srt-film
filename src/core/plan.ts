@@ -4,9 +4,10 @@
 
 import { parseSRT } from "./srt";
 import { planBeats } from "./beats";
-import { composeScenes, validateScene, type BeatScene } from "./compose";
+import { composeScenes, validateScene, displayHeadline, displayWidth, HEADLINE_MAX, type BeatScene } from "./compose";
 import { buildContent } from "./content";
 import { applyOverride, type OverrideMap } from "./overrides";
+import { stripPunct } from "./text";
 import type { Shot } from "./shot";
 import { LAYOUT_BY_ID } from "../layouts/catalog";
 import { eligible, pickLayout, planStyles } from "../layouts/pick";
@@ -28,12 +29,14 @@ export function plan(srt: string, ovRaw: string): PlanResult {
   const problems: string[] = [];
   const styles: string[] = [];
 
-  // 第一遍：把每拍旁白变成内容（并做溯源校验）
+  // 第一遍：把每拍旁白变成内容（并做溯源校验）。
+  // 宽度安全区不在这里查：版式还没选，无从判断该拍最终是槽位版式还是 custom 满版画面 ——
+  // 挪到第三遍版式确定后按 layout.custom 分流查（见下）。
   const prepared = beats.map((beat) => {
     const ovr = ov[String(beat.index)];
     const scene: BeatScene = composeScenes([beat])[0]!;
     const applied = ovr ? applyOverride(scene, ovr) : scene;
-    problems.push(...validateScene(applied, ovr?.source, Boolean(ovr?.layout?.custom)));
+    problems.push(...validateScene(applied, ovr?.source, true));
 
     const content = buildContent(applied, beat, false);
     if (ovr?.headline) content.headline = ovr.headline;
@@ -112,10 +115,22 @@ export function plan(srt: string, ovRaw: string): PlanResult {
     if (!eligible(layout, content)) {
       problems.push(`拍 ${beat.index}：版式「${layout.name}」需要更多可溯源数字，旁白里不够`);
     }
-    // 动效门禁：版式自带的动效必须存在且可组合
-    const motions = [...layout.enter, ...(layout.emphasis ? [layout.emphasis] : [])];
-    problems.push(...validateMotionSet(motions).map((e) => `拍 ${beat.index}：${e}`));
-    for (const id of motions) if (!MOTION_BY_ID.has(id)) problems.push(`拍 ${beat.index}：版式引用了未知动效 ${id}`);
+    // 宽度安全区只约束槽位版式：custom 满版画面（v2 / 专属场景）自己断行与自适应字号
+    // （compose.validateScene 的 skipHeadlineWidth 即此意），槽位版式的宽句仍须拦。
+    if (!layout.custom) {
+      const h = stripPunct(displayHeadline(content.headline));
+      if (displayWidth(h) > HEADLINE_MAX) {
+        problems.push(`拍 ${beat.index}：headline「${h}」显示宽度 ${displayWidth(h)} 超出安全区（${HEADLINE_MAX}），需缩短或分拍`);
+      }
+    }
+    // 动效门禁：版式自带的动效必须存在且可组合。
+    // enter 池第 i 项分给第 i 个槽（不同元素），逐项单独成组；emphasis 无元素落点，单独成组。
+    const groups = layout.enter.map((id) => [id]);
+    if (layout.emphasis) groups.push([layout.emphasis]);
+    problems.push(...validateMotionSet(groups).map((e) => `拍 ${beat.index}：${e}`));
+    for (const id of [...layout.enter, ...(layout.emphasis ? [layout.emphasis] : [])]) {
+      if (!MOTION_BY_ID.has(id)) problems.push(`拍 ${beat.index}：版式引用了未知动效 ${id}`);
+    }
 
     out.push({ layout, content, start: beat.start, end: beat.end });
   });

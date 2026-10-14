@@ -36,14 +36,14 @@
   },
   "11": {
     "layoutId": "cp-now-then",
-    "headline": "不是不疼",
+    "headline": "那些把保持距离当信条的人",
     "left": "保持距离",
     "right": "把疼换了形态",
     "animations": { "0": "m-slide-left", "1": "m-blur-in", "2": "m-slide-right", "3": "m-fade-down" }
   },
   "12": {
     "layoutId": "fg-corridor",
-    "headline": "没有尽头",
+    "headline": "没有尽头的那种",
     "animations": { "0": "m-zoom-in", "1": "m-rotate-in" }
   },
   "13": {
