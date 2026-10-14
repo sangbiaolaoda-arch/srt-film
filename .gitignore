@@ -25,3 +25,5 @@ npm-debug.log*
 .env
 .env.local
 .env.*.local
+vite.config.ts.timestamp-*.mjs
+src/layouts/render.patched.tsx
