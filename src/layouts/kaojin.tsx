@@ -16,7 +16,7 @@
 import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT, type SemTone } from "./emphasis";
 import type { Style } from "./types";
 
-const S = '"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif';
+export const S = '"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif';
 
 export interface SceneProps {
   /** 本拍完整台词（来自旁白，诚实约束：场景不得引入台词之外的字） */
@@ -30,12 +30,12 @@ export interface SceneProps {
 type Scene = (p: SceneProps) => JSX.Element;
 
 /** 单行台词按最大可用宽（1040px）适配字号。 */
-function fit(t: string, max: number): number {
+export function fit(t: string, max: number): number {
   return Math.min(max, Math.floor(1040 / Math.max(1, Array.from(t).length)));
 }
 
 /** 每 n 字一行（中文台词的确定性断行）。 */
-function lines(t: string, n: number): string[] {
+export function lines(t: string, n: number): string[] {
   const chars = Array.from(t);
   const out: string[] = [];
   for (let i = 0; i < chars.length; i += n) out.push(chars.slice(i, i + n).join(""));

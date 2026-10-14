@@ -2,6 +2,7 @@
 // v3 新增两级：先决定风格（覆写优先），再在风格内挑版式。
 
 import { LAYOUTS } from "./catalog";
+import { V2_LAYOUTS } from "./v2";
 import type { Group, Layout, RenderContent, Style } from "./types";
 import { displayWidth } from "../core/compose";
 
@@ -187,17 +188,31 @@ function interleaveFlagship(pool: Layout[]): Layout[] {
   return out;
 }
 
-/** 确定性挑选：在指定风格内、按拍序轮转优先组，组内避开上一拍用过的版式。 */
-export function pickLayout(content: RenderContent, style: Style, prevId?: string): Layout {
-  const ofStyle = LAYOUTS.filter((l) => (l.style ?? "editorial") === style);
-  const pool0 = ofStyle.length > 0 ? ofStyle : LAYOUTS;
+/** 确定性挑选：在指定池内、按拍序轮转优先组，组内避开上一拍用过的版式。
+ * requireFirst：内容的第一优先组必须在本池内（如数字丰富拍首选 chart），
+ * 否则返回 undefined 整拍让位 —— 防止「v2 没有图表组就降级画数字卡」这种隐性覆盖不足。
+ * 池内找不到合格优先组时返回 undefined（调用方决定回退）。 */
+function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?: string, requireFirst = false): Layout | undefined {
+  if (pool.length === 0) return undefined;
+  const ofStyle = pool.filter((l) => (l.style ?? "editorial") === style);
+  const pool0 = ofStyle.length > 0 ? ofStyle : pool;
   const usable = pool0.filter((l) => eligible(l, content));
   const base = usable.length > 0 ? usable : pool0;
-  const groups = preferredGroups(content, style).filter((g) => base.some((l) => l.group === g));
-  if (groups.length === 0) return base[0] ?? LAYOUTS[0]!;
+  const wanted = preferredGroups(content, style);
+  if (requireFirst && wanted.length > 0 && !base.some((l) => l.group === wanted[0]!)) return undefined;
+  const groups = wanted.filter((g) => base.some((l) => l.group === g));
+  if (groups.length === 0) return undefined;
   const group = groups[(content.beat - 1) % groups.length]!;
-  const pool = base.filter((l) => l.group === group && l.id !== prevId);
+  const poolG = base.filter((l) => l.group === group && l.id !== prevId);
   const fallback = base.filter((l) => l.group === group);
-  const finalPool = interleaveFlagship(pool.length > 0 ? pool : fallback);
+  const finalPool = interleaveFlagship(poolG.length > 0 ? poolG : fallback);
   return finalPool[(content.beat - 1) % finalPool.length]!;
+}
+
+/**
+ * 默认选版入口：v2 满版构图池优先，挑不出合格优先组（如图表拍 v2 首批无 chart 组）
+ * 才落回旧 catalog 槽位库。旧的 162 套保留为回退，不再是被修补的主场。
+ */
+export function pickLayout(content: RenderContent, style: Style, prevId?: string): Layout {
+  return pickFrom(V2_LAYOUTS, content, style, prevId, true) ?? pickFrom(LAYOUTS, content, style, prevId) ?? LAYOUTS[0]!;
 }

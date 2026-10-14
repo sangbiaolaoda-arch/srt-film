@@ -8,6 +8,7 @@ import { Asset } from "./assets";
 import { Figure } from "./figures";
 import { KAOJIN_SCENES } from "./kaojin";
 import { WANGJI_SCENES } from "./wangji";
+import { V2_BOARDS } from "./v2";
 import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT, type Seg, type SemTone } from "./emphasis";
 import { BgLayer } from "./bg";
 import { DecorLayer } from "./decor";
@@ -478,6 +479,15 @@ export function LayoutLayer({ layout, content }: { layout: Layout; content: Rend
     return (
       <g data-layout={layout.id}>
         {scene({ text: stripPunct(content.headline), beat: content.beat, style: layout.style ?? "editorial" })}
+      </g>
+    );
+  }
+  // v2 满版构图板式：同走 custom 通路，但收全量 content（board 是参数化构图，不是一拍一画）。
+  const board = layout.custom ? V2_BOARDS[layout.custom] : undefined;
+  if (board) {
+    return (
+      <g data-layout={layout.id}>
+        {board({ content: { ...content, headline: stripPunct(content.headline) }, beat: content.beat, style: layout.style ?? "editorial" })}
       </g>
     );
   }

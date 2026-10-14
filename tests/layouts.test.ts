@@ -10,6 +10,7 @@ import { APPLIED_MOTION_IDS } from "../src/motion/apply";
 import { decideStyle, eligible, pickLayout, planStyles } from "../src/layouts/pick";
 import { CHART_KINDS } from "../src/layouts/charts";
 import { ASSET_IDS } from "../src/layouts/assets";
+import { V2_LAYOUTS, V2_BOARDS } from "../src/layouts/v2";
 import { KAOJIN_SCENES } from "../src/layouts/kaojin";
 import { WANGJI_SCENES } from "../src/layouts/wangji";
 import { hasPunct } from "../src/core/text";
@@ -348,8 +349,17 @@ describe("选择与资格门禁", () => {
     }
   });
   it("编辑风的多个分组都能被选到（版式不是死数据）", () => {
+    // v2 契约：数字丰富拍回退旧池 chart；其余形态走 v2 满版池。混合内容应踩到 ≥4 组。
     const hit = new Set<string>();
-    for (let b = 1; b <= 40; b++) hit.add(pickLayout(demoContent(b), "editorial").group);
+    for (let b = 1; b <= 40; b++) {
+      const base = demoContent(b);
+      const variant =
+        b % 4 === 2 ? { ...base, numbers: [], bignum: undefined } // 清单形态 → v2 list
+        : b % 4 === 3 ? { ...base, numbers: [7], bignum: "7" } // 单数字 → v2 number
+        : b % 4 === 0 ? { ...base, headline: "其实不是忘记而是记得", numbers: [], bignum: undefined } // 对照句 → compare
+        : base; // 数字丰富 → 回退旧池 chart
+      hit.add(pickLayout(variant, "editorial").group);
+    }
     expect(hit.size).toBeGreaterThanOrEqual(4);
   });
   it("海报风的四个分组都能被选到", () => {
@@ -445,5 +455,30 @@ describe("构图与对比度门禁（手册 02/04 可判定检查）", () => {
       const cr = contrast(ink, paper);
       expect(cr, `${style} 对比度 ${cr.toFixed(2)} < 4.5`).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+describe("v2 满版构图池", () => {
+  it("每套板式的 custom 场景已注册、id 唯一、主槽声明非空", () => {
+    const ids = new Set<string>();
+    for (const l of V2_LAYOUTS) {
+      ids.add(l.id);
+      expect(V2_BOARDS[l.custom!], `${l.id} 的场景 ${l.custom} 未注册`).toBeTruthy();
+      expect(l.slots.length, `${l.id} 缺主槽声明`).toBeGreaterThan(0);
+      expect(l.decor, `${l.id} 应关闭母版装饰（板式自带满版底）`).toBe(false);
+    }
+    expect(ids.size).toBe(V2_LAYOUTS.length);
+  });
+  it("每套板式都能渲出满版画面（不是死数据）", () => {
+    for (const l of V2_LAYOUTS) {
+      const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent(V2_LAYOUTS.indexOf(l) + 1) }));
+      expect(html.startsWith("<svg"), l.id).toBe(true);
+      expect(html.length, `${l.id} 渲染内容过短`).toBeGreaterThan(500);
+    }
+  });
+  it("v2 编辑风池优先：常规拍选到的是 v2 板式", () => {
+    const plain: RenderContent = { ...demoContent(), numbers: [], bignum: undefined };
+    const picked = pickLayout(plain, "editorial");
+    expect(picked.id.startsWith("v2-")).toBe(true);
   });
 });
