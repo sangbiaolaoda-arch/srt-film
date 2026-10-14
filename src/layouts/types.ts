@@ -20,6 +20,12 @@ export type FxKind =
   | "particles-converge" | "particles-vortex" | "particles-burst"
   | "polyhedron" | "tunnel" | "glow" | "none";
 
+/**
+ * 编辑风满版 SVG 图形背景（画法套装 A 组移植）：确定性纯图形，无 filter，
+ * 位于 decor 之下、底色之上。给「文字浮在素底」的画面一个构图主体。
+ */
+export type BgKind = "dots-fade" | "halftone" | "contour" | "rays" | "waves";
+
 export const POSTER_GROUPS: Group[] = ["poster-focus", "poster-field", "poster-geo", "poster-nest"];
 
 export type SlotKind =
@@ -62,6 +68,12 @@ export interface Slot {
   /** 该槽强调动效 */
   mx?: string;
   opacity?: number;
+  /** 直接指定色值（panel 色块构图用，如深蓝底 + 橙红条）。门禁仍以正文对比度兜底 */
+  color?: string;
+  /** 字距（px）。大字宽字距构图（如「遗 忘 的 形 状」）用 */
+  tracking?: number;
+  /** 逐字竖排：从槽位顶部向下排，每字一行高。中文竖排大字构图用 */
+  vertical?: boolean;
   /** 需要的数据量：图表至少要有这么多个可溯源数字，否则该版式不合格 */
   needs?: number;
 }
@@ -101,6 +113,8 @@ export interface Layout {
    * 不进自动挑选池，只被导演覆写点名。
    */
   custom?: string;
+  /** 旗舰版式（画法套装移植）：选版时与普通版式 1:1 交错插池，保证出现率 */
+  flagship?: boolean;
   /** 本拍的入场转场 id（缺省按 stage 的轮转序列取） */
   transition?: string;
   /** 本拍的出场动效 id（缺省按 stage 的轮转序列取） */
@@ -113,6 +127,8 @@ export interface Layout {
   camera?: CameraMove;
   /** 是否绘制母版装饰层（点阵 / 四角角标 / 进度条）。专属场景片应关闭，缺省开启 */
   decor?: boolean;
+  /** 满版图形背景（编辑风）：dots-fade 圆点渐隐 / halftone 半调 / contour 山形 / rays 放射 / waves 水波 */
+  bg?: BgKind;
   /** 海报风的 canvas 特效（背景层） */
   fx?: FxKind;
   /** 特效强度 0..1，缺省 0.6 */

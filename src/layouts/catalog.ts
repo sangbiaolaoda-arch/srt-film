@@ -1,14 +1,15 @@
 // 版式目录：128 个版式，全部是数据。渲染器解释它们，机器门禁校验它们。
 // 网格统一 12 列 × 8 行；box = [x, y, w, h]。
 
-import type { FxKind, Group, Layout, Slot, SlotKind } from "./types";
+import type { BgKind, FxKind, Group, Layout, Slot, SlotKind } from "./types";
 
 const s = (k: SlotKind, x: number, y: number, w: number, h: number, o: Partial<Slot> = {}): Slot =>
   ({ k, box: [x, y, w, h], ...o });
 
 const L = (
   id: string, name: string, group: Group, enter: string[],
-  slots: Slot[], extra: { emphasis?: string; ambient?: string; note?: string; needs?: number } = {},
+  slots: Slot[],
+  extra: { emphasis?: string; ambient?: string; note?: string; needs?: number; paper?: string; bg?: BgKind; decor?: boolean; flagship?: boolean } = {},
 ): Layout => ({ id, name, group, enter, slots, ...extra });
 
 /** 海报风版式：暗底 + canvas 特效，fx 决定背景特效种类。 */
@@ -957,6 +958,125 @@ export const LAYOUTS: Layout[] = [
     [s("figure", 0.7, 0.9, 10.6, 4.2, { figure: "fig-waves", m: "m-rise-lines", mx: "m-glow" }),
      s("headline", 1, 5.4, 10, 2.2, { size: "xxl", align: "center", m: "m-stroke-draw" })],
     { note: "两种感受合成为一条：同源，不是并列", ambient: "m-breathe-bg" }),
+  // ══════════ S. 旗舰版式（14）—— 画法套装 A/C/E 组移植，画法出处见每套 note ══════════
+  // 设计语言：大色块满版 / 超大字宽字距 / 竖排 / 满版图形背景（bg）。
+  // 原语：Slot.color（块面色值）、Slot.tracking（字距）、Slot.vertical（竖排）、Layout.bg。
+
+  // A07 蒙版擦除提示：深蓝大块 78% + 橙红竖条 22%，字落在蓝块左下
+  L("sp-block-split", "色块分割", "statement", TEXT_ENTER,
+    [s("panel", 0, 0, 9.4, 8, { color: "#2e4756" }),
+     s("panel", 9.4, 0, 2.6, 8, { color: "#d94f2b" }),
+     s("headline", 0.55, 5, 8, 2.4, { size: "xl", tone: "paper", mx: "m-underline-draw" }),
+     s("kicker", 0.55, 4.2, 6, 0.7, { size: "s", literal: "从左到右", tone: "paper", opacity: 0.65 })],
+    { flagship: true, note: "画法A07：块面分割，字压大色块" }),
+
+  // E15 标题卡与副题：暗底 + 大字宽字距居中 + 英文副题 + 角落注
+  L("sp-display-dark", "暗底宽字距标题", "statement", PO_LINE,
+    [s("headline", 0.8, 2.6, 10.4, 2.6, { size: "mega", tone: "paper", align: "center", tracking: 30 }),
+     s("subhead", 2, 5.6, 8, 0.8, { size: "s", tone: "dim", align: "center", tracking: 6 }),
+     s("meta", 9.2, 6.8, 2.4, 0.6, { size: "xs", tone: "dim", align: "end" })],
+    { flagship: true, paper: "#14131a", decor: false, note: "画法E15：一屏一个层次，仪式感定版" }),
+
+  // E15 编辑风变体：纸白底 + 大字宽字距 + 细红线
+  L("sp-display-light", "纸白宽字距标题", "quote", TEXT_ENTER,
+    [s("headline", 0.6, 2.8, 10.8, 2.4, { size: "huge", align: "center", tracking: 18 }),
+     s("rule", 4.4, 5.6, 3.2, 0.12, { tone: "accent" }),
+     s("subhead", 2.5, 6, 7, 0.8, { size: "s", tone: "dim", align: "center", tracking: 4 })],
+    { flagship: true, note: "画法E15编辑风变体：留白 + 宽字距" }),
+
+  // A05 远处的山，会等你：山形层叠背景 + 顶部大字
+  L("sp-contour-title", "山形层叠", "statement", TEXT_ENTER,
+    [s("headline", 0.7, 0.9, 8.5, 2.2, { size: "xxl" }),
+     s("caption", 0.7, 3.1, 7, 0.9, { size: "s", tone: "dim" })],
+    { flagship: true, bg: "contour", note: "画法A05：层叠山脊当构图主体，字压上层天空" }),
+
+  // A03/C16 半调渐变 + 大标语
+  L("sp-halftone-slogan", "半调网点标语", "statement", PO_TYPE,
+    [s("headline", 0.7, 4.6, 10.6, 2.4, { size: "xxl" }),
+     s("kicker", 0.7, 3.9, 6, 0.6, { size: "s", literal: "SIGNAL", tone: "accent", tracking: 8 })],
+    { flagship: true, bg: "halftone", note: "画法A03：印刷网点退晕当天空，字压暗部" }),
+
+  // A18 消散构图：黑底放射花心在右，字居左避让
+  L("sp-rays-quiet", "放射留白", "statement", PO_SPIN,
+    [s("headline", 0.6, 2.6, 6.4, 2.6, { size: "xxl", tone: "paper" }),
+     s("caption", 0.6, 5.2, 5.5, 0.9, { size: "s", tone: "dim" })],
+    { flagship: true, paper: "#111015", decor: false, bg: "rays", note: "画法A18：放射线聚焦右侧花心，文字大留白" }),
+
+  // A02 被水浸过：水波细线 + 大字触底
+  L("sp-waves-bottom", "水波触底字", "statement", TEXT_ENTER,
+    [s("headline", 0.6, 0.8, 10.8, 2.2, { size: "xxl", tracking: 6 }),
+     s("rule", 0.7, 3.4, 2.6, 0.1, { tone: "accent" })],
+    { flagship: true, bg: "waves", note: "画法A02：底部水波托住上半留白的大字" }),
+
+  // E01 文字放大+竖排：竖排大字占左，正文小字居右下
+  L("sp-vertical-tension", "竖排张力", "quote", ["m-char-rise", "m-fade-up"],
+    [s("headline", 0.9, 0.9, 2.6, 6.4, { size: "xxl", vertical: true, m: "m-char-rise" }),
+     s("rule", 4.1, 1.2, 0.09, 5.6, { tone: "hairline" }),
+     s("subhead", 4.7, 5.4, 6.6, 1.6, { size: "m", tone: "dim" })],
+    { flagship: true, note: "画法E01：竖排大字 + 右下小注，东方排版张力" }),
+
+  // C10 硬切对比：左色块白字金句 + 右纸白小字
+  L("sp-two-panel-quote", "双栏硬切金句", "quote", ["m-slide-left", "m-fade-up"],
+    [s("panel", 0, 0, 7.2, 8, { color: "#1e1d24" }),
+     s("quote", 0.7, 2.4, 5.8, 3.2, { size: "xl", tone: "paper" }),
+     s("subhead", 8, 3, 3.4, 2.4, { size: "m", tone: "dim" }),
+     s("label", 8, 5.6, 3, 0.6, { size: "xs", literal: "对照", tone: "accent", tracking: 6 })],
+    { flagship: true, note: "画法C10：左黑右白硬切，两栏各说一半" }),
+
+  // A14 决定性瞬间：超大数字 + 小字
+  L("sp-num-giant", "巨型数字瞬间", "number", PO_RISE,
+    [s("bignum", 0.4, 1.2, 7, 4.6, { size: "mega" }),
+     s("headline", 0.6, 6, 8.5, 1.5, { size: "l" }),
+     s("rule", 0.7, 5.7, 1.8, 0.1, { tone: "accent" })],
+    { flagship: true, note: "画法A14：数字即画面主体，一屏只讲一个数", needs: 1 }),
+
+  // A06 先有线，才有形：极简留白 + 单个小色块
+  L("sp-minimal-block", "极简留白", "statement", ["m-fade-up", "m-zoom-in"],
+    [s("panel", 5.4, 3.2, 1.2, 1.2, { color: "#2e4756" }),
+     s("headline", 1, 5.6, 10, 1.6, { size: "l", align: "center" }),
+     s("kicker", 1, 1, 10, 0.6, { size: "xs", literal: "FORM FOLLOWS", tone: "dim", align: "center", tracking: 10 })],
+    { flagship: true, note: "画法A06：大留白中央一个小主体，极度克制" }),
+
+  // A19 点阵字体：满版字模氛围 + 底部标语
+  L("sp-dots-word", "点阵氛围", "bookend", PO_TYPE,
+    [s("headline", 0.8, 5.4, 10.4, 1.8, { size: "xl", tone: "paper" }),
+     s("meta", 9.4, 0.7, 2, 0.6, { size: "xs", tone: "dim", align: "end" })],
+    { flagship: true, paper: "#131217", decor: false, bg: "dots-fade", note: "画法A19：圆点退晕当字模氛围，暗底定版" }),
+
+  // E12 虚线上升曲线版式验收未达标（曲线过淡），已移除 —— 宁缺毋滥，不留半成品。
+
+  // C20 章节总汇：进度分格 + 章节字
+  L("sp-chapter-card", "章节进度卡", "bookend", ["m-fade-up", "m-stagger-words"],
+    [s("headline", 1, 3, 8, 2, { size: "xxl" }),
+     s("progress", 1, 5.4, 10, 0.28, { tone: "accent" }),
+     s("meta", 8.6, 5.9, 2.4, 0.6, { size: "xs", tone: "dim", align: "end" })],
+    { flagship: true, note: "画法C20：章节锚点，一眼看到走到哪了" }),
+
+  // ── 旗舰扩展：覆盖 compare / process / timeline 组（情感叙事高频组）──
+
+  // E04 一个圈对一个十圈：左右两半色块反转，两个大词对峙
+  L("sp-vs-halves", "左右半屏对峙", "compare", ["m-slide-left", "m-fade-up"],
+    [s("panel", 0, 0, 6, 8, { color: "#2e4756" }),
+     s("label", 0.6, 1, 4.8, 0.6, { size: "s", src: "left", tone: "paper", tracking: 4 }),
+     s("headline", 0.6, 3, 5, 2.6, { size: "xxl", tone: "paper", src: "left" }),
+     s("label", 6.8, 1, 4.8, 0.6, { size: "s", src: "right", tone: "accent", tracking: 4 }),
+     s("subhead", 6.8, 3, 4.8, 2.6, { size: "xxl", src: "right" })],
+    { flagship: true, note: "画法E04：左右色块反转，一屏只放两个词" }),
+
+  // E07 阶梯每道都生长：阶梯剪影 + 底部短句
+  L("sp-steps-rise", "阶梯生长", "process", ["m-rise-lines", "m-stagger-words"],
+    [s("figure", 0.8, 1.2, 10.4, 4, { figure: "fig-path-end", m: "m-rise-lines" }),
+     s("headline", 0.8, 5.6, 9, 1.8, { size: "l" }),
+     s("kicker", 0.8, 4.9, 5, 0.6, { size: "xs", literal: "PROCESS", tone: "accent", tracking: 8 })],
+    { flagship: true, note: "画法E07：阶梯图形 + 底部短句，过程感" }),
+
+  // E13 时间轴与章节节点：细线贯穿 + 节点大字
+  L("sp-timeline-line", "时间轴节点", "timeline", ["m-fade-up", "m-slide-left"],
+    [s("axis", 0.8, 3.4, 10.4, 0.06, { tone: "hairline" }),
+     s("bignum", 0.8, 1, 5, 2, { size: "huge" }),
+     s("headline", 0.8, 4.2, 9, 2.2, { size: "l" }),
+     s("caption", 0.8, 6.4, 8, 0.8, { size: "s", tone: "dim" })],
+    { flagship: true, note: "画法E13：细轴贯穿，数字是节点", needs: 1 }),
 ];
 
 export const LAYOUT_BY_ID = new Map(LAYOUTS.map((l) => [l.id, l]));

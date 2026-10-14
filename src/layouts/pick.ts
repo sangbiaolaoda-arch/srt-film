@@ -150,6 +150,22 @@ function preferredGroups(content: RenderContent, style: Style): Group[] {
   return out;
 }
 
+/** 旗舰版式与普通版式交错插池：旗舰循环复用（同一旗舰重复出现至少隔一个池长），
+ * 把旗舰命中率钉在约 50% —— 旗舰是画法套装移植的重设计版式，纯追加池尾会被取模饿死。 */
+function interleaveFlagship(pool: Layout[]): Layout[] {
+  const flag = pool.filter((l) => l.flagship);
+  const rest = pool.filter((l) => !l.flagship);
+  if (flag.length === 0 || rest.length === 0) return pool;
+  const out: Layout[] = [];
+  let i = 0;
+  let j = 0;
+  while (out.length < pool.length) {
+    out.push(flag[i++ % flag.length]!);
+    if (j < rest.length) out.push(rest[j++]!);
+  }
+  return out;
+}
+
 /** 确定性挑选：在指定风格内、按拍序轮转优先组，组内避开上一拍用过的版式。 */
 export function pickLayout(content: RenderContent, style: Style, prevId?: string): Layout {
   const ofStyle = LAYOUTS.filter((l) => (l.style ?? "editorial") === style);
@@ -161,6 +177,6 @@ export function pickLayout(content: RenderContent, style: Style, prevId?: string
   const group = groups[(content.beat - 1) % groups.length]!;
   const pool = base.filter((l) => l.group === group && l.id !== prevId);
   const fallback = base.filter((l) => l.group === group);
-  const finalPool = pool.length > 0 ? pool : fallback;
+  const finalPool = interleaveFlagship(pool.length > 0 ? pool : fallback);
   return finalPool[(content.beat - 1) % finalPool.length]!;
 }

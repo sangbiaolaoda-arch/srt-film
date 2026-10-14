@@ -9,6 +9,7 @@ import { Figure } from "./figures";
 import { KAOJIN_SCENES } from "./kaojin";
 import { WANGJI_SCENES } from "./wangji";
 import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT, type Seg, type SemTone } from "./emphasis";
+import { BgLayer } from "./bg";
 import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
 import { stripPunct } from "../core/text";
@@ -238,7 +239,8 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
 
   switch (slot.k) {
     case "panel":
-      return g(<rect x={x} y={y} width={w} height={h} fill={fill} opacity={opacity} />);
+      // color 直指定：块面分割构图（画法 A07）需要深蓝/橙红等色板外颜色
+      return g(<rect x={x} y={y} width={w} height={h} fill={slot.color ?? fill} opacity={opacity} />);
     case "vignette":
       return g(<rect x={x} y={y} width={w} height={h} fill="none" stroke={C.hairline} strokeWidth={1} />);
     case "frame":
@@ -355,6 +357,27 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       // 先按标点截断（displayHeadline），再净化标点 —— 顺序反了会让截断失效。
       const t = isHeadlineLike ? stripPunct(displayHeadline(raw)) : stripPunct(raw);
       if (!t) return g(<g />);
+
+      // 竖排分支（画法 E01）：逐字从槽顶向下排。中文竖排大字构图。
+      if (slot.vertical) {
+        const sizeV = size;
+        const step = sizeV * 1.16;
+        const maxChars = Math.max(2, Math.floor(h / step));
+        const chars = Array.from(t).slice(0, maxChars);
+        const anchorV = textAnchor(slot.align);
+        const txV = anchorV === "middle" ? x + w / 2 : anchorV === "end" ? x + w : x + sizeV / 2 + 2;
+        const startYV = y + sizeV * 0.92;
+        return g(
+          <g data-line="">
+            {chars.map((ch, j) => (
+              <text key={j} x={txV} y={startYV + j * step} fontSize={sizeV} fill={fill} fontFamily={SERIF} fontWeight={600} textAnchor={anchorV === "middle" ? "middle" : "start"} data-char="">
+                {ch}
+              </text>
+            ))}
+          </g>,
+        );
+      }
+
       const family = slot.k === "source" || slot.k === "attribution" || slot.k === "caption" ? SANS : SERIF;
       const weight = isHeadlineLike ? 600 : 400;
       // 标题类先做语义强调：把「疼 / 代价 / 在乎」这类强词切出来，行内换色放大加粗。
@@ -378,7 +401,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
             const yLine = startY + i * lineH;
             if (!splitChars) {
               return (
-                <text key={i} x={tx} y={yLine} fontSize={size} fill={fill} fontFamily={family} fontWeight={weight} textAnchor={anchor} data-line="">
+                <text key={i} x={tx} y={yLine} fontSize={size} fill={fill} fontFamily={family} fontWeight={weight} textAnchor={anchor} letterSpacing={slot.tracking} data-line="">
                   {mergeTones(row).map((s, j) =>
                     s.tone ? (
                       <tspan key={j} fill={sem[s.tone]} fontWeight={SEM_WEIGHT} fontSize={size * SEM_SCALE}>
@@ -444,8 +467,12 @@ export function LayoutLayer({ layout, content }: { layout: Layout; content: Rend
     );
   }
   const ctx: Ctx = { content, layout, numericIndex: 0 };
+  const C = colorsOf(layout.style);
   return (
     <g data-layout={layout.id}>
+      {layout.bg && (
+        <BgLayer kind={layout.bg} seed={content.beat} colorDim={C.dim} colorHairline={C.hairline} accent={C.accent} />
+      )}
       {layout.slots.map((slot, i) => (
         <SlotNode key={i} slot={slot} ctx={ctx} index={i} />
       ))}
@@ -455,7 +482,7 @@ export function LayoutLayer({ layout, content }: { layout: Layout; content: Rend
 
 /** 版式 → 完整纯 SVG（1280×720 坐标系），画廊与单帧导出用。 */
 export function LayoutSVG({ layout, content, paper }: LayoutSVGProps): JSX.Element {
-  const bg = paper ?? colorsOf(layout.style).paper;
+  const bg = paper ?? layout.paper ?? colorsOf(layout.style).paper;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

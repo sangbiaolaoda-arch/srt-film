@@ -419,9 +419,9 @@ describe("构图与对比度门禁（手册 02/04 可判定检查）", () => {
       for (const s of l.slots) {
         const [x, y, w, h] = s.box;
         if (w <= 0 || h <= 0) bad.push(`${l.id}:${s.k} 尺寸非正`);
-        // 满版出血是图像/暗角装饰的设计意图（画法手册 02：bleed 不受安全区约束），
-        // 只查携带信息的内容槽（文字/数字/图形）。
-        if (s.k === "asset" || s.k === "vignette" || s.k === "image") continue;
+        // 满版出血是图像/暗角/构图色块的设计意图（画法手册 02：bleed 不受安全区约束），
+        // 只查携带信息的内容槽（文字/数字/图形）。panel 满版 = 旗舰版式的底色块（画法 A07/C10）。
+        if (s.k === "asset" || s.k === "vignette" || s.k === "image" || s.k === "panel") continue;
         const nx = x / cols;
         const ny = y / rows;
         const nw = w / cols;
