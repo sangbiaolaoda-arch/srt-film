@@ -134,6 +134,8 @@ export interface Layout {
   fx?: FxKind;
   /** 特效强度 0..1，缺省 0.6 */
   fxStrength?: number;
+  /** 特效主色，缺省 POSTER_ACCENT。满版板式（v2）有自己的色板，特效必须纳入其中 */
+  fxAccent?: string;
   /** 底色，缺省按 style 取（编辑风纸白 / 海报风暗黑） */
   paper?: string;
   /**

@@ -541,9 +541,9 @@ export const V2_LAYOUTS: Layout[] = [
   B("vertical", "竖排大字", "statement", { note: "短句（≤9 字）最佳", enter: ["m-fade-up", "m-scale-soft"] }),
   B("chapter", "章节卡", "bookend", { note: "开场 / 定版", enter: ["m-char-rise", "m-bar-sweep"] }),
   B("steps", "单线生长", "process", { note: "过程 / 递进", enter: ["m-stroke-draw", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.05 } }),
-  B("duo", "双圆对峙", "poster-geo", { style: "poster", note: "left/right 对照，暗底", enter: ["m-slide-right", "m-slide-left"] }),
-  B("dark-word", "暗底大字", "poster-focus", { style: "poster", note: "金句定场", enter: ["m-char-rise", "m-glow"] }),
-  B("strata", "水平色带", "poster-field", { style: "poster", note: "氛围场 + 大字，配缓推", enter: ["m-slide-right", "m-scale-soft"], camera: { scaleFrom: 1.0, scaleTo: 1.06 } }),
+  B("duo", "双圆对峙", "poster-geo", { style: "poster", note: "left/right 对照，暗底", enter: ["m-slide-right", "m-slide-left"], fx: "particles-vortex", fxAccent: EMBER, fxStrength: 0.5 }),
+  B("dark-word", "暗底大字", "poster-focus", { style: "poster", note: "金句定场", enter: ["m-char-rise", "m-glow"], fx: "glow", fxAccent: EMBER, fxStrength: 0.95 }),
+  B("strata", "水平色带", "poster-field", { style: "poster", note: "氛围场 + 大字，配缓推", enter: ["m-slide-right", "m-scale-soft"], camera: { scaleFrom: 1.0, scaleTo: 1.08 }, fx: "particles-converge", fxAccent: VERMILION, fxStrength: 0.55 }),
   B("balance", "天平", "poster-geo", { style: "poster", note: "权衡对照", enter: ["m-stroke-draw", "m-fade-up"] }),
-  B("dust", "尘埃与主体", "poster-focus", { style: "poster", note: "氛围定场，配缓推", enter: ["m-drift-slow", "m-char-rise"], camera: { scaleFrom: 1.0, scaleTo: 1.05 } }),
+  B("dust", "尘埃与主体", "poster-focus", { style: "poster", note: "氛围定场，配缓推", enter: ["m-drift-slow", "m-char-rise"], camera: { scaleFrom: 1.0, scaleTo: 1.08 }, fx: "particles-vortex", fxAccent: STEEL, fxStrength: 0.5 }),
 ];

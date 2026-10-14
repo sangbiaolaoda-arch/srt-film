@@ -54,7 +54,7 @@ function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number,
     t: local,
     dur: Math.max(shot.end - shot.start, 0.8),
     seed: (hashSeed(layout.id) ^ Math.imul(shot.content.beat, 7919)) >>> 0,
-    accent: POSTER_ACCENT,
+    accent: layout.fxAccent ?? POSTER_ACCENT,
     ink: POSTER_DIM,
     dim: POSTER_DIM,
   };
