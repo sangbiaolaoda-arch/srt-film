@@ -135,6 +135,11 @@ export interface Layout {
   fxStrength?: number;
   /** 底色，缺省按 style 取（编辑风纸白 / 海报风暗黑） */
   paper?: string;
+  /**
+   * 是否绘制满版底色层（wash）：受光渐变 + 柔光斑 + 边缘衰减，按拍号走色彩脚本。
+   * 缺省开启 —— 纯色底是「一眼假」的主因之一。专属场景（custom）自动关闭。
+   */
+  wash?: boolean;
   slots: Slot[];
 }
 

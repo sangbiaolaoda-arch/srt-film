@@ -13,7 +13,28 @@ export function eligible(layout: Layout, content: RenderContent): boolean {
     const need = slot.needs ?? layout.needs ?? 3;
     if (content.numbers.length < need) return false;
   }
+  // 极短句（≤4 字宽，如「说」「他问」）只允许进「有大主槽」的版式：
+  // 渲染器会把极短句放大到贴满主槽（见 render.tsx 短句放大），主槽太小的话
+  // 放大上限被盒子高度卡死，结果是一个两字词缩在页角、四边大片留白 ——
+  // 这是 02 语料印相里最难看的一类帧。出处：Adobe 海报指南 Step 3/4
+  // （hook 必须占画面主体；「为一个词留出整个画面」）。
+  if (displayWidth(content.headline) <= 4 && hookCover(layout) < 0.2) return false;
   return true;
+}
+
+/** 算主槽面积的槽种：只算真正承载「主角文字」的槽。 */
+const HOOK_KINDS = new Set(["headline", "quote", "text", "bignum", "num2"]);
+
+/** 主槽画面占比：版式里最大文字槽的 box 面积 / 整幅。 */
+export function hookCover(layout: Layout): number {
+  const cols = layout.cols ?? 12;
+  const rows = layout.rows ?? 8;
+  let best = 0;
+  for (const s of layout.slots) {
+    if (!HOOK_KINDS.has(s.k)) continue;
+    best = Math.max(best, (s.box[2] / cols) * (s.box[3] / rows));
+  }
+  return best;
 }
 
 export interface StyleDecision {

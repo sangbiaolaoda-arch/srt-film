@@ -10,6 +10,8 @@ import { KAOJIN_SCENES } from "./kaojin";
 import { WANGJI_SCENES } from "./wangji";
 import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT, type Seg, type SemTone } from "./emphasis";
 import { BgLayer } from "./bg";
+import { DecorLayer } from "./decor";
+import { WashLayer } from "./wash";
 import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
 import { stripPunct } from "../core/text";
@@ -217,7 +219,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
   const tone = slot.tone ?? (slot.k === "bignum" ? "accent" : "ink");
   const C = colorsOf(ctx.layout.style);
   const fill = C[tone];
-  const size = FONT_SIZE[slot.size ?? "m"];
+  const size: number = FONT_SIZE[slot.size ?? "m"];
   const anchor = textAnchor(slot.align);
   const tx = anchor === "middle" ? x + w / 2 : anchor === "end" ? x + w : x;
   const motion = slot.m ?? ctx.layout.enter[index % (ctx.layout.enter.length || 1)] ?? "m-fade-up";
@@ -379,32 +381,45 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       }
 
       const family = slot.k === "source" || slot.k === "attribution" || slot.k === "caption" ? SANS : SERIF;
+      // 短句放大（海报法则：hook 必须是画面最大的元素 —— 字越少，字就该越大）。
+      // 「说」单独成拍时若只有 48px，画面必然空；放到贴满槽宽才是海报语言。
+      // 出处：Adobe《How to design a poster》Step 3（本轮 Agent-Reach 实抓）+
+      // 手册 02《构图与取景》层级断言。上限 340px 防止单字大到出格。
+      let fs = size;
+      if (isHeadlineLike) {
+        const units = Array.from(t).reduce((n, ch) => n + (ch.codePointAt(0)! > 0xff ? 1 : 0.55), 0);
+        if (units > 0 && units <= 8) {
+          const byWidth = (w / units) * 0.86; // 保证单行放得下（不换行）
+          const byHeight = h / 1.45; // 单行行高 1.32 + 余量
+          fs = Math.max(size, Math.min(byWidth, byHeight, 340));
+        }
+      }
       const weight = isHeadlineLike ? 600 : 400;
       // 标题类先做语义强调：把「疼 / 代价 / 在乎」这类强词切出来，行内换色放大加粗。
       // 非标题小字（出处、注释）保持单一色调 —— 满屏都强调等于没有强调。
       const rows: MChar[][] = isHeadlineLike
         ? wrapMarked(
             emphasize(t).flatMap((s) => Array.from(s.text).map((ch) => ({ ch, tone: s.tone }))),
-            size,
+            fs,
             w,
           )
-        : wrapText(t, size, w).map((ln) => Array.from(ln).map((ch) => ({ ch })));
-      const lineH = size * 1.32;
-      const startY = y + Math.min(h * 0.5 + (rows.length - 1) * lineH * 0.5, h * 0.9) - (rows.length - 1) * lineH + size * 0.18;
+        : wrapText(t, fs, w).map((ln) => Array.from(ln).map((ch) => ({ ch })));
+      const lineH = fs * 1.32;
+      const startY = y + Math.min(h * 0.5 + (rows.length - 1) * lineH * 0.5, h * 0.9) - (rows.length - 1) * lineH + fs * 0.18;
       const sem = SEM_COLORS[ctx.layout.style ?? "editorial"];
       // 海报风大字拆成逐字符独立 <text>：这样逐字动效（上浮／打出）才有对象，
       // 每个字也都是可以单独做变换的图形。编辑风保持整行，不动既有视觉。
-      const splitChars = isHeadlineLike && size >= 24 && ctx.layout.style === "poster";
+      const splitChars = isHeadlineLike && fs >= 24 && ctx.layout.style === "poster";
       return g(
         <g>
           {rows.map((row, i) => {
             const yLine = startY + i * lineH;
             if (!splitChars) {
               return (
-                <text key={i} x={tx} y={yLine} fontSize={size} fill={fill} fontFamily={family} fontWeight={weight} textAnchor={anchor} letterSpacing={slot.tracking} data-line="">
+                <text key={i} x={tx} y={yLine} fontSize={fs} fill={fill} fontFamily={family} fontWeight={weight} textAnchor={anchor} letterSpacing={slot.tracking} data-line="">
                   {mergeTones(row).map((s, j) =>
                     s.tone ? (
-                      <tspan key={j} fill={sem[s.tone]} fontWeight={SEM_WEIGHT} fontSize={size * SEM_SCALE}>
+                      <tspan key={j} fill={sem[s.tone]} fontWeight={SEM_WEIGHT} fontSize={fs * SEM_SCALE}>
                         {s.text}
                       </tspan>
                     ) : (
@@ -414,7 +429,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
                 </text>
               );
             }
-            const widths = row.map((c) => charWidth(c.ch) * size * (c.tone ? SEM_SCALE : 1));
+            const widths = row.map((c) => charWidth(c.ch) * fs * (c.tone ? SEM_SCALE : 1));
             const total = widths.reduce((a, b) => a + b, 0);
             let cx = anchor === "middle" ? tx - total / 2 : anchor === "end" ? tx - total : tx;
             return (
@@ -428,7 +443,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
                       key={j}
                       x={at}
                       y={yLine}
-                      fontSize={c.tone ? size * SEM_SCALE : size}
+                      fontSize={c.tone ? fs * SEM_SCALE : fs}
                       fill={c.tone ? sem[c.tone] : fill}
                       fontFamily={family}
                       fontWeight={c.tone ? SEM_WEIGHT : weight}
@@ -470,6 +485,9 @@ export function LayoutLayer({ layout, content }: { layout: Layout; content: Rend
   const C = colorsOf(layout.style);
   return (
     <g data-layout={layout.id}>
+      {layout.wash !== false && (
+        <WashLayer beat={content.beat} style={layout.style} paper={layout.paper} />
+      )}
       {layout.bg && (
         <BgLayer kind={layout.bg} seed={content.beat} colorDim={C.dim} colorHairline={C.hairline} accent={C.accent} />
       )}
@@ -493,6 +511,9 @@ export function LayoutSVG({ layout, content, paper }: LayoutSVGProps): JSX.Eleme
     >
       <rect x={0} y={0} width={1280} height={720} fill={bg} />
       <LayoutLayer layout={layout} content={content} />
+      {layout.decor !== false && !layout.custom && (
+        <DecorLayer beat={content.beat} style={layout.style} />
+      )}
       <BeatMark beat={content.beat} style={layout.style} />
     </svg>
   );
