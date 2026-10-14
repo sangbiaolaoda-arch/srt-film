@@ -20,6 +20,7 @@
 import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT } from "./emphasis";
 import { S, fit, lines } from "./kaojin";
 import { stripPunct } from "../core/text";
+import { displayWidth } from "../core/compose";
 import type { Layout, RenderContent, Style } from "./types";
 
 export interface BoardProps {
@@ -94,6 +95,20 @@ function wrap(t: string, maxRows: number): string[] {
 
 const clean = (t: string | undefined): string => (t ? stripPunct(t) : "");
 
+/** 按**可用宽度**（px）与字号上限适配。fit() 假定 1040px 满宽，
+ *  出血分屏 / 半幅清单里直接用它会把字溢出色块 —— 这里按版面实际可用宽算。 */
+function fitW(t: string, avail: number, cap: number): number {
+  return Math.min(cap, Math.floor(avail / Math.max(1, Array.from(t).length)));
+}
+
+/** 页脚小字去重：caption 取自旁白第二分句，几乎总是已显示正文的子串 ——
+ *  满版画面里同一句话出现两遍是最显眼的丑（02 语料印相实测 4/16 帧中招）。
+ *  是子串就整个不渲染，留白比复读好。 */
+function foot(t: string | undefined, body: string): string {
+  const c = clean(t);
+  return c && !body.includes(c) ? c : "";
+}
+
 /* ══ 编辑风 8 套（纸白底）══════════════════════════════════════════ */
 
 /* ── 01 分屏色块对照（m-A07）──────────────────────────────────────
@@ -101,15 +116,16 @@ const clean = (t: string | undefined): string => (t ? stripPunct(t) : "");
 const v2SplitBlocks: Board = ({ content, style }) => {
   const L = clean(content.left) || stripPunct(content.headline);
   const R = clean(content.right) || clean(content.subhead);
+  const footT = foot(content.caption, L + R);
   return (
     <g>
       <rect x={-40} y={-40} width={880} height={800} fill={INDIGO} data-anim data-motion="m-slide-right" />
       <rect x={840} y={-40} width={480} height={800} fill={PAPER} />
       <rect x={836} y={-40} width={5} height={800} fill={VERMILION} />
-      <VText x={80} y={390} size={fit(L, 84)} fill={PAPER} text={L} style={style} anchor="start" motion="m-fade-up" />
-      {R && <VText x={920} y={400} size={fit(R, 44)} fill={INK} text={R} style={style} anchor="start" motion="m-fade-up" />}
-      {clean(content.caption) && (
-        <VText x={920} y={640} size={22} fill={INK} text={clean(content.caption)} style={style} anchor="start" opacity={0.55} motion="m-fade-up" />
+      <VText x={80} y={390} size={fitW(L, 700, 84)} fill={PAPER} text={L} style={style} anchor="start" motion="m-fade-up" />
+      {R && <VText x={920} y={400} size={fitW(R, 300, 44)} fill={INK} text={R} style={style} anchor="start" motion="m-fade-up" />}
+      {footT && footT !== R && (
+        <VText x={920} y={640} size={fitW(footT, 300, 22)} fill={INK} text={footT} style={style} anchor="start" opacity={0.55} motion="m-fade-up" />
       )}
     </g>
   );
@@ -121,6 +137,7 @@ const v2InkLine: Board = ({ content, style }) => {
   const t = stripPunct(content.headline);
   const rows = wrap(t, 2);
   const last = rows.length - 1;
+  const footT = foot(content.caption, rows.join(""));
   return (
     <g>
       {rows.map((r, i) => (
@@ -130,8 +147,8 @@ const v2InkLine: Board = ({ content, style }) => {
       <path data-anim data-motion="m-stroke-draw"
         d="M96 596 C 260 584 430 610 640 594 S 1020 586 1184 600"
         stroke={INK} strokeWidth={3.5} fill="none" opacity={0.85} />
-      {clean(content.caption) && (
-        <VText x={1184} y={660} size={22} fill={INK} text={clean(content.caption)} style={style} anchor="end" opacity={0.55} motion="m-fade-up" />
+      {footT && (
+        <VText x={1184} y={660} size={22} fill={INK} text={footT} style={style} anchor="end" opacity={0.55} motion="m-fade-up" />
       )}
     </g>
   );
@@ -142,18 +159,50 @@ const v2InkLine: Board = ({ content, style }) => {
 const v2NumGiant: Board = ({ content, style }) => {
   const n = clean(content.bignum) || (content.numbers[0] !== undefined ? String(content.numbers[0]) : "");
   const main = n || stripPunct(content.headline);
-  const kick = clean(content.caption) || clean(content.subhead);
+  const kick = foot(content.caption, main) || foot(content.subhead, main);
+  // 单位拆分只做「数字部 ≥1 字 且 单位 ≤2 字」的短量纲（两秒钟 → 两 + 秒钟）；
+  // 「半个小时」拆开只剩一个「半」，宁可整体作大字不拆。
+  const unit = clean(content.unit);
+  const splittable = unit !== "" && main.endsWith(unit)
+    && Array.from(main).length - Array.from(unit).length >= 1 && Array.from(unit).length <= 2;
+  const shown = splittable ? main.slice(0, main.length - unit.length) : main;
+  const size = Math.min(300, Math.floor(1000 / Math.max(1, Array.from(shown).length)));
   return (
     <g>
       <rect x={110} y={112} width={1060} height={2} fill={INK} opacity={0.7} data-anim data-motion="m-bar-sweep" />
       {kick && <VText x={110} y={88} size={24} fill={INK} text={kick} style={style} anchor="start" spacing={6} opacity={0.75} motion="m-fade-up" />}
-      <VText x={640} y={470} size={Math.min(300, Math.floor(1000 / Math.max(1, Array.from(main).length)))}
-        fill={INK} text={main} style={style} motion="m-scale-soft" />
-      {clean(content.unit) && (
-        <VText x={640 + (Array.from(main).length * Math.min(300, Math.floor(1000 / Math.max(1, Array.from(main).length)))) / 2 + 40}
-          y={470} size={44} fill={VERMILION} text={clean(content.unit)} style={style} anchor="start" motion="m-fade-up" />
+      <VText x={640} y={470} size={size} fill={INK} text={shown} style={style} motion="m-scale-soft" />
+      {splittable && (
+        <VText x={640 + (Array.from(shown).length * size) / 2 + 40}
+          y={470} size={44} fill={VERMILION} text={unit} style={style} anchor="start" motion="m-fade-up" />
       )}
       <circle cx={1170} cy={640} r={5} fill={VERMILION} data-anim data-motion="m-tick-pulse" />
+    </g>
+  );
+};
+
+/* ── 03b 数字色带（m-E05 × m-A14）────────────────────────────────
+   数字板式二段：满版靛蓝横带 + 带上巨号数字（纸白），与 num-giant
+   （纸白巨号）按拍交替 —— 数字拍两套构图轮换，避免同一画面复现。 */
+const v2NumBand: Board = ({ content, style }) => {
+  const n = clean(content.bignum) || (content.numbers[0] !== undefined ? String(content.numbers[0]) : "");
+  const main = n || stripPunct(content.headline);
+  const kick = foot(content.caption, main);
+  const footT = foot(content.subhead, main);
+  const unit = clean(content.unit);
+  const splittable = unit !== "" && main.endsWith(unit)
+    && Array.from(main).length - Array.from(unit).length >= 1 && Array.from(unit).length <= 2;
+  const shown = splittable ? main.slice(0, main.length - unit.length) : main;
+  const size = Math.min(280, Math.floor(760 / Math.max(1, Array.from(shown).length)));
+  const midY = 365 + size * 0.36;
+  return (
+    <g>
+      {kick && <VText x={110} y={120} size={26} fill={INK} text={kick} style={style} anchor="start" spacing={6} opacity={0.7} motion="m-fade-up" />}
+      <rect x={-40} y={250} width={1360} height={230} fill={INDIGO} data-anim data-motion="m-slide-right" />
+      <VText x={640} y={midY} size={size} fill={PAPER} text={shown} style={style} motion="m-scale-soft" />
+      {splittable && <VText x={640 + (Array.from(shown).length * size) / 2 + 36} y={midY} size={40} fill={VERMILION} text={unit} style={style} anchor="start" motion="m-fade-up" />}
+      {footT && <VText x={1170} y={620} size={22} fill={INK} text={footT} style={style} anchor="end" opacity={0.55} motion="m-fade-up" />}
+      <rect x={110} y={560} width={72} height={4} fill={VERMILION} data-anim data-motion="m-bar-sweep" />
     </g>
   );
 };
@@ -163,7 +212,8 @@ const v2NumGiant: Board = ({ content, style }) => {
 const v2QuoteCard: Board = ({ content, style }) => {
   const rows = wrap(stripPunct(content.headline), 3);
   const size = Math.min(68, fit(rows[0] ?? "", 880));
-  const from = clean(content.caption) || clean(content.subhead);
+  // 出处只取 subhead：caption 是旁白第二分句、已被正文包住，拿来做出处会重复
+  const from = clean(content.subhead);
   return (
     <g>
       <rect x={120} y={200} width={7} height={150} fill={VERMILION} data-anim data-motion="m-fade-up" />
@@ -179,14 +229,18 @@ const v2QuoteCard: Board = ({ content, style }) => {
 };
 
 /* ── 05 清单刻度（m-E17）──────────────────────────────────────────
-   左侧大标 + 右列条目（朱红小方块为记），条目间细线。 */
+   左侧大标 + 右列条目（朱红小方块为记），条目间细线。
+   防重复：hero 取最长分句（信息主力），右列只放其余分句 —— 整句与分句
+   并排渲染会让同一句话在画面里出现两遍（02 语料印相最丑的一类帧）。 */
 const v2ListMarks: Board = ({ content, style }) => {
-  const items = content.bullets.map(clean).filter(Boolean).slice(0, 5);
+  const clauses = content.bullets.map(clean).filter(Boolean);
+  const hi = clauses.reduce((best, c, i) => (displayWidth(c) > displayWidth(clauses[best]!) ? i : best), 0);
+  const h = clauses.length > 0 ? clauses[hi]! : stripPunct(content.headline);
+  const items = clauses.filter((_, i) => i !== hi).slice(0, 4);
   const step = items.length > 0 ? Math.min(96, 500 / items.length) : 96;
-  const h = stripPunct(content.headline);
   return (
     <g>
-      <VText x={110} y={320} size={Math.min(88, fit(h, 620))} fill={INK} text={h} style={style} anchor="start" motion="m-char-rise" />
+      <VText x={110} y={320} size={fitW(h, 540, 88)} fill={INK} text={h} style={style} anchor="start" motion="m-char-rise" />
       <rect x={112} y={366} width={64} height={5} fill={VERMILION} />
       {items.map((it, i) => (
         <g key={i} data-anim data-motion="m-fade-up">
@@ -231,7 +285,7 @@ const v2Chapter: Board = ({ content, style }) => {
     <g>
       <VText x={640} y={150} size={26} fill={INK} text={String(content.beat).padStart(2, "0")} style={style} spacing={8} opacity={0.6} motion="m-fade-up" />
       <rect x={560} y={186} width={160} height={1.5} fill={INK} opacity={0.4} />
-      <VLines rows={rows} x={170} y0={400} size={Math.min(112, fit(rows[0] ?? "", 940))} fill={INK} style={style} motion="m-char-rise" />
+      <VLines rows={rows} x={170} y0={400} size={fitW(rows[0] ?? "", 930, 112)} fill={INK} style={style} motion="m-char-rise" />
       <rect x={590} y={rows.length > 1 ? 590 : 540} width={100} height={5} fill={VERMILION} data-anim data-motion="m-bar-sweep" />
     </g>
   );
@@ -273,6 +327,7 @@ const v2Duo: Board = ({ content, style }) => {
    暗底 + 字后一团暖光晕（多层半透明圆，不用 filter）+ 单行大字。 */
 const v2DarkWord: Board = ({ content, style }) => {
   const t = stripPunct(content.headline);
+  const footT = foot(content.caption, t);
   return (
     <g>
       <g data-anim data-motion="m-glow">
@@ -281,8 +336,8 @@ const v2DarkWord: Board = ({ content, style }) => {
         <circle cx={640} cy={340} r={130} fill={EMBER} opacity={0.1} />
       </g>
       <VText x={640} y={390} size={fit(t, 150)} fill={CREAM} text={t} style={style} motion="m-char-rise" />
-      {clean(content.caption) && (
-        <VText x={640} y={640} size={26} fill={CREAM} text={clean(content.caption)} style={style} opacity={0.5} spacing={4} motion="m-fade-up" />
+      {footT && (
+        <VText x={640} y={640} size={26} fill={CREAM} text={footT} style={style} opacity={0.5} spacing={4} motion="m-fade-up" />
       )}
     </g>
   );
@@ -314,7 +369,8 @@ const v2Strata: Board = ({ content, style }) => {
 const v2Balance: Board = ({ content, style }) => {
   const L = clean(content.left);
   const R = clean(content.right);
-  const tilt = Array.from(L).length >= Array.from(R || "0").length ? -14 : 14;
+  // 文本长的一侧垂得更低（重的下沉）—— 反过来会像翘翘板失灵
+  const tilt = Array.from(L).length >= Array.from(R || "0").length ? 14 : -14;
   const beamY = 300;
   return (
     <g>
@@ -333,6 +389,8 @@ const v2Balance: Board = ({ content, style }) => {
 /* ── 13 尘埃与主体（m-E19 / m-B09）────────────────────────────────
    暗底 + 确定性尘埃点阵（hash 伪随机，同输入同画面）+ 中央大字。 */
 const v2Dust: Board = ({ content, style }) => {
+  const t = stripPunct(content.headline);
+  const footT = foot(content.caption, t);
   const h = (i: number, j: number, k: number): number => {
     const x = Math.sin(i * 127.1 + j * 311.7 + k * 74.7) * 43758.5453;
     return x - Math.floor(x);
@@ -355,8 +413,8 @@ const v2Dust: Board = ({ content, style }) => {
       <g data-anim data-motion="m-drift-slow">{dots}</g>
       <VText x={640} y={380} size={fit(stripPunct(content.headline), 120)} fill={CREAM}
         text={stripPunct(content.headline)} style={style} motion="m-char-rise" />
-      {clean(content.caption) && (
-        <VText x={640} y={620} size={26} fill={CREAM} text={clean(content.caption)} style={style} opacity={0.5} spacing={4} motion="m-fade-up" />
+      {footT && (
+        <VText x={640} y={620} size={26} fill={CREAM} text={footT} style={style} opacity={0.5} spacing={4} motion="m-fade-up" />
       )}
     </g>
   );
@@ -368,6 +426,7 @@ export const V2_BOARDS: Record<string, Board> = {
   "v2:split-blocks": v2SplitBlocks,
   "v2:ink-line": v2InkLine,
   "v2:num-giant": v2NumGiant,
+  "v2:num-band": v2NumBand,
   "v2:quote-card": v2QuoteCard,
   "v2:list-marks": v2ListMarks,
   "v2:vertical": v2Vertical,
@@ -399,6 +458,7 @@ export const V2_LAYOUTS: Layout[] = [
   B("split-blocks", "分屏色块", "compare", { note: "left/right 对照，靛蓝色块 2/3 出血", enter: ["m-slide-right", "m-fade-up"] }),
   B("ink-line", "情绪一笔", "statement", { note: "大字 + 底部墨线", enter: ["m-char-rise", "m-stroke-draw"] }),
   B("num-giant", "巨号数字", "number", { note: "需要 1 个可溯源数字", needs: 1, enter: ["m-scale-soft", "m-bar-sweep"] }),
+  B("num-band", "数字色带", "number", { note: "需要 1 个可溯源数字", needs: 1, enter: ["m-slide-right", "m-scale-soft"] }),
   B("quote-card", "引语卡", "quote", { note: "金句 / 设问", enter: ["m-char-rise", "m-fade-up"] }),
   B("list-marks", "清单刻度", "list", { note: "bullets ≥ 3", enter: ["m-fade-up"] }),
   B("vertical", "竖排大字", "statement", { note: "短句（≤9 字）最佳", enter: ["m-fade-up", "m-scale-soft"] }),

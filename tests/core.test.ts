@@ -96,6 +96,21 @@ describe("trace", () => {
   it("没有量纲数字时才回退到裸数字", () => {
     expect(extractNumbers("第3步").map((n) => n.raw)).toEqual(["3"]);
   });
+  it("中文数字：序数（第一次/第七次/第二天）", () => {
+    expect(extractNumbers("我爸今年六十七，第一次主动说想学用手机").map((n) => n.raw)).toEqual(["第一次"]);
+    expect(extractNumbers("第七次，他自己退回去了")[0]!.value).toBe(7);
+  });
+  it("中文数字：量纲（四十秒/半个小时），值走 cn2num", () => {
+    expect(extractNumbers("一条能说四十秒")[0]).toEqual({ raw: "四十秒", value: 40, unit: "秒" });
+    expect(extractNumbers("我教了你半个小时")[0]!.value).toBe(0.5);
+  });
+  it("语气 filler 不当数字（念一遍/一条语音/那年）", () => {
+    expect(extractNumbers("错一次，他就自己念一遍")).toHaveLength(0);
+    expect(extractNumbers("一条能说四十秒").map((n) => n.raw)).toEqual(["四十秒"]);
+  });
+  it("序数与量纲不重叠计数（第七次 ≠ 七次）", () => {
+    expect(extractNumbers("第七次，他自己退回去了")).toHaveLength(1);
+  });
   it("溯源判定", () => {
     expect(isTraceable("85%", "转化率提升了85%！")).toBe(true);
     expect(isTraceable("90%", "转化率提升了85%！")).toBe(false);

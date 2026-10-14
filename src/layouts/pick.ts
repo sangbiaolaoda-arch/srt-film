@@ -200,13 +200,33 @@ function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?:
   const base = usable.length > 0 ? usable : pool0;
   const wanted = preferredGroups(content, style);
   if (requireFirst && wanted.length > 0 && !base.some((l) => l.group === wanted[0]!)) return undefined;
-  const groups = wanted.filter((g) => base.some((l) => l.group === g));
+  // 去重：preferredGroups 会重复推同一组（如 poster-focus 先因数字、后因兜底），
+  // 排名表被后写覆盖会让优先级颠倒（geo 被推到 focus 后面）。
+  const groups = [...new Set(wanted.filter((g) => base.some((l) => l.group === g)))];
   if (groups.length === 0) return undefined;
-  const group = groups[(content.beat - 1) % groups.length]!;
-  const poolG = base.filter((l) => l.group === group && l.id !== prevId);
-  const fallback = base.filter((l) => l.group === group);
-  const finalPool = interleaveFlagship(poolG.length > 0 ? poolG : fallback);
-  return finalPool[(content.beat - 1) % finalPool.length]!;
+  // 排名轮换，不按组硬分区取模：单组单板式时（list→list-marks、bookend→chapter），
+  // 组内取模会让该组一被轮中就原样复现 —— 02 语料 16 拍因此只看到 5 套板式。
+  // 改为全池按组优先级排序后整池轮转：优先级变成次序而不是闸门，
+  // 重复周期从「组内长度」拉到「池长」，首选组的板式仍排在轮转最前面。
+  const rank = new Map<Group, number>();
+  groups.forEach((g, i) => rank.set(g, i));
+  const ranked = [...base].sort(
+    (a, b) => (rank.get(a.group) ?? 99) - (rank.get(b.group) ?? 99) || a.id.localeCompare(b.id),
+  );
+  // 数据拍（number/chart 首选）：数字主角是这一拍的内容主体（旁白里真有数量词），
+  // 在首选组内轮转 —— 全池轮转会把 13 套池里的数字板式饿死
+  // （02 语料一半拍有数量词，旧轮转下数字板式零命中）。
+  const head = groups[0]!;
+  if (head === "number" || head === "chart") {
+    const headPool = interleaveFlagship(ranked.filter((l) => l.group === head && l.id !== prevId));
+    if (headPool.length > 0) return headPool[(content.beat - 1) % headPool.length]!;
+  }
+  // 其余拍：全池排名轮换。池长稳定（不因避重缩池），避重只做index 位移 ——
+  // 缩池会让 (beat-1)%len 整体漂移，rank 0 的板式被随机饿死。
+  const finalPool = interleaveFlagship(ranked);
+  let idx = (content.beat - 1) % finalPool.length;
+  if (finalPool[idx]!.id === prevId) idx = (idx + 1) % finalPool.length;
+  return finalPool[idx]!;
 }
 
 /**

@@ -18,22 +18,77 @@ const PATTERNS: RegExp[] = [
 // 兜底层：两层都空时才用，避免把「2024年」「第3步」里的数字当成数据
 const BARE = /(\d+(?:\.\d+)?)/g;
 
-function scan(text: string, pat: RegExp, seen: Set<string>, out: NumToken[]): void {
-  pat.lastIndex = 0;
-  let m: RegExpExecArray | null;
-  while ((m = pat.exec(text))) {
-    if (seen.has(m[0])) continue;
-    seen.add(m[0]);
-    out.push({ raw: m[0].trim(), value: Number(m[1]), unit: m[2] });
+// 中文数字层：对白语料（如 02 号）的数字全是「六十七」「第七次」「四十秒」，
+// 只认阿拉伯数字时整支语料零命中 —— 数字主角板式（num-giant）永远不出场。
+// 序数层（第一次/第七次/第二天）先跑，unit 不收量词（「第」字已表达次序）。
+const CN_DIGITS = "零一二两三四五六七八九十百千万半";
+const CN_ORD = new RegExp(`第([${CN_DIGITS}]+)(次|遍|回|趟|天|年|个|步)`, "g");
+// 量纲层只收真测量词；「次/遍/条/句」不收 ——「念一遍」「一条语音」是语气 filler 不是数据
+const CN_QTY = new RegExp(`([${CN_DIGITS}]+)(岁|秒钟|秒|分钟|个小时|小时|天|年|步|楼|层|块|元|倍|个字)`, "g");
+
+/** 中文数字 → 数值（覆盖到万；「半」= 0.5）。 */
+export function cn2num(s: string): number {
+  if (s === "半") return 0.5;
+  const digits: Record<string, number> = { 零: 0, 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  const units: Record<string, number> = { 十: 10, 百: 100, 千: 1000, 万: 10000 };
+  let total = 0;
+  let section = 0;
+  let number = 0;
+  for (const ch of s) {
+    if (ch in digits) number = digits[ch]!;
+    else if (ch in units) {
+      const u = units[ch]!;
+      section += (number || 1) * u;
+      number = 0;
+      if (u >= 10000) { total += section; section = 0; }
+    }
   }
+  return total + section + number;
 }
 
 export function extractNumbers(text: string): NumToken[] {
   const seen = new Set<string>();
+  const spans: Array<[number, number]> = [];
   const out: NumToken[] = [];
-  for (const pat of PATTERNS) scan(text, pat, seen, out);
-  if (out.length === 0) scan(text, BARE, seen, out);
+  for (const pat of PATTERNS) scan(text, pat, seen, out, spans);
+  scanCn(text, CN_ORD, seen, out, spans);
+  scanCn(text, CN_QTY, seen, out, spans);
+  if (out.length === 0) scan(text, BARE, seen, out, spans);
   return out;
+}
+
+function overlaps(spans: Array<[number, number]>, s: number, e: number): boolean {
+  return spans.some(([a, b]) => s < b && e > a);
+}
+
+function scan(text: string, pat: RegExp, seen: Set<string>, out: NumToken[], spans: Array<[number, number]>): void {
+  pat.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = pat.exec(text))) {
+    if (seen.has(m[0])) continue;
+    const s = m.index;
+    const e = s + m[0].length;
+    if (overlaps(spans, s, e)) continue;
+    seen.add(m[0]);
+    spans.push([s, e]);
+    out.push({ raw: m[0].trim(), value: Number(m[1]), unit: m[2] });
+  }
+}
+
+/** 中文数字扫描：value 走 cn2num；ordinal 的 unit 不收（「第」字已表达次序）。 */
+function scanCn(text: string, pat: RegExp, seen: Set<string>, out: NumToken[], spans: Array<[number, number]>): void {
+  const withUnit = pat === CN_QTY;
+  pat.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = pat.exec(text))) {
+    if (seen.has(m[0])) continue;
+    const s = m.index;
+    const e = s + m[0].length;
+    if (overlaps(spans, s, e)) continue;
+    seen.add(m[0]);
+    spans.push([s, e]);
+    out.push({ raw: m[0].trim(), value: cn2num(m[1]!), unit: withUnit ? m[2] : undefined });
+  }
 }
 
 // 门禁：画面数字必须可溯源到拍文本（或覆写时标注的原文）
