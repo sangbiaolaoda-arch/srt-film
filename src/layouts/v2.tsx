@@ -592,7 +592,7 @@ const v2AxisColumns: Board = ({ content, beat, profile: p }) => {
             <g key={f}>
               <line x1={x0 - 14} y1={baseY - plotH * f} x2={x1} y2={baseY - plotH * f}
                 stroke={p.tone.hairline} strokeWidth={1} opacity={f === 0 ? 1 : 0.55} />
-              <VNum x={x0 - 24} y={baseY - plotH * f + 7} size={18} fill={p.ink}
+              <VNum x={x0 - 24} y={baseY - plotH * f + 7} size={20} fill={p.ink}
                 text={tickLabel(max * f)} p={p} anchor="end" opacity={0.6} />
             </g>
           ))}
