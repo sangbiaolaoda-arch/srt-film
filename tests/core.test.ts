@@ -121,6 +121,27 @@ describe("trace", () => {
     expect(extractNumbers("错一次，他就自己念一遍")).toHaveLength(0);
     expect(extractNumbers("一条能说四十秒").map((n) => n.raw)).toEqual(["四十秒"]);
   });
+  it("序列指代不成度量（下一步/这一步/每层不是测量值）", () => {
+    // 01 语料拍 03「第一步…这一步叫 DNS 查询」实测：「这一步」曾漏进度量层，
+    // 图表风把该拍选成数字巨号板 —— 序列指代必须挡在量纲层之外。
+    expect(extractNumbers("第一步，把这串字母翻译成 IP 地址，这一步叫 DNS 查询").map((t) => `${t.raw}/${t.kind}`))
+      .toEqual(["第一步/ordinal"]);
+    expect(extractNumbers("走到下一步")).toHaveLength(0);
+    expect(extractNumbers("每层楼都有标记")).toHaveLength(0);
+    expect(extractNumbers("同一层楼")).toHaveLength(0);
+    // 真测量词不受影响：「六十七岁」照旧是度量值
+    expect(extractNumbers("我爸今年六十七岁")[0]!.kind).toBe("measure");
+  });
+  it("版本/型号不是度量值（TLS 1.3 / iOS 17 / HTML5）", () => {
+    // 01 语料拍 08「TLS 1.3 只需要 1 个往返」实测：版本号 1.3 曾进兜底层，
+    // 坐标柱画出 1.3 vs 1 的量纲崩坏。标识符上下文的数字整块挡掉。
+    expect(extractNumbers("TLS 1.3 只需要 1 个往返").map((n) => n.raw)).toEqual(["1"]);
+    expect(extractNumbers("iOS 17 也能跑")).toHaveLength(0);
+    expect(extractNumbers("HTML5 早就普及了")).toHaveLength(0);
+    // 中文语境里的裸数字与「第3步」不受影响
+    expect(extractNumbers("有 3 种办法").map((n) => n.raw)).toEqual(["3"]);
+    expect(extractNumbers("第3步").map((n) => n.raw)).toEqual(["3"]);
+  });
   it("序数与量纲不重叠计数（第七次 ≠ 七次）", () => {
     expect(extractNumbers("第七次，他自己退回去了")).toHaveLength(1);
   });

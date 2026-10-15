@@ -467,6 +467,206 @@ const v2Timeline: Board = ({ content, profile: p }) => {
   );
 };
 
+/* ══ 图表动态图形风构图（白底 + 测量网格 + 等宽数字 + 坐标轴语言）══════════
+   三套板共用同一组图形语法 token：MeasGrid（母版测量网格）、VNum（等宽数字）、
+   p.axis 门控的坐标轴与刻度。轴/刻度上的数字全部来自本拍真实数据
+   （max 由 numberTokens 现算），不放装饰性假刻度 —— 图表风的可信度建立在
+   「屏幕上每个数都溯源」上，与旁白门禁同一条纪律。 */
+
+/** 图表风母版测量网格：与 decor.tsx 图表风分支同参数（40px 细 + 200px 粗）。
+ *  v2 板走 custom 通路不过 DecorLayer（render.tsx 对 custom 跳过 decor 层），
+ *  网格由板内自绘 —— 母版签名不因渲染通路不同而丢失。pattern id 带拍号：
+ *  同屏多拍共存同一棵 DOM（画廊/对照样片），重复 id 会全局解析到第一层。 */
+function MeasGrid({ beat, p }: { beat: number; p: StyleProfile }): JSX.Element | null {
+  if (!p.grid) return null;
+  return (
+    <g opacity={0.55}>
+      <defs>
+        <pattern id={`v2-grid-${beat}`} width={40} height={40} patternUnits="userSpaceOnUse">
+          <path d="M40 0 L0 0 L0 40" fill="none" stroke={p.tone.hairline} strokeWidth={1} />
+        </pattern>
+        <pattern id={`v2-grid5-${beat}`} width={200} height={200} patternUnits="userSpaceOnUse">
+          <path d="M200 0 L0 0 L0 200" fill="none" stroke={p.tone.hairline} strokeWidth={1.6} />
+        </pattern>
+      </defs>
+      <rect x={0} y={0} width={1280} height={720} fill={`url(#v2-grid-${beat})`} />
+      <rect x={0} y={0} width={1280} height={720} fill={`url(#v2-grid5-${beat})`} />
+    </g>
+  );
+}
+
+/** 等宽数字文本：图表风的数字签名（fontNum）。刻度、图号、柱值都走它。 */
+function VNum(props: {
+  x: number; y: number; size: number; fill: string; text: string; p: StyleProfile;
+  anchor?: "start" | "middle" | "end"; opacity?: number; motion?: string;
+}): JSX.Element {
+  return (
+    <text
+      x={props.x} y={props.y} fontSize={props.size} fill={props.fill}
+      fontFamily={props.p.fontNum} fontWeight={500} letterSpacing={1}
+      textAnchor={props.anchor ?? "start"} opacity={props.opacity}
+      data-anim={props.motion ? true : undefined} data-motion={props.motion}
+    >
+      {props.text}
+    </text>
+  );
+}
+
+/** 刻度标签格式：≥10 取整，<10 留一位小数 —— 真实值的可读形式，不四舍五入出假精度。 */
+function tickLabel(v: number): string {
+  if (v === 0) return "0";
+  return v >= 10 ? String(Math.round(v)) : v.toFixed(1);
+}
+
+/* ── 14 数据巨号（number 组，图表风的数字主角）──────────────────────
+   等宽巨号数字 + 数字正下方一条测量尺（端 ticks + 居中标注）。
+   尺量的是数字本身的宽度 —— 技术制图的尺寸线语汇，不是假数据轴。 */
+const v2DataGiant: Board = ({ content, beat, profile: p }) => {
+  const n = clean(content.bignum) || (content.numbers[0] !== undefined ? String(content.numbers[0]) : "");
+  const main = n || stripPunct(content.headline);
+  const kick = foot(content.caption, main) || foot(content.subhead, main);
+  const unit = clean(content.unit);
+  const splittable = unit !== "" && main.endsWith(unit)
+    && Array.from(main).length - Array.from(unit).length >= 1 && Array.from(unit).length <= 2;
+  const shown = splittable ? main.slice(0, main.length - unit.length) : main;
+  const isNum = n !== "";
+  const size = Math.min(280, Math.floor(940 / Math.max(1, Array.from(shown).length)));
+  const x0 = 120;
+  const baseY = 470;
+  // 等宽数字近似宽：JetBrains Mono  advance ≈ 0.6em；非等宽回退按 0.62 估，只用于定位。
+  const numW = Array.from(shown).length * size * (p.monoNum ? 0.6 : 0.62);
+  return (
+    <g>
+      <MeasGrid beat={beat} p={p} />
+      {kick && <VNum x={x0} y={120} size={22} fill={p.ink} text={kick} p={p} opacity={0.7} motion="m-fade-up" />}
+      <VNum x={1170} y={120} size={20} fill={p.ink} text={`NO.${String(beat).padStart(2, "0")}`} p={p} anchor="end" opacity={0.5} motion="m-fade-up" />
+      {isNum ? (
+        <VNum x={x0} y={baseY} size={size} fill={p.ink} text={shown} p={p} motion="m-scale-soft" />
+      ) : (
+        <VText x={x0} y={baseY} size={size} fill={p.ink} text={shown} profile={p} anchor="start" motion="m-scale-soft" />
+      )}
+      {splittable && (
+        <VNum x={x0 + numW + 28} y={baseY} size={46} fill={p.accent} text={unit} p={p} motion="m-fade-up" />
+      )}
+      {/* 测量尺：数字宽度即测量对象，尺寸线语汇。单位已跟在数字旁时不再重复标注 */}
+      <g data-anim data-motion="m-bar-sweep">
+        <line x1={x0} y1={556} x2={x0 + numW} y2={556} stroke={p.accent} strokeWidth={2} />
+        <line x1={x0} y1={544} x2={x0} y2={568} stroke={p.accent} strokeWidth={2} />
+        <line x1={x0 + numW} y1={544} x2={x0 + numW} y2={568} stroke={p.accent} strokeWidth={2} />
+      </g>
+      {unit && !splittable && <VNum x={x0 + numW / 2} y={604} size={20} fill={p.ink} text={unit} p={p} anchor="middle" opacity={0.55} />}
+      <circle cx={1170} cy={640} r={5} fill={p.accent} data-anim data-motion="m-tick-pulse" />
+    </g>
+  );
+};
+
+/* ── 15 坐标柱（chart 组，图表风的图形主角）────────────────────────
+   竖柱 + 基线 + 左侧真实值刻度（max 由本拍度量值现算）。柱顶标 raw 原文，
+   柱下只放印刷序号 —— 旁白里没有项目名，硬造标签就是编内容。 */
+const v2AxisColumns: Board = ({ content, beat, profile: p }) => {
+  const nums = (content.numberTokens ?? [])
+    .filter((t) => t.kind === "measure" && Number.isFinite(t.value) && t.value > 0)
+    .slice(0, 4);
+  const joined = nums.map((t) => t.raw).join(" ");
+  const kick = foot(content.caption, joined);
+  const footT = foot(content.subhead, joined);
+  const max = nums.reduce((m, t) => Math.max(m, t.value), 0);
+  const baseY = 560;
+  const plotH = 300;
+  const x0 = 230;
+  const x1 = 1140;
+  const slot = (x1 - x0) / Math.max(1, nums.length);
+  const barW = Math.min(120, slot * 0.52);
+  return (
+    <g>
+      <MeasGrid beat={beat} p={p} />
+      {kick && <VNum x={110} y={120} size={22} fill={p.ink} text={kick} p={p} opacity={0.7} motion="m-fade-up" />}
+      <VNum x={1170} y={120} size={20} fill={p.ink} text={`N=${nums.length}`} p={p} anchor="end" opacity={0.5} />
+      {nums.length === 0 ? (
+        <VText x={170} y={400} size={Math.min(72, fit(stripPunct(content.headline), 900))}
+          fill={p.ink} text={stripPunct(content.headline)} profile={p} anchor="start" motion="m-char-rise" />
+      ) : (
+        <>
+          {/* y 轴刻度：0 / ¼ / ½ / ¾ / max 五档，标签是真实值 */}
+          {p.axis && [0, 0.25, 0.5, 0.75, 1].map((f) => (
+            <g key={f}>
+              <line x1={x0 - 14} y1={baseY - plotH * f} x2={x1} y2={baseY - plotH * f}
+                stroke={p.tone.hairline} strokeWidth={1} opacity={f === 0 ? 1 : 0.55} />
+              <VNum x={x0 - 24} y={baseY - plotH * f + 7} size={18} fill={p.ink}
+                text={tickLabel(max * f)} p={p} anchor="end" opacity={0.6} />
+            </g>
+          ))}
+          {/* 基线 */}
+          <line x1={x0 - 14} y1={baseY} x2={x1} y2={baseY} stroke={p.ink} strokeWidth={2} data-anim data-motion="m-bar-sweep" />
+          {nums.map((t, i) => {
+            const h = Math.max(6, (t.value / max) * plotH);
+            const cx = x0 + slot * i + slot / 2;
+            const fill = i === 0 ? p.accent : p.ink;
+            return (
+              <g key={i}>
+                <rect x={cx - barW / 2} y={baseY - h} width={barW} height={h} rx={p.radius}
+                  fill={fill} opacity={i === 0 ? 1 : 0.72} data-anim data-motion="m-bar-sweep" />
+                <VNum x={cx} y={baseY - h - 16} size={34} fill={fill} text={t.raw} p={p} anchor="middle" motion="m-fade-up" />
+                <VNum x={cx} y={baseY + 32} size={18} fill={p.ink} text={String(i + 1).padStart(2, "0")} p={p} anchor="middle" opacity={0.5} />
+              </g>
+            );
+          })}
+        </>
+      )}
+      {footT && <VNum x={1170} y={640} size={20} fill={p.ink} text={footT} p={p} anchor="end" opacity={0.55} motion="m-fade-up" />}
+    </g>
+  );
+};
+
+/* ── 16 测量注记（timeline 组，图表风的文字板）─────────────────────
+   四角定位标记 + 等宽图号（FIG.拍号，真实数据）+ 引线锚点 + 底部通长尺。
+   文字拍也保留图表风的图形语法 —— 全列一致性不靠「偶尔有张图」。 */
+const v2MeasureNote: Board = ({ content, beat, profile: p }) => {
+  const t = stripPunct(content.headline);
+  const rows = wrap(t, 3);
+  const size = Math.min(64, fit(rows[0] ?? "", 900));
+  const items = content.bullets.map(clean).filter(Boolean).slice(0, rows.length <= 2 ? 3 : 0);
+  const itemsY = 330 + rows.length * size * 1.42 + 26;
+  const cap = foot(content.caption, rows.join("") + items.join(""));
+  return (
+    <g>
+      <MeasGrid beat={beat} p={p} />
+      {/* 四角定位标记：印刷制版的 registration marks */}
+      <g stroke={p.tone.hairline} strokeWidth={1.2} fill="none">
+        {([[64, 64], [1216, 64], [64, 640], [1216, 640]] as Array<[number, number]>).map(([cx, cy], i) => (
+          <g key={i}>
+            <line x1={cx - 10} y1={cy} x2={cx + 10} y2={cy} />
+            <line x1={cx} y1={cy - 10} x2={cx} y2={cy + 10} />
+            <circle cx={cx} cy={cy} r={4} />
+          </g>
+        ))}
+      </g>
+      <VNum x={110} y={120} size={20} fill={p.ink} text={`FIG.${String(beat).padStart(2, "0")}`} p={p} opacity={0.6} motion="m-fade-up" />
+      {/* 引线 + 锚点：从锚点引线到文字块 */}
+      <g data-anim data-motion="m-stroke-draw">
+        <line x1={110} y1={172} x2={152} y2={252} stroke={p.accent} strokeWidth={1.5} />
+        <circle cx={110} cy={172} r={5} fill={p.accent} />
+      </g>
+      <VLines rows={rows} x={152} y0={330} size={size} fill={p.ink} profile={p} motion="m-char-rise" />
+      {items.map((it, i) => (
+        <g key={i} data-anim data-motion="m-fade-up">
+          <rect x={154} y={itemsY + i * 44 - 12} width={8} height={8} fill={p.accent} />
+          <VText x={178} y={itemsY + i * 44} size={26} fill={p.ink} text={it} profile={p} anchor="start" opacity={0.8} />
+        </g>
+      ))}
+      {cap && <VNum x={1170} y={660} size={18} fill={p.ink} text={cap} p={p} anchor="end" opacity={0.5} />}
+      {/* 底部通长尺：11 等分 ticks（ BeatMark 在 y≈696，尺压在 678 不撞） */}
+      <g>
+        <line x1={110} y1={678} x2={1170} y2={678} stroke={p.ink} strokeWidth={1} opacity={0.7} />
+        {Array.from({ length: 11 }, (_, i) => (
+          <line key={i} x1={110 + i * 106} y1={i % 5 === 0 ? 672 : 676} x2={110 + i * 106} y2={684}
+            stroke={p.ink} strokeWidth={1} opacity={0.6} />
+        ))}
+      </g>
+    </g>
+  );
+};
+
 /* ══ 注册表 ═══════════════════════════════════════════════════════ */
 
 export const V2_BOARDS: Record<string, Board> = {
@@ -486,6 +686,9 @@ export const V2_BOARDS: Record<string, Board> = {
   "v2:strata": v2Strata,
   "v2:balance": v2Balance,
   "v2:dust": v2Dust,
+  "v2:data-giant": v2DataGiant,
+  "v2:axis-columns": v2AxisColumns,
+  "v2:measure-note": v2MeasureNote,
 };
 
 /** 板式条目构造：slots 只是「需要什么内容」的资格声明（渲染走 custom 场景，槽位被绕过）。 */
@@ -525,4 +728,13 @@ export const V2_LAYOUTS: Layout[] = [
   B("strata", "水平色带", "poster-field", { style: "flat-vector", note: "氛围场 + 大字，配缓推", enter: ["m-slide-right", "m-scale-soft"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "particles-converge", fxAccent: "accent", fxStrength: 0.8 }),
   B("balance", "天平", "poster-geo", { style: "flat-vector", note: "权衡对照", enter: ["m-stroke-draw", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.14 } }),
   B("dust", "尘埃与主体", "poster-focus", { style: "flat-vector", note: "氛围定场，配缓推", enter: ["m-drift-slow", "m-char-rise"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "particles-vortex", fxAccent: "steel", fxStrength: 0.8 }),
+  // 图表动态图形风三件套：母版网格 + 等宽数字 + 坐标轴语言。机位推得比另外两系轻
+  // （motionPace 0.9）—— 测量画面经不起大幅度位移，尺会抖。
+  // data-giant / axis-columns 都带 chart 资格槽（needs 按**度量值**数，见 pick.ts
+  // eligible 注释）：span「十年」不是可画的量，光板 numbers.length 会把「十年」
+  // 渲染成光秃秃的「10」—— 量纲崩坏。headline 槽并存：hookCover 门禁认文字槽，
+  // 数字板的「主角」是数字不是文字，没文字槽会把短句拍误判为小主槽版式。
+  B("data-giant", "数据巨号", "number", { style: "chart-motion", note: "图表风巨号数字：等宽数字 + 测量尺", needs: 1, slots: [{ k: "headline", box: [1, 1, 10, 6] }, { k: "chart", box: [1, 1, 10, 6], needs: 1 }], enter: ["m-scale-soft", "m-bar-sweep"], camera: { scaleFrom: 1.0, scaleTo: 1.06 } }),
+  B("axis-columns", "坐标柱", "chart", { style: "chart-motion", note: "图表风柱图：基线 + 真实值刻度", needs: 2, slots: [{ k: "headline", box: [1, 1, 10, 6] }, { k: "chart", box: [1, 1, 10, 6], needs: 2 }], enter: ["m-bar-sweep", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.06 } }),
+  B("measure-note", "测量注记", "timeline", { style: "chart-motion", note: "图表风文字板：定位标记 + 引线 + 等宽图号", enter: ["m-fade-up", "m-stroke-draw"], camera: { scaleFrom: 1.0, scaleTo: 1.06 } }),
 ];

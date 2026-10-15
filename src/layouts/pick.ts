@@ -188,8 +188,13 @@ function preferredGroups(content: RenderContent, style: Style): Group[] {
     return out;
   }
   if (style === "chart-motion") {
-    if (content.numbers.length >= 1) out.push("chart", "number");
-    out.push("chart", "number", "timeline", "image", "bookend");
+    // 与编辑风同构，但数字组只认**度量值**：span「十年」不是可画的量，图表风的
+    // 数字板（data-giant）资格按度量值门禁 —— 头组若推 number 而池里唯一的 number
+    // 板不合格，requireFirst 会判负、整拍掉回旧 catalog（span 拍实测掉到
+    // sp-num-giant，把「十年」渲成光秃秃的「10」）。
+    if (measureCount(content) >= 2) out.push("chart");
+    if (measureCount(content) >= 1) out.push("number");
+    out.push("timeline", "image", "bookend", "statement");
     return out;
   }
   if (/[?？]$|怎么|为什么|如何/.test(text)) out.push("quote", "statement");

@@ -25,8 +25,8 @@ export interface PlanResult {
   styles: string[];
 }
 
-/** 构建管线：返回拍计划与门禁问题（问题非空则不播放）。 */
-export function plan(srt: string, ovRaw: string): PlanResult {
+/** 构建管线：返回拍计划与门禁问题（问题非空则不播放）。ovRaw 缺省视为无覆写。 */
+export function plan(srt: string, ovRaw = ""): PlanResult {
   const ov: OverrideMap = ovRaw.trim() ? (JSON.parse(ovRaw) as OverrideMap) : {};
   const beats = planBeats(parseSRT(srt));
   const problems: string[] = [];
