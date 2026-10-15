@@ -9,4 +9,6 @@ export interface Shot {
   start: number;
   end: number;
   tlStart?: number;
+  /** 本拍来自哪些 SRT cue（溯源用，对应 Render Plan 的 sourceCueIds） */
+  cueIds?: number[];
 }

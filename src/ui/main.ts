@@ -4,6 +4,7 @@
 
 import { plan, type PlanResult } from "../core/plan";
 import { validateSRT, decodeSrtBytes } from "../core/srt-validate";
+import { toRenderPlan, serializeRenderPlan } from "../core/render-plan";
 import { buildStage, type Shot, type StageHandle } from "./stage";
 import { exportMp4 } from "../export/mp4";
 import "../styles/main.css";
@@ -30,7 +31,7 @@ type ReportLine = { text: string; kind: ReportKind };
 
 let stage: StageHandle | null = null;
 let shots: Shot[] = [];
-let planStyles: string[] = [];
+let lastPlan: PlanResult | null = null;
 let raf = 0;
 let playing = false;
 let exporting = false;
@@ -133,8 +134,8 @@ btnLoad.addEventListener("click", () => {
     log("规划门禁未通过，已阻止预览");
     return;
   }
-  planStyles = result.styles;
   shots = result.shots;
+  lastPlan = result;
 
   // 阶段 4：预览
   setStep("plan", "done");
@@ -249,25 +250,15 @@ btnExport.addEventListener("click", async () => {
 
 btnCancel.addEventListener("click", () => exportCtl?.abort());
 
-// 可复现产物：SRT + 覆写 + 镜头计划 + 运行日志，存为工程 JSON。
+// 可复现产物：导出 schema 背书的 RenderPlan（SRT + 镜头计划 + 画布 + 导出配置）。
 btnSave.addEventListener("click", () => {
-  if (shots.length === 0) return;
-  const data = {
-    source: "srt-film",
-    generatedAt: new Date().toISOString(),
-    srt: srtInput.value,
-    overrides: ovInput.value,
-    plan: {
-      shots: shots.map((s) => ({
-        layout: s.layout.id,
-        style: s.layout.style,
-        headline: s.content.headline,
-      })),
-      styles: planStyles,
-    },
-  };
-  downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }), "srt-film-project.json");
-  log("已保存工程 JSON（含 SRT、覆写与镜头计划）");
+  if (!lastPlan || shots.length === 0) return;
+  const rp = toRenderPlan(lastPlan, { srt: srtInput.value });
+  downloadBlob(
+    new Blob([serializeRenderPlan(rp)], { type: "application/json" }),
+    "srt-film-render-plan.json",
+  );
+  log(`已保存 RenderPlan v${rp.version}（${rp.scenes.length} 拍，schema=${rp.schema}）`);
 });
 
 function renderBeatList() {

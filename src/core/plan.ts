@@ -132,7 +132,7 @@ export function plan(srt: string, ovRaw: string): PlanResult {
       if (!MOTION_BY_ID.has(id)) problems.push(`拍 ${beat.index}：版式引用了未知动效 ${id}`);
     }
 
-    out.push({ layout, content, start: beat.start, end: beat.end });
+    out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id) });
   });
 
   return { shots: out, problems, styles };
