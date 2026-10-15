@@ -9,6 +9,7 @@ import { Figure } from "./figures";
 import { KAOJIN_SCENES } from "./kaojin";
 import { WANGJI_SCENES } from "./wangji";
 import { V2_BOARDS } from "./v2";
+import { IM_BOARDS } from "./im-board";
 import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT, type Seg, type SemTone } from "./emphasis";
 import { BgLayer } from "./bg";
 import { DecorLayer } from "./decor";
@@ -200,6 +201,11 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       );
     case "asset": case "image": case "device": case "icon":
       return g(<Asset id={slot.asset ?? "icon-star"} w={w} h={h} tone={tone === "accent" ? "accent" : tone === "dim" ? "dim" : tone === "paper" ? "paper" : "ink"} />);
+    case "photo":
+      // 真照片由 renderFrame 的 canvas 图像层直画 —— SVG-as-image 不能加载外部
+      // 资源（浏览器硬规则），照片进不了序列化管线。这里只留空占位组：
+      // 槽序号必须和 enter 池对上，后面的槽才不会拿错入场动效。
+      return g(null);
     case "dotmatrix": {
       const n = Math.max(3, Math.min(24, ctx.content.numbers[0] ?? 12));
       const r = Math.min(h / 2.6, 10);
@@ -421,7 +427,7 @@ export function LayoutLayer({ layout, content }: { layout: Layout; content: Rend
     );
   }
   // v2 满版构图板式：同走 custom 通路，但收全量 content（board 是参数化构图，不是一拍一画）。
-  const board = layout.custom ? V2_BOARDS[layout.custom] : undefined;
+  const board = layout.custom ? (V2_BOARDS[layout.custom] ?? IM_BOARDS[layout.custom]) : undefined;
   if (board) {
     const C = colorsOf(layout.style);
     return (

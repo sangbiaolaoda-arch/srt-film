@@ -7,6 +7,7 @@ import { layerOpacity, rasterizeLayer } from "./rasterize";
 import { applyPost, postForStyle } from "./post";
 import { drawContinuity } from "./continuity";
 import { type FxOpts, driftMotes, glowPulse, gridPulse, nestedTunnel, paperSheen, particleField, polyhedron } from "./effects";
+import { ensurePhoto } from "../assets/photos";
 import { resolveProfile } from "../styles/style-system";
 
 export const STAGE_W = 1280;
@@ -104,10 +105,70 @@ function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number,
   if (fx !== "drift-motes" && fx !== "grid-pulse" && fx !== "paper-sheen") glowPulse(ctx, o, strength);
 }
 
+/**
+ * 图像层（baseline-audit 缺陷 6）：photo 槽的真照片，画在 SVG 之下 —— 照片是底，
+ * 文字与图形浮在其上。必须由 canvas 直画：rasterize.ts 走「SVG 序列化 → blob →
+ * new Image()」，而浏览器规定 SVG 以 image 方式加载时不能引用任何外部资源，
+ * 照片进不了那条管线（这也是素材层一直禁 <image> 的根因）。
+ * 随所属图层的不透明度走（交叉溶解时照片跟着一起淡入淡出），并继承该拍的机位缩放。
+ */
+async function drawPhotos(ctx: CanvasRenderingContext2D, shot: Shot, op: number, W: number, H: number, t: number): Promise<void> {
+  if (op <= 0.012) return;
+  const layout = shot.layout;
+  const cols = layout.cols ?? 12;
+  const rows = layout.rows ?? 8;
+  const prof = resolveProfile(layout.style);
+  const paper = layout.paper ?? prof.paper;
+  const cam = cameraScale(shot, t);
+
+  for (const slot of layout.slots) {
+    if (slot.k !== "photo") continue;
+    const id = slot.photo ?? shot.photo;
+    if (!id) continue;
+    const img = await ensurePhoto(id);
+    const [gx, gy, gw, gh] = slot.box;
+    const x = (gx / cols) * W;
+    const y = (gy / rows) * H;
+    const bw = (gw / cols) * W;
+    const bh = (gh / rows) * H;
+
+    ctx.save();
+    if (cam !== 1) {
+      ctx.translate(W / 2, H / 2);
+      ctx.scale(cam, cam);
+      ctx.translate(-W / 2, -H / 2);
+    }
+    ctx.beginPath();
+    ctx.rect(x, y, bw, bh);
+    ctx.clip();
+    if (img) {
+      // cover 铺满 + 焦点裁切（crop 0..1：0 贴左/上，1 贴右/下，缺省居中）
+      const [cx, cy] = slot.crop ?? [0.5, 0.5];
+      const k = Math.max(bw / img.naturalWidth, bh / img.naturalHeight);
+      const dw = img.naturalWidth * k;
+      const dh = img.naturalHeight * k;
+      ctx.globalAlpha = op;
+      ctx.drawImage(img, x + (bw - dw) * cx, y + (bh - dh) * cy, dw, dh);
+    } else {
+      // 照片没加载出来（只可能是故障）：素色块降级 —— 画面仍是完整的，且每次运行一致
+      ctx.globalAlpha = op;
+      ctx.fillStyle = prof.tone.dim;
+      ctx.fillRect(x, y, bw, bh);
+    }
+    // 纸色罩：把照片压回纸面调性，深色字才压得住（编辑风的「克制」：图要像印上去的）
+    const tint = slot.tint ?? 0.5;
+    if (tint > 0) {
+      ctx.globalAlpha = tint * op;
+      ctx.fillStyle = paper;
+      ctx.fillRect(x, y, bw, bh);
+    }
+    ctx.restore();
+  }
+}
+
 /** 把一帧画进 ctx。调用前需先把 GSAP 时间轴 seek 到位。
  *  输出尺寸跟随 ctx.canvas，光栅化也按该分辨率进行（放大不错、缩小不糊）。 */
-export async function renderFrame(input: FrameInput): Promise<void> {
-  const { ctx, svg, shots, t, frame } = input;
+export async function renderFrame(input: FrameInput): Promise<void> {  const { ctx, svg, shots, t, frame } = input;
   const W = ctx.canvas.width;
   const H = ctx.canvas.height;
   ctx.globalAlpha = 1;
@@ -143,9 +204,19 @@ export async function renderFrame(input: FrameInput): Promise<void> {
     ctx.restore();
   }
 
-  // 2. SVG 层：只画真正可见的（通常 1 层，交叉溶解期 2 层）
+  // 可见层窗口（交叉溶解期最多 2 层）：图像层与 SVG 层共用同一个窗口。
   const lo = Math.max(0, active - 1);
   const hi = Math.min(shots.length - 1, active + 1);
+
+  // 1.5 图像层（缺陷 6）：photo 槽的真照片。在 SVG 之下、底色之上 —— 照片是底。
+  //  交叉溶解期两层各画各的（各自跟随所属图层的不透明度）。
+  for (let i = lo; i <= hi; i++) {
+    const shot2 = shots[i]!;
+    if (!shot2.layout.slots.some((sl) => sl.k === "photo")) continue;
+    await drawPhotos(ctx, shot2, layerOpacity(svg, i), W, H, t);
+  }
+
+  // 2. SVG 层：只画真正可见的（通常 1 层，交叉溶解期 2 层）
   for (let i = lo; i <= hi; i++) {
     const op = layerOpacity(svg, i);
     if (op <= 0.012) continue;

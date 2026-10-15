@@ -45,9 +45,9 @@ export type SlotKind =
   | "rule" | "panel" | "frame" | "arrow" | "axis" | "progress" | "divider" | "vignette"
   // 列表
   | "bullets" | "listnum" | "checklist" | "pills" | "tags"
-  // 图表 / 图像 / 素材 / 概念图形
+  // 图表 / 图像 / 素材 / 概念图形 / 真照片
   | "chart" | "image" | "icon" | "asset" | "device" | "dotmatrix" | "clock" | "calendar"
-  | "figure"
+  | "figure" | "photo"
   // 标注
   | "label" | "source" | "meta" | "badge";
 
@@ -84,6 +84,12 @@ export interface Slot {
   vertical?: boolean;
   /** 需要的数据量：图表至少要有这么多个可溯源数字，否则该版式不合格 */
   needs?: number;
+  /** 真照片槽：指定固定照片（双图对照的第二张等）。缺省吃本拍语义选图的结果 */
+  photo?: import("../assets/photos").PhotoId;
+  /** 照片上的纸色罩（0..1，压多重的纸色让文字可读；缺省 0.5） */
+  tint?: number;
+  /** cover 裁切的焦点（0..1，0 贴左/上，1 贴右/下；缺省居中）。双框取同一张的两处裁切用 */
+  crop?: [number, number];
 }
 
 export interface CameraMove {

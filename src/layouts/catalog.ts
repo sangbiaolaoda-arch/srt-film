@@ -545,6 +545,31 @@ export const LAYOUTS: Layout[] = [
      s("headline", 1, 2.8, 10, 3, { size: "xxl" })],
     { note: "需要质感时" }),
 
+  // ══════════ G2. 真照片 (4) —— baseline-audit 缺陷 6 ══════════
+  // photo 槽由 canvas 图像层直画（见 render/frame.ts drawPhotos）；语义选图在
+  // plan（assets/photos.ts）。资格门禁：标签没命中的拍进不了这些版式 ——
+  // 配错图比没图更伤可信度，宁缺毋滥。
+  L("im-photo-bleed", "全幅照片", "image", ["m-fade-up", "m-char-rise", "m-fade-up"],
+    [s("photo", 0, 0, 12, 8, { tint: 0.55 }),
+     s("kicker", 1, 4.1, 6, 0.8, { size: "xs", tone: "accent", src: "none", literal: "影像" }),
+     s("headline", 1, 5, 10, 2.3, { size: "xxl" })],
+    { note: "照片是底、大字浮在其上；纸色罩把照片压回印刷调", decor: false }),
+  L("im-photo-split", "左图右文", "image", ["m-slide-right", "m-fade-up"],
+    [s("photo", 0, 0, 6.4, 8, { tint: 0.12 }),
+     s("headline", 7.1, 2.3, 4.2, 2.6, { size: "xl" }),
+     s("caption", 7.1, 5.2, 4.2, 1.6, { size: "s", tone: "dim" })],
+    { note: "图占半幅，文字呼吸在素底上" }),
+  L("im-photo-duo", "同图双框", "image", ["m-fade-up", "m-fade-up", "m-fade-up"],
+    [s("photo", 0, 0, 6, 8, { tint: 0.15, crop: [0.18, 0.5] }),
+     s("photo", 6, 0, 6, 8, { tint: 0.34, crop: [0.82, 0.5] }),
+     s("headline", 0.9, 6.35, 10.2, 1.4, { size: "l" })],
+    { note: "同一张照片取两处裁切 —— 一个世界的两个侧面" }),
+  L("im-photo-note", "照片 + 注脚", "image", ["m-scale-soft", "m-fade-up"],
+    [s("photo", 1, 1.2, 10, 4.6, { tint: 0.1 }),
+     s("rule", 1, 6.1, 10, 0.12, { tone: "accent" }),
+     s("headline", 1, 6.4, 10, 1.4, { size: "l" })],
+    { note: "照片是主角、大字压底" }),
+
   // ══════════ H. 引语 / 金句 (8) ══════════
   L("qt-pull-quote", "引号金句", "quote", ["m-fade-up", "m-stagger-words"],
     [s("literal", 1, 1.4, 4, 2, { size: "huge", tone: "hairline", src: "none", literal: "❙❙" }),

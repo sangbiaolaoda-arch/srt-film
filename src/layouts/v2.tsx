@@ -25,8 +25,10 @@ export interface BoardProps {
 
 type Board = (p: BoardProps) => JSX.Element;
 
-/* ── 横排整行 + 行内语义强调（转发 data-anim 动效钩子）。 */
-function VText(props: {
+/* ── 横排整行 + 行内语义强调（转发 data-anim 动效钩子）。
+   export：im-board.tsx（image 组满版插画）复用同一个文字原语 —— 两条板库
+   必须共用同一份「文字怎么进画面」，否则同一次 seek 里两种字的强调/字距会分叉。 */
+export function VText(props: {
   x: number; y: number; size: number; fill: string; text: string; profile: StyleProfile;
   anchor?: "start" | "middle" | "end"; spacing?: number; motion?: string; opacity?: number;
 }) {

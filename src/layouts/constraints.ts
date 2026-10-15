@@ -40,7 +40,7 @@ export function slotBox(slot: Slot, cols = 12, rows = 8): Box {
  *  卡片设计）—— 都不进此表。 */
 const SOLID_KINDS: ReadonlySet<SlotKind> = new Set<SlotKind>([
   "panel", "chart", "figure", "image", "asset", "device", "icon",
-  "dotmatrix", "clock", "calendar",
+  "dotmatrix", "clock", "calendar", "photo",
 ]);
 
 /** 真正渲染文字的槽（与 render.tsx SlotNode 的 default/文本分支对齐）。

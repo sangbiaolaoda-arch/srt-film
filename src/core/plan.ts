@@ -17,6 +17,7 @@ import { resolveProfile } from "../styles/style-system";
 import { MOTION_BY_ID, validateMotionSet } from "../motion/catalog";
 import { buildMotionSchedule } from "../motion/schedule";
 import { describeConflict, slotConflicts } from "../motion/conflict";
+import { pickPhoto, type PhotoId } from "../assets/photos";
 
 export interface PlanResult {
   shots: Shot[];
@@ -68,6 +69,7 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
   // 第三遍：风格内挑版式 + 资格/动效门禁
   const out: Shot[] = [];
   let prevLayout: string | undefined;
+  let prevPhoto: PhotoId | undefined;
   // 组级帽的跨拍记忆：同组板式出镜封顶（见 pick.ts groupCap），
   // 覆写指定的版式也计数 —— 导演钉了的构图同样占这支片的构图配额。
   const used = new Map<Group, number>();
@@ -76,11 +78,15 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
   prepared.forEach(({ beat, ovr, content, narrative, continuity }, i) => {
     const decision = decisions[i]!;
     // 版式来源优先级：内联完整版式（ovr.layout，如专属场景）> catalog 查表（ovr.layoutId）> 自动挑选
+    // 语义选图（缺陷 6）：标签没命中就不配图 —— 宁缺毋滥，配错图比没图更伤可信度。
+    // 必须在选版之前：image 组的资格门禁要知道这一拍有没有合适的照片。
+    const photo = pickPhoto(`${beat.text} ${content.headline}`, beat.index, prevPhoto);
+
     let layout = ovr?.layout ?? (ovr?.layoutId ? LAYOUT_BY_ID.get(ovr.layoutId) : undefined);
     if (ovr?.layoutId && !ovr.layout && !layout) {
       problems.push(`拍 ${beat.index}：覆写的版式 id「${ovr.layoutId}」不存在`);
     }
-    layout = layout ?? pickLayout(content, decision.style, prevLayout, { used, total: prepared.length });
+    layout = layout ?? pickLayout(content, decision.style, prevLayout, { used, total: prepared.length }, photo?.id);
     bump(layout.group);
 
     // 风格档灌进 layout：底色 / 图形调色板 / 特效路径全部由 layout.style 驱动。
@@ -138,7 +144,15 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
       }
     }
 
+    // 拍用了 photo 版式才挂选图结果（renderFrame 的 canvas 图像层消费）；
+    // 覆写钉版式时也照走资格门禁 —— 覆写了一个 photo 版式而这拍没图，必须拦下来。
+    const usesPhoto = layout.slots.some((sl) => sl.k === "photo");
+    if (usesPhoto && !photo) {
+      problems.push(`拍 ${beat.index}：版式「${layout.name}」需要语义匹配的照片，旁白里没有可用的图`);
+    }
+
     prevLayout = layout.id;
+    if (usesPhoto && photo) prevPhoto = photo.id;
 
     const realStyle = layout.style ?? "editorial";
     const styleTag = realStyle === "chart-motion" ? "图表" : realStyle === "flat-vector" ? "扁平" : "编辑";
@@ -146,8 +160,8 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
       `${String(beat.index).padStart(2, "0")} ${styleTag}（${ovr?.layoutId || ovr?.layout ? "覆写版式" : decision.reason}）`,
     );
 
-    // 资格门禁：图表版式必须拿得到足够多的可溯源数字
-    if (!eligible(layout, content)) {
+    // 资格门禁：图表版式必须拿得到足够多的可溯源数字；photo 版式要有语义匹配的照片
+    if (!eligible(layout, content, photo?.id)) {
       problems.push(`拍 ${beat.index}：版式「${layout.name}」需要更多可溯源数字，旁白里不够`);
     }
     // 宽度安全区只约束槽位版式：custom 满版画面（v2 / 专属场景）自己断行与自适应字号
@@ -167,7 +181,7 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
       if (!MOTION_BY_ID.has(id)) problems.push(`拍 ${beat.index}：版式引用了未知动效 ${id}`);
     }
 
-    out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id), narrative, continuity });
+    out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id), narrative, continuity, photo: usesPhoto ? photo?.id : undefined });
   });
 
   // 第四遍：槽级动效冲突门禁（baseline-audit 缺陷 5）。

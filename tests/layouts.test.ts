@@ -447,7 +447,9 @@ describe("构图与对比度门禁（手册 02/04 可判定检查）", () => {
         if (w <= 0 || h <= 0) bad.push(`${l.id}:${s.k} 尺寸非正`);
         // 满版出血是图像/暗角/构图色块的设计意图（画法手册 02：bleed 不受安全区约束），
         // 只查携带信息的内容槽（文字/数字/图形）。panel 满版 = 旗舰版式的底色块（画法 A07/C10）。
-        if (s.k === "asset" || s.k === "vignette" || s.k === "image" || s.k === "panel") continue;
+        // photo 与 asset/image 同理：真照片由 canvas 图像层按槽位直画，满幅铺底正是
+        // 它的构图意图（「照片是底」），按安全区收缩会在照片四周留出一圈纸色边。
+        if (s.k === "asset" || s.k === "vignette" || s.k === "image" || s.k === "panel" || s.k === "photo") continue;
         const nx = x / cols;
         const ny = y / rows;
         const nw = w / cols;

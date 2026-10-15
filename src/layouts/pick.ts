@@ -4,6 +4,7 @@
 import { LAYOUTS } from "./catalog";
 import { V2_LAYOUTS } from "./v2";
 import type { Group, Layout, RenderContent, Style } from "./types";
+import type { PhotoId } from "../assets/photos";
 import { displayWidth } from "../core/compose";
 
 /** 度量值数量：token 分层缺失的老 content（测试 / 手工构造）按 numbers.length 老规矩。
@@ -14,8 +15,12 @@ function measureCount(content: RenderContent): number {
     : content.numbers.length;
 }
 
-/** 资格门禁：图表版式必须有足够多可溯源数字；否则该版式对本拍不合格。 */
-export function eligible(layout: Layout, content: RenderContent): boolean {
+/** 资格门禁：图表版式必须有足够多可溯源数字；photo 版式必须有语义匹配的照片；
+ * 否则该版式对本拍不合格。 */
+export function eligible(layout: Layout, content: RenderContent, photo?: PhotoId): boolean {
+  // photo 槽没钉死照片的版式，靠本拍的语义选图 —— 没命中标签就老实让位
+  //（配错图比没图更伤可信度，见 assets/photos.ts pickPhoto）。
+  if (layout.slots.some((sl) => sl.k === "photo" && !sl.photo) && !photo) return false;
   if (layout.needs !== undefined && content.numbers.length < layout.needs) return false;
   for (const slot of layout.slots) {
     if (slot.k !== "chart") continue;
@@ -175,8 +180,9 @@ export function planStyles(
   return scored;
 }
 
-/** 内容信号 → 优先版式组（按序尝试）。 */
-function preferredGroups(content: RenderContent, style: Style): Group[] {
+/** 内容信号 → 优先版式组（按序尝试）。有语义匹配的照片时把 image 组提到内容组之后：
+ * 照片是稀缺资源（标签命中的拍不多），命中了就该优先用掉。 */
+function preferredGroups(content: RenderContent, style: Style, photo?: PhotoId): Group[] {
   const text = content.headline;
   const out: Group[] = [];
   if (style === "flat-vector") {
@@ -194,6 +200,8 @@ function preferredGroups(content: RenderContent, style: Style): Group[] {
     // sp-num-giant，把「十年」渲成光秃秃的「10」）。
     if (measureCount(content) >= 2) out.push("chart");
     if (measureCount(content) >= 1) out.push("number");
+    // 注意：图表风不推 image —— 白底数据系的画面语言是「测量与刻度」，
+    // 突然插一张照片会破坏系内一致性（v2-chart-boards 的三件套测试钉的就是这条）。
     out.push("timeline", "image", "bookend", "statement");
     return out;
   }
@@ -206,6 +214,7 @@ function preferredGroups(content: RenderContent, style: Style): Group[] {
   if (measureCount(content) >= 2) out.push("chart");
   else if (content.numbers.length >= 1) out.push("number");
   if (content.bullets.length >= 3) out.push("list");
+  if (photo) out.push("image"); // 同上：命中照片才提前，没命中维持原尾序
   out.push("statement", "timeline", "image", "bookend");
   return out;
 }
@@ -247,13 +256,16 @@ function groupCap(total: number): number {
  * requireFirst：内容的第一优先组必须在本池内（如数字丰富拍首选 chart），
  * 否则返回 undefined 整拍让位 —— 防止「v2 没有图表组就降级画数字卡」这种隐性覆盖不足。
  * 池内找不到合格优先组时返回 undefined（调用方决定回退）。 */
-function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?: string, requireFirst = false, ctx?: PickCtx): Layout | undefined {
+function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?: string, requireFirst = false, ctx?: PickCtx, photo?: PhotoId): Layout | undefined {
   if (pool.length === 0) return undefined;
   const ofStyle = pool.filter((l) => (l.style ?? "editorial") === style);
-  const pool0 = ofStyle.length > 0 ? ofStyle : pool;
-  const usable = pool0.filter((l) => eligible(l, content));
+  // 需要 Semantics 选图的版式：没图就从池里拿掉 —— 不能等 usable 为空再回落原池，
+  // 那条回落路会把「没图的 photo 版式」又放回来（photo 槽没有 fallback 画面）。
+  const hasPhoto = (l: Layout) => photo !== undefined || !l.slots.some((sl) => sl.k === "photo" && !sl.photo);
+  const pool0 = (ofStyle.length > 0 ? ofStyle : pool).filter(hasPhoto);
+  const usable = pool0.filter((l) => eligible(l, content, photo));
   const base = usable.length > 0 ? usable : pool0;
-  const wanted = preferredGroups(content, style);
+  const wanted = preferredGroups(content, style, photo);
   if (requireFirst && wanted.length > 0 && !base.some((l) => l.group === wanted[0]!)) return undefined;
   // 去重：preferredGroups 会重复推同一组（如 poster-focus 先因数字、后因兜底），
   // 排名表被后写覆盖会让优先级颠倒（geo 被推到 focus 后面）。
@@ -286,6 +298,18 @@ function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?:
     const headPool = interleaveFlagship(ranked.filter((l) => l.group === head && l.id !== prevId));
     if (headPool.length > 0) return headPool[(content.beat - 1) % headPool.length]!;
   }
+  // 照片拍（缺陷 6）：语义选图命中的拍，image 组内轮转 —— 同数字板式的道理，
+  // 全池轮转会让 200+ 版式池里的 4 套照片板几乎永远轮不中（实测命中 0）。
+  // 命中了照片就优先用照片板（photo 槽的优先，矢量素材拼贴的让位）；帽照常生效。
+  // 避重用 index 位移不缩池 —— 缩池会让 (beat-1)%len 整体漂移，轮转变成抓阄。
+  if (head === "image" && photo && !capped("image")) {
+    const pool2 = ranked.filter((l) => l.group === "image");
+    const withPhoto = pool2.filter((l) => l.slots.some((sl) => sl.k === "photo"));
+    const headPool = withPhoto.length > 0 ? withPhoto : pool2;
+    let idx = (content.beat - 1) % headPool.length;
+    if (headPool[idx]!.id === prevId && headPool.length > 1) idx = (idx + 1) % headPool.length;
+    return headPool[idx]!;
+  }
   // 其余拍：全池排名轮换。池长稳定（不因避重缩池），避重只做index 位移 ——
   // 缩池会让 (beat-1)%len 整体漂移，rank 0 的板式被随机饿死。
   const finalPool = interleaveFlagship(ranked);
@@ -299,6 +323,6 @@ function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?:
  * 才落回旧 catalog 槽位库。旧的 162 套保留为回退，不再是被修补的主场。
  * ctx 带本片已用组直方图（plan.ts 维护），组级帽靠它生效；不传则无帽（单拍挑选/测试）。
  */
-export function pickLayout(content: RenderContent, style: Style, prevId?: string, ctx?: PickCtx): Layout {
-  return pickFrom(V2_LAYOUTS, content, style, prevId, true, ctx) ?? pickFrom(LAYOUTS, content, style, prevId, false, ctx) ?? LAYOUTS[0]!;
+export function pickLayout(content: RenderContent, style: Style, prevId?: string, ctx?: PickCtx, photo?: PhotoId): Layout {
+  return pickFrom(V2_LAYOUTS, content, style, prevId, true, ctx, photo) ?? pickFrom(LAYOUTS, content, style, prevId, false, ctx, photo) ?? LAYOUTS[0]!;
 }
