@@ -128,3 +128,29 @@
 尚存缺陷：v2 池暂无 chart-motion 专属板（图表风拍仍回落 catalog chart/number 组，靠母版网格补偿签名）；`density`/`transitionBias` 等 token 的细粒度消费（如网格疏密随 density）未做；wrapMarked（渲染）与 wrapText（检查器）的度量差依赖 1.25 倍阈值吸收，极端强调标题可能低估行数；跨镜头连续性令牌（continuityIn/Out 的形状/位置继承）尚未进渲染层。
 是否可以进入下一阶段：是。
 下一阶段入口：Phase 7 — 运动、镜头与转场系统（主运动可说明性、跨镜头连续性字段进渲染、转场库与 transitionBias 联动）；image 组版式与 chart-motion 专属 v2 板作为视觉对象模块扩充择机插入。
+
+## Phase 6 — 视觉对象模块与布局/约束引擎（第二刀：图表风三件套 + 提取质量）
+
+状态：PASS
+本阶段目标：补上第一刀遗留的最大签名缺口 —— v2 满版池没有 chart-motion 板（覆写钉死图表风时 11 拍全落编辑风板，等于换色皮），grid/axis/fontNum 在满版通路无消费方；顺带修图表资格上游的数字提取质量（假度量值会让图表风选版失真）。
+代码与文档变更：
+- `src/layouts/v2.tsx`：新增图表风三件套（均声明 `style: "chart-motion"`，母版签名由板内自绘）：
+  · `v2-data-giant`（number 组）：等宽巨号数字（fontNum）+ 数字下方测量尺（端 ticks + 尺寸线语汇，量的是数字自身宽度，不是假数据轴）+ 等宽图号 NO.拍号。
+  · `v2-axis-columns`（chart 组）：竖柱 + 基线 + 左侧五档**真实值**刻度（max 由本拍度量值现算：0/¼/½/¾/max，无装饰假数）+ 柱顶 raw 原文 + 柱下印刷序号；`p.axis` 门控，编辑风 profile 下轴与刻度整组消失（token 降级而非硬编码）。
+  · `v2-measure-note`（timeline 组）：文字板也带图表语法 —— FIG.拍号 + 四角定位标记（registration marks）+ 引线锚点 + 底部 11 等分通长尺。全列一致性不靠「偶尔有张图」。
+  · `MeasGrid`：与 decor.tsx 图表风分支同参数的 40px 细 + 200px 粗网格。v2 板走 custom 通路不过 DecorLayer（render.tsx 对 custom 跳过 decor），网格由板内自绘；pattern id 带拍号（画廊/对照样片多拍共存同一棵 DOM）。
+  · 两块数字板带 chart 资格槽（needs 按度量值数）+ headline 槽（hookCover 门禁认文字槽，数字板的主角是数字不是文字）。
+- `src/layouts/pick.ts`：`preferredGroups(chart-motion)` 重构为与编辑风同构 —— 度量值≥2 才首选 chart、度量值≥1 才首选 number、文字拍 head=timeline。原实现无条件把 chart 推第一：0/1 数字拍在 v2 池没有合格 chart 板，`requireFirst` 直接判负，整拍掉回旧 catalog 槽位库（图表风列一半是槽位排版，母版语法断档；span 拍更掉到 sp-num-giant）。
+- `src/core/trace.ts`：**修两个数字提取 bug**（图表资格的上游，01 语料实测）：
+  · 「下一步/这一步/每层」的「一步/一层」漏进度量层（序列指代不是测量值）→ CN_QTY 加否定后视挡「第下上这同每另」前缀。拍 03「第一步…这一步叫 DNS 查询」因此被误选成数字巨号板。
+  · 「TLS 1.3」「iOS 17」版本号进兜底层成度量值 → BARE 加两道闸：ASCII 字母+≤2 空格前缀、数字/小数点断点（同一个数的内部断点：1.3 的 3、17 的 7）。拍 08 坐标柱曾画出 1.3 vs 1 的量纲崩坏。
+- `src/core/plan.ts`：`plan(srt, ovRaw = "")` —— 自然调用不再因缺参炸。
+- 新增 `tools/frame-peek.tsx`（单帧 1:1 细看 + 无头浏览器截图验收）。
+- 测试：新增 `tests/v2-chart-boards.test.tsx` 14 例（选版路由三类拍 + span 不成图 + 跨系隔离 + 图形语法 + 编辑风降级 + 确定性 + 覆写全片一致性 + 自动规划）；`tests/core.test.ts` 补 2 例提取回归（序列指代 / 版本号）。
+执行命令：`npx tsc --noEmit`、`npx vitest run`、`npm run build`、`constraint-audit`、6 语料 `plan-dry`、`style-sweep`、`three-style-sheet` 重生成、frame-peek 截图（agent-browser）。
+测试结果：tsc 零错；**163 测试全过**（148 旧 + 15 新）；constraint-audit：212 个槽位版式硬错误 0 / 告警 0；6/6 语料门禁通过且零告警；build 成功。
+真实渲染证据：`dist/three-style-sheet.html`（重生成）+ frame-peek 截图逐帧核对 —— 图表风列现由三件套构成：文字拍=测量注记（FIG.01 + 定位标记 + 引线 + 通长尺）、一数字拍=数据巨号（等宽「120」+ 毫秒 + 尺寸线）、多度量拍=坐标柱（真实值刻度 0/30/60/90/120 + 柱顶原文）。母版网格签名 22 处、等宽字体 15 处、FIG 图号 9 处。修掉假度量后 01 语料自动规划正确地一拍图表风都不亮（数据不密集不硬凑）；03 数据对比语料 02/05 两拍自动命中坐标柱。
+本阶段解决的问题：图表风从「v2 池无板 → 回落编辑风板换色」修复为「三件套专属构图 + 母版网格 + 等宽数字 + 坐标轴语言」；图表选版路由的 requireFirst 断档；数字提取的两类假度量（序列指代 / 版本号）。
+尚存缺陷：`density` token 仍无消费方（网格疏密不随密度 变）；continuityIn/Out 未进渲染层；charts.tsx（catalog 图表槽）与 v2 图表板是两套图表实现，刻度风格统一但代码未合流；「往上再走一步」类动词+步仍算度量（可接受残留）。
+是否可以进入下一阶段：是。
+下一阶段入口：Phase 7 — 运动、镜头与转场系统（主运动可说明性、跨镜头连续性字段进渲染、转场库与 transitionBias 联动）；image 组版式作为视觉对象模块扩充择机插入。
