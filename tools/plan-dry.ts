@@ -34,7 +34,7 @@ try {
   process.exit(2);
 }
 
-const { shots, problems, styles } = result;
+const { shots, problems, warnings, styles } = result;
 
 // 时间轴起点：与 ui/stage.tsx 同一套累加（拍间交叠 0.25s），唯一区别是不计退出动效的尾巴。
 // 所以这里给的是**估算**，成片真实时长以导出为准。
@@ -71,6 +71,11 @@ console.log(
     ` · 估算时长 ${tlEnd.toFixed(2)}s（${Math.round(tlEnd * STAGE_FPS)} 帧 @ ${STAGE_FPS}fps）`,
 );
 console.log(`风格判定：${styles.join("　")}`);
+
+if (warnings && warnings.length > 0) {
+  console.log(`\n⚠ 布局告警 ${warnings.length} 条（不拦截播放）：`);
+  for (const w of warnings) console.log(`  - ${w}`);
+}
 
 if (problems.length > 0) {
   console.error(`\n✗ 门禁未通过 ${problems.length} 条：`);

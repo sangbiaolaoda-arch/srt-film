@@ -153,6 +153,9 @@ btnLoad.addEventListener("click", () => {
   report(lines.concat([
     { text: `门禁通过：${shots.length} 拍，用到 ${new Set(shots.map((s) => s.layout.id)).size} 个版式，画面数字全部可溯源。`, kind: "ok" },
     { text: `风格：${styleReport} —— ${result.styles.join("　")}`, kind: "ok" },
+    ...(result.warnings?.length
+      ? [{ text: `布局告警 ${result.warnings.length} 条（不拦截播放）：${result.warnings.slice(0, 3).join("；")}${result.warnings.length > 3 ? "…" : ""}`, kind: "warn" as const }]
+      : []),
   ]));
   log(`规划完成：${shots.length} 拍（${styleReport}）`);
 

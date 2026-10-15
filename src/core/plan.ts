@@ -11,6 +11,7 @@ import { stripPunct } from "./text";
 import type { Shot } from "./shot";
 import { LAYOUT_BY_ID } from "../layouts/catalog";
 import { eligible, pickLayout, planStyles } from "../layouts/pick";
+import { checkLayout } from "../layouts/constraints";
 import type { Group } from "../layouts/types";
 import { MOTION_BY_ID, validateMotionSet } from "../motion/catalog";
 
@@ -18,6 +19,8 @@ export interface PlanResult {
   shots: Shot[];
   /** 门禁问题；非空则不应播放 */
   problems: string[];
+  /** Phase 6 布局约束告警（实体重叠/文字贴边；不拦截播放，进调试信息） */
+  warnings?: string[];
   /** 逐拍风格判定说明（进调试面板） */
   styles: string[];
 }
@@ -27,6 +30,7 @@ export function plan(srt: string, ovRaw: string): PlanResult {
   const ov: OverrideMap = ovRaw.trim() ? (JSON.parse(ovRaw) as OverrideMap) : {};
   const beats = planBeats(parseSRT(srt));
   const problems: string[] = [];
+  const warnings: string[] = [];
   const styles: string[] = [];
 
   // 第一遍：把每拍旁白变成内容（并做溯源校验）。
@@ -107,6 +111,17 @@ export function plan(srt: string, ovRaw: string): PlanResult {
       };
     }
 
+    // Phase 6 布局约束（槽覆写之后跑 —— 覆写可能改 box/size）：越界与严重文字溢出
+    // 是硬门禁（进 problems；不拦截等于静默丢失画面元素）；实体重叠/贴边进告警通道。
+    // custom 满版画面（v2 板/专属场景）自己管构图与断行，不查。
+    if (!layout.custom) {
+      const lc = checkLayout(layout, content);
+      problems.push(...lc.errors.map((e) => `拍 ${beat.index}：${e}`));
+      if (lc.warnings.length) {
+        warnings.push(...lc.warnings.map((w) => `拍 ${beat.index}：${w}`));
+      }
+    }
+
     prevLayout = layout.id;
 
     const realStyle = layout.style ?? "editorial";
@@ -139,5 +154,5 @@ export function plan(srt: string, ovRaw: string): PlanResult {
     out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id), narrative });
   });
 
-  return { shots: out, problems, styles };
+  return { shots: out, problems, warnings, styles };
 }

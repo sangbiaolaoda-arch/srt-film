@@ -15,68 +15,12 @@ import { DecorLayer } from "./decor";
 import { WashLayer } from "./wash";
 import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
-import { stripPunct } from "../core/text";
+import { stripPunct, charWidth, wrapText, FONT_SIZE } from "../core/text";
 import { resolveProfile } from "../styles/style-system";
 
 /** 风格档色板：直接取 style-system 的 tone token，不写死颜色。 */
 export function colorsOf(style?: Style): Record<Tone, string> {
   return resolveProfile(style).tone;
-}
-
-const FONT_SIZE = { xs: 14, s: 18, m: 24, l: 34, xl: 48, xxl: 72, huge: 104, mega: 168 } as const;
-
-/** 英文/数字按 0.55 字宽计，其余按 1 字宽计 —— 决定一行能放多少字。 */
-function charWidth(ch: string): number {
-  return ch.codePointAt(0)! > 0xff ? 1 : 0.55;
-}
-
-function wrapText(text: string, sizePx: number, maxWidth: number): string[] {
-  const maxUnits = maxWidth / sizePx;
-  const chars = Array.from(text);
-  const widths = chars.map(charWidth);
-
-  // 贪心：能塞就塞，得到最少行数
-  const greedy: string[] = [];
-  let line = "";
-  let used = 0;
-  for (let i = 0; i < chars.length; i++) {
-    const w = widths[i]!;
-    if (used + w > maxUnits && line) {
-      greedy.push(line);
-      line = chars[i]!;
-      used = w;
-    } else {
-      line += chars[i]!;
-      used += w;
-    }
-  }
-  if (line) greedy.push(line);
-
-  // 中文标题的孤字行很难看：15 个字会被贪心切成 14+1，最后一行只剩一个「恶」。
-  // 只在这种情况（不止一行、且最后一行 ≤ 2 个字符）重排一次 —— 把字符尽量均匀摊到
-  // 同样多的行数里；摊完只要有任何一行放不下，就退回贪心结果，绝不比原来更差。
-  const lastLen = Array.from(greedy[greedy.length - 1] ?? "").length;
-  if (greedy.length < 2 || lastLen > 2) return greedy;
-
-  const n = greedy.length;
-  const balanced: string[] = [];
-  let at = 0;
-  for (let ln = 0; ln < n; ln++) {
-    const charsLeft = chars.length - at;
-    const rowsLeft = n - ln;
-    const want = Math.max(1, Math.round(charsLeft / rowsLeft));
-    let u = 0;
-    let k = 0;
-    while (k < want && at + k < chars.length && u + widths[at + k]! <= maxUnits + 1e-9) {
-      u += widths[at + k]!;
-      k++;
-    }
-    if (k === 0) return greedy; // 一个都放不下：退回贪心
-    balanced.push(chars.slice(at, at + k).join(""));
-    at += k;
-  }
-  if (at < chars.length) return greedy; // 没摊完：退回贪心
-  return balanced;
 }
 
 function textAnchor(align: Slot["align"]): "start" | "middle" | "end" {
@@ -246,7 +190,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       return g(<rect x={x} y={y} width={w} height={h} fill={fill} opacity={0.85} />);
     case "chart": {
       const kind = slot.chart ?? "line-up";
-      return g(<Chart kind={kind} w={w} h={h} seed={ctx.content.beat} tone={tone === "accent" ? "accent" : "ink"} values={ctx.content.numbers} />);
+      return g(<Chart kind={kind} w={w} h={h} seed={ctx.content.beat} tone={tone === "accent" ? "accent" : "ink"} values={ctx.content.numbers} profile={prof} />);
     }
     case "figure":
       return g(
@@ -381,13 +325,24 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       const weight = isHeadlineLike ? 600 : 400;
       // 标题类先做语义强调：把「疼 / 代价 / 在乎」这类强词切出来，行内换色放大加粗。
       // 非标题小字（出处、注释）保持单一色调 —— 满屏都强调等于没有强调。
-      const rows: MChar[][] = isHeadlineLike
-        ? wrapMarked(
-            emphasize(t).flatMap((s) => Array.from(s.text).map((ch) => ({ ch, tone: s.tone }))),
-            fs,
-            w,
-          )
-        : wrapText(t, fs, w).map((ln) => Array.from(ln).map((ch) => ({ ch })));
+      const wrapAt = (f: number): MChar[][] =>
+        isHeadlineLike
+          ? wrapMarked(
+              emphasize(t).flatMap((s) => Array.from(s.text).map((ch) => ({ ch, tone: s.tone }))),
+              f,
+              w,
+            )
+          : wrapText(t, f, w).map((ln) => Array.from(ln).map((ch) => ({ ch })));
+      // 高度钳制（Phase 6 约束引擎的渲染侧落地）：排完超出槽高就缩字号重排，直到
+      // 放得下或触底（基准字号的一半、且不低于 24px）。短句放大只按 ≤8 字钳过高度，
+      // 9–16 字的长句 + mega 字号会把末行排出槽外 —— 画面上直接缺字，而 startY 的
+      // 钳制让预览看起来只「差一点」。constraints.ts 的 textFit 量的就是这道线。
+      const fsFloor = Math.max(24, size * 0.5);
+      let rows = wrapAt(fs);
+      while (fs > fsFloor && rows.length * fs * 1.32 > h) {
+        fs = Math.max(fsFloor, fs * 0.9);
+        rows = wrapAt(fs);
+      }
       const lineH = fs * 1.32;
       const startY = y + Math.min(h * 0.5 + (rows.length - 1) * lineH * 0.5, h * 0.9) - (rows.length - 1) * lineH + fs * 0.18;
       const sem = SEM_COLORS[ctx.layout.style ?? "editorial"];

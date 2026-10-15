@@ -60,6 +60,9 @@ export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
   const c = colorsOf(style);
   const p = resolveProfile(style);
   const textured = p.paperTexture;
+  // 图表风母版：测量网格（对位栅格的数据版）—— token grid 的消费方。
+  // 没有它，图表风的非图表拍只剩「白底」，签名被稀释成换色。
+  const gridded = p.grid;
   const frac = total && total > 0 ? Math.min(1, beat / total) : 1;
   const x0 = 64;
   const x1 = 1280 - 64;
@@ -96,6 +99,22 @@ export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
         </>
       ) : (
         <>
+          {gridded && (
+            /* 图表风：40px 细网格 + 200px 粗网格（坐标纸语汇）。网格是恒定刻度，
+               不随拍跳变；透明度压低到不抢内容。id 带拍号（多拍共存同一棵 DOM）。 */
+            <g opacity={0.55}>
+              <defs>
+                <pattern id={`decor-grid-${beat}`} width={40} height={40} patternUnits="userSpaceOnUse">
+                  <path d="M40 0 L0 0 L0 40" fill="none" stroke={c.hairline} strokeWidth={1} />
+                </pattern>
+                <pattern id={`decor-grid5-${beat}`} width={200} height={200} patternUnits="userSpaceOnUse">
+                  <path d="M200 0 L0 0 L0 200" fill="none" stroke={c.hairline} strokeWidth={1.6} />
+                </pattern>
+              </defs>
+              <rect x={0} y={0} width={1280} height={720} fill={`url(#decor-grid-${beat})`} />
+              <rect x={0} y={0} width={1280} height={720} fill={`url(#decor-grid5-${beat})`} />
+            </g>
+          )}
           {/* 半调暗角（画法 A03 + vignette）：扁平矢量风与图表风净底，四角压暗聚焦中心 */}
           <defs>
             <radialGradient id={`decor-vig-${beat}`} cx="50%" cy="46%" r="78%">
