@@ -80,6 +80,49 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn-primary { background: var(--ink); color: var(--paper); }
 .btn-primary:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); }
+.file-btn { display: inline-flex; align-items: center; }
+.file-btn:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+
+/* —— 生成状态步进 —— */
+.status-steps {
+  display: flex;
+  gap: 0;
+  list-style: none;
+  margin: 22px 0 0;
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.status-steps li {
+  flex: 1;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 9px 4px;
+  color: var(--ink-dim);
+  border-right: 1px solid var(--hairline);
+  background: #fff;
+  position: relative;
+}
+.status-steps li:last-child { border-right: none; }
+.status-steps li.active { background: var(--ink); color: var(--paper); }
+.status-steps li.done { background: #eef0e9; color: #3d7a3d; }
+.status-steps li.fail { background: #fbeae6; color: var(--accent); }
+
+.status-log {
+  margin-top: 14px;
+  max-height: 150px;
+  overflow-y: auto;
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  padding: 10px 12px;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 11.5px;
+  line-height: 1.7;
+  color: var(--ink-dim);
+  background: #fff;
+}
+.status-log .log-t { color: var(--accent); margin-right: 8px; }
 
 .gate-report {
   margin-top: 16px;
@@ -89,6 +132,7 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 }
 .gate-report li { padding: 6px 10px; border-left: 2px solid var(--accent); background: #fff; margin-bottom: 6px; }
 .gate-report li.ok { border-left-color: #3d7a3d; color: #3d7a3d; }
+.gate-report li.warn { border-left-color: #b8860b; color: #8a6d1b; }
 
 .stage {
   aspect-ratio: 16 / 9;

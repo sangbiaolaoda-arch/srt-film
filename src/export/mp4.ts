@@ -7,7 +7,12 @@ import { STAGE_FPS, renderFrame } from "../render/frame";
 export const EXPORT_W = 1920;
 export const EXPORT_H = 1080;
 
-export async function exportMp4(stage: StageHandle, duration: number): Promise<Blob> {
+export async function exportMp4(
+  stage: StageHandle,
+  duration: number,
+  opts?: { signal?: AbortSignal },
+): Promise<Blob> {
+  const signal = opts?.signal;
   if (typeof VideoEncoder === "undefined") {
     throw new Error("当前浏览器不支持 WebCodecs，请使用 Chrome/Edge 110+");
   }
@@ -47,6 +52,7 @@ export async function exportMp4(stage: StageHandle, duration: number): Promise<B
 
   try {
     for (let f = 0; f < totalFrames; f++) {
+      if (signal?.aborted) throw new Error("已取消导出");
       if (encodeError) throw encodeError;
       const t = f / STAGE_FPS;
       stage.seek(t);
@@ -63,6 +69,11 @@ export async function exportMp4(stage: StageHandle, duration: number): Promise<B
     await encoder.flush();
     if (encodeError) throw encodeError;
     muxer.finalize();
+    try { encoder.close(); } catch { /* 已关闭 */ }
+  } catch (e) {
+    // 取消或失败：释放编码器，避免残留半截任务占资源
+    try { encoder.close(); } catch { /* 已关闭 */ }
+    throw e;
   } finally {
     stage.setAutoRender(true);
     stage.seek(resumeAt);
