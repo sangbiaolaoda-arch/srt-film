@@ -90,7 +90,10 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .field-inline select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .export-summary { font-size: 12px; color: var(--ink-dim); font-family: ui-monospace, Consolas, monospace; }
 
-.actions { display: flex; gap: 10px; }
+/* 按钮行：左栏只有 380px，5 个按钮的最小内容宽度加起来超出 —— 不禁止收缩的话
+   flex 会把它们压到内容宽度以下，中文逐字竖排（实测被压成 52~80px 宽 × 80px 高）。
+   所以：不缩、不折字，放不下就整体换行。 */
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
 .btn {
   border: 1px solid var(--ink);
   background: transparent;
@@ -99,6 +102,8 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
   padding: 9px 18px;
   border-radius: 2px;
   cursor: pointer;
+  white-space: nowrap;
+  flex: 0 0 auto;
   transition: background 0.15s ease, color 0.15s ease;
 }
 .btn:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
@@ -216,16 +221,18 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .transport input[type="range"] { flex: 1; accent-color: var(--accent); }
 #timecode { font-variant-numeric: tabular-nums; font-size: 13px; color: var(--ink-dim); min-width: 64px; }
 
+/* 拍列表：与 .actions 同一根因 —— flex 子项默认能被压到内容宽度以下，中文逐字竖排
+   （实测「遗忘，不是记忆的宽度。」被压成 30px 宽的单字列）。让标题不折字、整行放不下就换行。 */
 .beat-list { margin-top: 20px; list-style: none; }
 .beat-list li {
-  display: flex; gap: 12px; align-items: baseline;
+  display: flex; flex-wrap: wrap; gap: 12px; align-items: baseline;
   padding: 8px 4px; border-bottom: 1px solid var(--hairline);
   font-size: 13px; cursor: pointer;
 }
 .beat-list li:hover .beat-text { color: var(--accent); }
 .beat-list .beat-no { color: var(--ink-dim); font-variant-numeric: tabular-nums; min-width: 34px; }
 .beat-list .beat-layout { color: var(--ink-dim); font-size: 11px; letter-spacing: 0.06em; min-width: 68px; }
-.beat-list .beat-text { flex: 1; }
+.beat-list .beat-text { flex: 1 1 40%; white-space: nowrap; }
 .beat-list .beat-role {
   font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
   color: var(--accent); border: 1px solid var(--accent); border-radius: 2px;

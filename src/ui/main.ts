@@ -4,7 +4,7 @@
 
 import { plan, type PlanResult } from "../core/plan";
 import { validateSRT, decodeSrtBytes } from "../core/srt-validate";
-import { toRenderPlan, serializeRenderPlan } from "../core/render-plan";
+import { toRenderPlan, parseRenderPlan, serializeRenderPlan } from "../core/render-plan";
 import { buildStage, type Shot, type StageHandle } from "./stage";
 import { exportMp4 } from "../export/mp4";
 import {
@@ -38,6 +38,7 @@ const selRes = $<HTMLSelectElement>("export-res");
 const selFps = $<HTMLSelectElement>("export-fps");
 const selBitrate = $<HTMLSelectElement>("export-bitrate");
 const exportSummary = $<HTMLSpanElement>("export-summary");
+const projectFile = $<HTMLInputElement>("project-file");
 
 type ReportKind = "ok" | "err" | "warn";
 type ReportLine = { text: string; kind: ReportKind };
@@ -52,6 +53,13 @@ let exportCtl: AbortController | null = null;
 
 const fmt = (s: number) =>
   `${String(Math.floor(s / 60)).padStart(2, "0")}:${(s % 60).toFixed(1).padStart(4, "0")}`;
+
+/** 毫秒 → 「约 40 秒」/「约 2 分 05 秒」（导出 ETA 用；不足 1 秒不显示，避免闪「剩余约 0 秒」）。 */
+function fmtDur(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 1) return "";
+  return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${String(s % 60).padStart(2, "0")} 秒`;
+}
 
 function report(lines: ReportLine[]) {
   gateReport.hidden = lines.length === 0;
@@ -215,6 +223,7 @@ btnLoad.addEventListener("click", () => {
     ...(result.warnings?.length
       ? [{ text: `布局告警 ${result.warnings.length} 条（不拦截播放）：${result.warnings.slice(0, 3).join("；")}${result.warnings.length > 3 ? "…" : ""}`, kind: "warn" as const }]
       : []),
+    ...compareWithProject(),
   ]));
   log(`规划完成：${shots.length} 拍（${styleReport}）`);
 
@@ -294,11 +303,21 @@ btnExport.addEventListener("click", async () => {
   log(`开始导出 ${shots.length} 拍 → ${cfg.width}×${cfg.height}@${cfg.fps}fps / ${(cfg.bitrate / 1e6).toFixed(0)}Mbps…`);
 
   try {
-    const blob = await exportMp4(stage, stage.duration, { signal: exportCtl.signal, ...cfg });
+    // 进度只在按钮文案里滚动更新，不逐帧写日志（74s 的片子会刷出几百行把面板淹掉）。
+    // 导出每 8 帧让出一次主线程，这里正好是唯一能安全改 DOM 的时机。
+    const blob = await exportMp4(stage, stage.duration, {
+      signal: exportCtl.signal,
+      ...cfg,
+      onProgress: (p) => {
+        const pct = Math.round((p.frame / p.total) * 100);
+        const eta = p.etaMs === undefined ? "" : ` · 剩余约 ${fmtDur(p.etaMs)}`;
+        btnExport.textContent = `导出中 ${pct}%${eta}`;
+      },
+    });
     downloadBlob(blob, `srt-film-${cfg.width}x${cfg.height}-${cfg.fps}fps.mp4`);
     setStep("export", "done");
     setStep("verify", "done");
-    log(`导出完成：${(blob.size / 1e6).toFixed(1)}MB`);
+    log(`导出完成：${(blob.size / 1e6).toFixed(1)}MB（${cfg.width}×${cfg.height}@${cfg.fps}fps）`);
     report([{ text: `MP4 已导出：${cfg.width}×${cfg.height}@${cfg.fps}fps，${shots.length} 拍，${(blob.size / 1e6).toFixed(1)}MB。可点「保存工程 JSON」留存可复现产物。`, kind: "ok" }]);
   } catch (e) {
     const msg = (e as Error).message;
@@ -333,6 +352,83 @@ btnSave.addEventListener("click", () => {
   );
   log(`已保存 RenderPlan v${rp.version}（${rp.scenes.length} 拍，${rp.canvas.width}×${rp.canvas.height}@${rp.canvas.fps}，schema=${rp.schema}）`);
 });
+
+// 载入工程 JSON：把「可复现产物」的闭环补上 —— 之前 parseRenderPlan/validateRenderPlan
+// 已实现并有测试，但 UI 上只能存不能读，闭环是断的。
+//
+// 回读做什么：回填 SRT 原文 + 导出档位（分辨率/帧率/码率），再走一次「载入并规划」。
+// 不直接渲染存档里的 scenes —— 规划是纯函数（同 SRT + 同覆写 → 同 shots），重规划
+// 等价于还原，而且顺手把门禁与风格规划一起跑了一遍。存档 scenes 只用于比对：
+// 若与重规划结果不同，说明工程是在规划逻辑改版之前存的，如实告诉用户而不是静默。
+let pendingProject: { scenes: { layoutId: string; headline: string }[] } | null = null;
+
+function applyExportSettingsFrom(rp: ReturnType<typeof toRenderPlan>): boolean {
+  const { width, height, fps } = rp.canvas;
+  const known = EXPORT_RESOLUTIONS.find((r) => r.width === width && r.height === height);
+  if (!known) {
+    log(`⚠ 工程里的分辨率 ${width}×${height} 不在面板档位内，保留当前选择`);
+    return false;
+  }
+  selRes.value = `${width}x${height}`;
+  selFps.value = String(fps);
+  const bitrate = rp.export.bitrate;
+  // 码率可能是「按分辨率自动派生」的结果值；正好等于某个下拉项就选中它，否则留在自动档。
+  const asOption = [...selBitrate.options].some((o) => Number(o.value) === bitrate);
+  selBitrate.value = bitrate !== undefined && asOption ? String(bitrate) : BITRATE_AUTO;
+  refreshExportSummary();
+  return true;
+}
+
+projectFile.addEventListener("change", () => {
+  const file = projectFile.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    let rp: ReturnType<typeof toRenderPlan>;
+    try {
+      rp = parseRenderPlan(String(reader.result));
+    } catch (e) {
+      // 校验失败时 parseRenderPlan 会把全部问题拼在一条消息里 —— 全摊给用户，
+      // 别只说「格式错误」。
+      report([{ text: `工程 JSON 校验失败：${(e as Error).message}`, kind: "err" }]);
+      log(`载入失败：${(e as Error).message}`);
+      projectFile.value = "";
+      return;
+    }
+    srtInput.value = rp.sourceSrt;
+    const applied = applyExportSettingsFrom(rp);
+    pendingProject = { scenes: rp.scenes };
+    log(`已载入工程 v${rp.version}（${rp.scenes.length} 拍${applied ? "" : "，导出档位部分保留当前值"}），重新规划中…`);
+    projectFile.value = "";
+    btnLoad.click();
+  };
+  reader.onerror = () => {
+    report([{ text: "工程 JSON 读取失败，请重试或更换文件", kind: "err" }]);
+    log("工程 JSON 读取失败");
+    projectFile.value = "";
+  };
+  reader.readAsText(file);
+});
+
+/** 工程回读后，比对存档 scenes 与重规划结果。不一致说明工程是在规划逻辑改版之前存的
+ *  （或中途手改过 SRT 覆盖）—— 如实报出来，不静默接受。比对完即清空，只比一次。 */
+function compareWithProject(): ReportLine[] {
+  if (!pendingProject) return [];
+  const saved = pendingProject.scenes;
+  pendingProject = null;
+  const now = shots.map((s) => ({ layoutId: s.layout.id, headline: s.content.headline }));
+  const same =
+    saved.length === now.length &&
+    saved.every((s, i) => s.layoutId === now[i]!.layoutId && s.headline === now[i]!.headline);
+  return same
+    ? [{ text: `与载入的工程一致：${saved.length} 拍的版式与标题逐拍吻合（同 SRT 复现成功）。`, kind: "ok" }]
+    : [{
+        text: `与载入的工程有出入：存档 ${saved.length} 拍、复现 ${now.length} 拍（首个差异在第 ${
+          Math.max(1, saved.findIndex((s, i) => s.layoutId !== now[i]?.layoutId || s.headline !== now[i]?.headline) + 1)
+        } 拍）—— 工程是在规划逻辑改版之前存的，画面以本次复现为准。`,
+        kind: "warn",
+      }];
+}
 
 function renderBeatList() {
   beatList.innerHTML = shots

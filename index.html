@@ -49,6 +49,9 @@
           <button id="btn-export" class="btn" disabled>导出 MP4</button>
           <button id="btn-cancel" class="btn" hidden disabled>取消导出</button>
           <button id="btn-save" class="btn" disabled>保存工程 JSON</button>
+          <label class="btn file-btn">载入工程 JSON
+            <input id="project-file" type="file" accept=".json,application/json" hidden />
+          </label>
         </div>
         <ol id="status-steps" class="status-steps">
           <li data-step="read">读取</li>

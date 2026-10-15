@@ -11,12 +11,25 @@ import {
 
 export type { ExportSettings };
 
+/** 导出进度快照。逐帧渲染 + WebCodecs 编码都在主线程，长片导出期间界面完全静止，
+ *  没有进度用户只能盯着一个「导出中…」猜是否卡住。 */
+export interface ExportProgress {
+  /** 已编码帧数（0..total） */
+  frame: number;
+  total: number;
+  /** 本次导出已耗时（毫秒） */
+  elapsedMs: number;
+  /** 按已用时与完成比例线性外推的剩余毫秒数；frame=0 时为 undefined */
+  etaMs?: number;
+}
+
 export async function exportMp4(
   stage: StageHandle,
   duration: number,
-  opts?: { signal?: AbortSignal } & Partial<ExportSettings>,
+  opts?: { signal?: AbortSignal; onProgress?: (p: ExportProgress) => void } & Partial<ExportSettings>,
 ): Promise<Blob> {
   const signal = opts?.signal;
+  const onProgress = opts?.onProgress;
   if (typeof VideoEncoder === "undefined") {
     throw new Error("当前浏览器不支持 WebCodecs，请使用 Chrome/Edge 110+");
   }
@@ -52,6 +65,7 @@ export async function exportMp4(
   });
 
   const totalFrames = Math.ceil(duration * fps);
+  const startedAt = performance.now();
   const resumeAt = stage.time();
   const wasPlaying = stage.playing();
   stage.pause();
@@ -70,9 +84,20 @@ export async function exportMp4(
       });
       encoder.encode(frame, { keyFrame: f % (fps * 2) === 0 });
       frame.close();
-      if (f % 8 === 0) await new Promise((r) => setTimeout(r)); // 让出主线程
+      // 让出主线程 + 上报进度。回调放在让出点之后：这里已经是唯一能安全写 DOM 的时机
+      // （循环体其余部分是同步的），也保证节流到每 8 帧一次，不会被进度上报本身拖慢。
+      if (f % 8 === 0) {
+        await new Promise((r) => setTimeout(r));
+        if (onProgress) {
+          const elapsedMs = performance.now() - startedAt;
+          const p: ExportProgress = { frame: f, total: totalFrames, elapsedMs };
+          if (f > 0) p.etaMs = Math.round(elapsedMs * (totalFrames - f) / f);
+          onProgress(p);
+        }
+      }
     }
 
+    onProgress?.({ frame: totalFrames, total: totalFrames, elapsedMs: performance.now() - startedAt });
     await encoder.flush();
     if (encodeError) throw encodeError;
     muxer.finalize();
