@@ -24,6 +24,22 @@
           <textarea id="override-input" rows="6" spellcheck="false"
             placeholder='{ "2": { "bigNumber": "120毫秒", "source": "耗时120毫秒" } }'></textarea>
         </label>
+        <div class="export-settings">
+          <span class="field-label">导出设置</span>
+          <label class="field-inline">
+            <span>分辨率</span>
+            <select id="export-res"></select>
+          </label>
+          <label class="field-inline">
+            <span>帧率</span>
+            <select id="export-fps"></select>
+          </label>
+          <label class="field-inline">
+            <span>码率</span>
+            <select id="export-bitrate"></select>
+          </label>
+          <span id="export-summary" class="export-summary"></span>
+        </div>
         <div class="actions">
           <button id="btn-load" class="btn btn-primary">载入并规划</button>
           <label class="btn file-btn">选择 .srt 文件

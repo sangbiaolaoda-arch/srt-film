@@ -78,11 +78,11 @@ RenderContent 数字溯源：`extractNumbers`（阿拉伯 + 中文数字两层�
 
 | # | 缺陷 | 影响 | 状态 |
 |---|---|---|---|
-| 1 | BEAT NN 母版角标 stage 母版无条件渲染（`stage.tsx:55`），`decor:false` 管不到——成片左下角挂角标 | 用户可见，成片不像成品 | 待定（改 stage.tsx 需用户确认） |
+| 1 | BEAT NN 母版角标 stage 母版无条件渲染（`stage.tsx:55`），`decor:false` 管不到——成片左下角挂角标 | 用户可见，成片不像成品 | **已修（Phase 8）**（见下方附表） |
 | 2 | v2 特效层仅 4/16（strata/dust/dark-word/duo），用户评「敷衍」 | 氛围拍有粒子，编辑风 8 拍纯排版 | 升级项 A（粒子扩编辑风）/B（BgKind 背景）待选 |
 | 3 | `layout.emphasis` 全库无渲染消费点（死字段） | 代码卫生 | 已记待定，不删（保旧兼容） |
 | 4 | 01/05 语料长句 headline 需人工覆写缩句（05-overrides 拍 11/12） | 自动规划对长句的处理上限 | 部分缓解（custom 豁免安全区），根治在 Phase 6 布局引擎 |
-| 5 | 槽级 `m`×`mx` 同元素冲突无门禁（只有版式级 enter 冲突校验） | 潜在动效冲突漏网 | 待 Phase 7 |
+| 5 | 槽级 `m`×`mx` 同元素冲突无门禁（只有版式级 enter 冲突校验） | 潜在动效冲突漏网 | 部分缓解（Phase 7 第一刀：`stage.tsx` 把槽级强调 `mx` 改到入场收尾后再 0.12s 触发，避开同一 transform 属性争用）；**自动门禁仍未做** —— 冲突检测要靠逐元素比对 tween 归属性，当前只在版式级校验 `enter` |
 | 6 | image 图像组板式未做 | 「文字/图像/图表」三层中图像层缺满版板式 | Phase 6 |
 
 ## 8. 可保留 / 需适配 / 确需替换
@@ -108,3 +108,11 @@ curl api.github.com/repos/heygen-com/hyperframes  # 63.9k★ TS Apache-2.0，pro
 ---
 
 **Phase 0 结论：PASS。** 基线可在本机重复（dev server + 8 语料 + 3 次连续导出成功）；保留/适配/替换边界清晰；主要缺陷 6 项已排序并有归属阶段。进入 Phase 1（选型记录见 `renderer-decision.md`）。
+
+---
+
+## 附：缺陷状态更新（Phase 8 收尾）
+
+| # | 缺陷 | 状态 |
+|---|---|---|
+| 1 | BEAT NN 母版角标进成片 | **已修（Phase 8）**：`stage.tsx` 的 `<BeatMark>` 与 `<DecorLayer>` 同走 `layout.decor !== false` 门控（`LayoutSVG` 里本来就受门控，舞台这条旁路渲染绕过了）。3 个 catalog 暗底定版式 + v2 `dark-word` 共 4 个版式的成片左下角不再挂角标。回归见 `tests/layouts.test.ts`「舞台层 · 拍号角标门控」。 |

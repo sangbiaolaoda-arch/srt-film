@@ -7,6 +7,7 @@
 //
 // 用法：
 //   node tools/e2e-export.mjs [--srt <路径>] [--ov <路径>] [--port 5199] [--out <mp4>]
+//                              [--w 1280 --h 720] [--fps 24]     // 导出档位，不给=页面默认 1080p30
 // 退出码：任一环节失败 → 1；全部通过 → 0。
 
 import { spawn } from "node:child_process";
@@ -94,6 +95,16 @@ const srtPath = resolve(ROOT, argOf("--srt", "examples/08-forgetting-20s.srt"));
 const ovPath = argv.includes("--ov") ? resolve(ROOT, argOf("--ov", "")) : null;
 const port = argOf("--port", "5199");
 const outMp4 = resolve(ROOT, argOf("--out", join(OUTDIR, "e2e.mp4")));
+// 导出档位（Phase 8）：不给就走页面默认值（1080p30），给了就覆盖面板后走真实导出路径，
+// 用于验收「非默认分辨率/帧率能不能真编出来」。
+const expW = Number(argOf("--w", "0")) || null;
+const expH = Number(argOf("--h", "0")) || null;
+const expFps = Number(argOf("--fps", "0")) || null;
+const expSettings = JSON.stringify(
+  Object.fromEntries(
+    Object.entries({ width: expW, height: expH, fps: expFps }).filter(([, v]) => v !== null),
+  ),
+);
 
 const results = [];
 const check = (name, ok, detail = "") => {
@@ -184,7 +195,7 @@ try {
   const startJs = `
     window.__exportDone = false;
     window.__exportErr = null;
-    window.__exportMp4(window.__stage, window.__stage.duration).then((blob) => {
+    window.__exportMp4(window.__stage, window.__stage.duration, ${expSettings}).then((blob) => {
       window.__lastMp4 = blob;
       window.__exportDone = true;
     }).catch((e) => {
@@ -251,7 +262,11 @@ try {
     const black = yavgs.filter((y) => y <= 16.5).length;
     const white = yavgs.filter((y) => y >= 234).length;
     check("ffprobe 容器可读", pr.code === 0 && !!dur, dur ? `${dur[1]}h${dur[2]}m${dur[3]}s ${res?.[1] ?? "?"} ${frames ?? "?"}` : txt.slice(-200));
-    check("帧数符合预期（≈拍数×时长×30fps）", !!frames && Number(frames.replace("frame=", "")) > 100, frames ?? "?");
+    check("帧数符合预期（≈时长×fps）", !!frames && Number(frames.replace("frame=", "")) > 100, frames ?? "?");
+    // 分辨率必须等于本次请求的档位：面板选 720p 却导出 1080p 是「设置没接上」的典型症状。
+    if (expW && expH) {
+      check("ffprobe 分辨率 = 请求档位", res?.[1] === `${expW}x${expH}`, `${res?.[1] ?? "?"}（请求 ${expW}x${expH}）`);
+    }
     check("无全黑帧", black === 0, `YAVG≤16.5 的帧 ${black}/${yavgs.length}`);
     check("无爆白帧", white === 0, `YAVG≥234 的帧 ${white}/${yavgs.length}`);
   }

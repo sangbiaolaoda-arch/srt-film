@@ -7,6 +7,15 @@ import { validateSRT, decodeSrtBytes } from "../core/srt-validate";
 import { toRenderPlan, serializeRenderPlan } from "../core/render-plan";
 import { buildStage, type Shot, type StageHandle } from "./stage";
 import { exportMp4 } from "../export/mp4";
+import {
+  DEFAULT_EXPORT,
+  EXPORT_BITRATE_OPTIONS,
+  EXPORT_FPS_OPTIONS,
+  EXPORT_RESOLUTIONS,
+  avcLevelLabel,
+  resolveExport,
+  type ExportSettings,
+} from "../export/settings";
 import "../styles/main.css";
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -25,6 +34,10 @@ const timecode = $<HTMLSpanElement>("timecode");
 const beatList = $<HTMLOListElement>("beat-list");
 const statusSteps = $<HTMLOListElement>("status-steps");
 const statusLog = $<HTMLDivElement>("status-log");
+const selRes = $<HTMLSelectElement>("export-res");
+const selFps = $<HTMLSelectElement>("export-fps");
+const selBitrate = $<HTMLSelectElement>("export-bitrate");
+const exportSummary = $<HTMLSpanElement>("export-summary");
 
 type ReportKind = "ok" | "err" | "warn";
 type ReportLine = { text: string; kind: ReportKind };
@@ -54,8 +67,7 @@ function log(msg: string) {
   statusLog.scrollTop = statusLog.scrollHeight;
 }
 
-const STEP_ORDER = ["read", "analyze", "plan", "preview", "export", "verify"];
-function setStep(name: string, state: "active" | "done" | "fail") {
+const STEP_ORDER = ["read", "analyze", "plan", "preview", "export", "verify"];function setStep(name: string, state: "active" | "done" | "fail") {
   const idx = STEP_ORDER.indexOf(name);
   if (idx < 0) return;
   statusSteps.querySelectorAll("li").forEach((li, i) => {
@@ -75,6 +87,53 @@ function downloadBlob(blob: Blob, filename: string) {
   a.click();
   URL.revokeObjectURL(a.href);
 }
+
+// —— 导出设置面板（Phase 8）——
+// 档位列表只有一份定义（export/settings.ts），这里只做 DOM 填充与读回。
+// 码率下拉里多一项「自动（按分辨率）」：换分辨率时不改码率是最容易犯的错
+//（1440p 配 4Mbps 会明显发糊），自动档直接用 defaultBitrate 派生。
+const BITRATE_AUTO = "auto";
+
+function fillExportPanel(): void {
+  selRes.innerHTML = EXPORT_RESOLUTIONS.map(
+    (r) => `<option value="${r.width}x${r.height}">${r.label}</option>`,
+  ).join("");
+  selRes.value = `${DEFAULT_EXPORT.width}x${DEFAULT_EXPORT.height}`;
+  selFps.innerHTML = EXPORT_FPS_OPTIONS.map((f) => `<option value="${f}">${f} fps</option>`).join("");
+  selFps.value = String(DEFAULT_EXPORT.fps);
+  const autoLabel = `自动（按分辨率）`;
+  selBitrate.innerHTML =
+    `<option value="${BITRATE_AUTO}">${autoLabel}</option>` +
+    EXPORT_BITRATE_OPTIONS.map((b) => `<option value="${b}000000">${b} Mbps</option>`).join("");
+  selBitrate.value = BITRATE_AUTO;
+  [selRes, selFps, selBitrate].forEach((el) => el.addEventListener("change", refreshExportSummary));
+  refreshExportSummary();
+}
+
+/** 读回面板 → 完整档位。码率选「自动」时留 undefined，交给 resolveExport 按像素数派生。 */
+function currentExport(): ExportSettings {
+  const [w, h] = selRes.value.split("x").map(Number);
+  const bitrateRaw = selBitrate.value;
+  return resolveExport({
+    width: w,
+    height: h,
+    fps: Number(selFps.value),
+    bitrate: bitrateRaw === BITRATE_AUTO ? undefined : Number(bitrateRaw),
+  });
+}
+
+/** 摘要行把「实际会用到的参数」摊开：H.264 level 是派生结果，不摊开用户无从判断
+ *  1440p 是不是真能编（超 level 会直接失败，不是降质）。 */
+function refreshExportSummary(): void {
+  try {
+    const cfg = currentExport();
+    exportSummary.textContent = `${cfg.width}×${cfg.height} · ${cfg.fps}fps · ${(cfg.bitrate / 1e6).toFixed(0)}Mbps · H.264 Level ${avcLevelLabel(cfg.width, cfg.height, cfg.fps)}`;
+  } catch (e) {
+    exportSummary.textContent = (e as Error).message;
+  }
+}
+
+fillExportPanel();
 
 function startTicker() {
   cancelAnimationFrame(raf);
@@ -224,6 +283,7 @@ srtFile.addEventListener("change", () => {
 // 导出：互斥（exporting 锁）+ 可取消（AbortController）+ 失败可重试（按钮复位）。
 btnExport.addEventListener("click", async () => {
   if (exporting || !stage || shots.length === 0) return;
+  const cfg = currentExport();
   exporting = true;
   exportCtl = new AbortController();
   btnExport.disabled = true;
@@ -231,15 +291,15 @@ btnExport.addEventListener("click", async () => {
   btnCancel.hidden = false;
   btnCancel.disabled = false;
   setStep("export", "active");
-  log(`开始导出 ${shots.length} 拍…`);
+  log(`开始导出 ${shots.length} 拍 → ${cfg.width}×${cfg.height}@${cfg.fps}fps / ${(cfg.bitrate / 1e6).toFixed(0)}Mbps…`);
 
   try {
-    const blob = await exportMp4(stage, stage.duration, { signal: exportCtl.signal });
-    downloadBlob(blob, "srt-film.mp4");
+    const blob = await exportMp4(stage, stage.duration, { signal: exportCtl.signal, ...cfg });
+    downloadBlob(blob, `srt-film-${cfg.width}x${cfg.height}-${cfg.fps}fps.mp4`);
     setStep("export", "done");
     setStep("verify", "done");
     log(`导出完成：${(blob.size / 1e6).toFixed(1)}MB`);
-    report([{ text: `MP4 已导出（${shots.length} 拍 / ${(blob.size / 1e6).toFixed(1)}MB）。可点「保存工程 JSON」留存可复现产物。`, kind: "ok" }]);
+    report([{ text: `MP4 已导出：${cfg.width}×${cfg.height}@${cfg.fps}fps，${shots.length} 拍，${(blob.size / 1e6).toFixed(1)}MB。可点「保存工程 JSON」留存可复现产物。`, kind: "ok" }]);
   } catch (e) {
     const msg = (e as Error).message;
     setStep("export", "fail");
@@ -263,14 +323,15 @@ btnExport.addEventListener("click", async () => {
 btnCancel.addEventListener("click", () => exportCtl?.abort());
 
 // 可复现产物：导出 schema 背书的 RenderPlan（SRT + 镜头计划 + 画布 + 导出配置）。
+// 导出档位从面板读，让工程 JSON 与实际 MP4 是同一份参数。
 btnSave.addEventListener("click", () => {
   if (!lastPlan || shots.length === 0) return;
-  const rp = toRenderPlan(lastPlan, { srt: srtInput.value });
+  const rp = toRenderPlan(lastPlan, { srt: srtInput.value, export: currentExport() });
   downloadBlob(
     new Blob([serializeRenderPlan(rp)], { type: "application/json" }),
     "srt-film-render-plan.json",
   );
-  log(`已保存 RenderPlan v${rp.version}（${rp.scenes.length} 拍，schema=${rp.schema}）`);
+  log(`已保存 RenderPlan v${rp.version}（${rp.scenes.length} 拍，${rp.canvas.width}×${rp.canvas.height}@${rp.canvas.fps}，schema=${rp.schema}）`);
 });
 
 function renderBeatList() {

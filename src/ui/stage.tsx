@@ -38,8 +38,10 @@ export interface StageHandle {
 /** 运动编排的全部决策在 motion/schedule.ts（纯函数、可测、确定性）。
  *  这里只做「翻译」：把 MotionPlan 逐条变成 GSAP timeline 调用。 */
 
-/** 离屏的版式容器：不可见，但保留布局（GSAP 需要能算盒子）。 */
-function Stage({ shots }: { shots: Shot[] }): JSX.Element {
+/** 离屏的版式容器：不可见，但保留布局（GSAP 需要能算盒子）。
+ *  导出给测试用：decor:false 时拍号角标与装饰层都不该出现在这一层里
+ *  （成片左下角挂母版标记是 baseline-audit 缺陷 1）。 */
+export function Stage({ shots }: { shots: Shot[] }): JSX.Element {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${STAGE_W} ${STAGE_H}`} width={STAGE_W} height={STAGE_H} data-stage="">
       {shots.map((shot, i) => (
@@ -47,7 +49,11 @@ function Stage({ shots }: { shots: Shot[] }): JSX.Element {
           {/* 机位运动作用于这个内层容器：与转场/出场（作用于外层 data-layer）不抢同一 transform */}
           <g data-cam={i}>
             <LayoutLayer layout={shot.layout} content={shot.content} />
-            <BeatMark beat={shot.content.beat} style={shot.layout.style} />
+            {/* 拍号角标跟 DecorLayer 同一个门控：decor:false 的定版式（暗底单图那种）
+                成片左下角不该挂母版标记 —— LayoutSVG 里本来就受门控，舞台这条旁路渲染绕过了。 */}
+            {shot.layout.decor !== false && (
+              <BeatMark beat={shot.content.beat} style={shot.layout.style} />
+            )}
             {shot.layout.decor !== false && (
               <DecorLayer beat={shot.content.beat} total={shots.length} style={shot.layout.style} />
             )}

@@ -16,6 +16,7 @@ import { KAOJIN_SCENES } from "../src/layouts/kaojin";
 import { WANGJI_SCENES } from "../src/layouts/wangji";
 import { hasPunct } from "../src/core/text";
 import { shotAt } from "../src/render/frame";
+import { Stage } from "../src/ui/stage";
 import { parseSRT } from "../src/core/srt";
 import { planBeats } from "../src/core/beats";
 import { composeScenes } from "../src/core/compose";
@@ -529,5 +530,31 @@ describe("decor 层 · density token 消费（Phase 7 第三刀）", () => {
     const ed = render("editorial");
     expect(ed).not.toContain('r="21"');
     expect(ed).not.toContain("decor-vig"); // 暗角只归净底分支
+  });
+});
+
+describe("舞台层 · 拍号角标门控（Phase 8，修 baseline-audit 缺陷 1）", () => {
+  const mkShot = (layout: Layout): Shot => ({
+    layout,
+    content: { ...demoContent(3), beat: 3 },
+    start: 0,
+    end: 2,
+  });
+  const renderStage = (layout: Layout) =>
+    renderToStaticMarkup(createElement(Stage, { shots: [mkShot(layout)] }));
+
+  const decorFalse = [...LAYOUTS, ...V2_LAYOUTS].filter((l) => l.decor === false);
+  it(`catalog+v2 共 ${decorFalse.length} 个 decor:false 版式在库里`, () => {
+    expect(decorFalse.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("decor:false 版式的舞台层内没有拍号角标", () => {
+    for (const l of decorFalse) {
+      expect(renderStage(l)).not.toContain("BEAT 03");
+    }
+  });
+
+  it("decor 未关的版式仍带角标（门控没有误伤）", () => {
+    expect(renderStage(LAYOUTS[0]!)).toContain("BEAT 03");
   });
 });

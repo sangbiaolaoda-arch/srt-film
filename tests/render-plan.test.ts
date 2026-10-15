@@ -30,7 +30,7 @@ describe("RenderPlan 契约", () => {
     expect(rp.schema).toBe(RENDER_PLAN_SCHEMA);
     expect(rp.version).toBe(RENDER_PLAN_VERSION);
     expect(rp.canvas).toEqual({ width: 1920, height: 1080, fps: 30 });
-    expect(rp.export).toEqual({ codec: "avc", container: "mp4", audio: false });
+    expect(rp.export).toEqual({ codec: "avc", container: "mp4", audio: false, bitrate: 8_000_000 });
     expect(rp.scenes).toHaveLength(result.shots.length);
   });
 

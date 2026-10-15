@@ -65,6 +65,31 @@ textarea {
 }
 textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
+/* —— 导出设置（Phase 8）：与按钮同一行的紧凑三档，摘要行摊开实际参数 —— */
+.export-settings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+}
+.export-settings > .field-label { margin-bottom: 0; }
+.field-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-dim); }
+.field-inline select {
+  background: #fff;
+  border: 1px solid var(--hairline);
+  border-radius: 2px;
+  padding: 4px 6px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ink);
+}
+.field-inline select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.export-summary { font-size: 12px; color: var(--ink-dim); font-family: ui-monospace, Consolas, monospace; }
+
 .actions { display: flex; gap: 10px; }
 .btn {
   border: 1px solid var(--ink);

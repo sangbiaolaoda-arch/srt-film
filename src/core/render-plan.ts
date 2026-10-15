@@ -7,13 +7,10 @@ import type { PlanResult } from "./plan";
 import type { Shot } from "./shot";
 import type { Style } from "../layouts/types";
 import type { NarrativeRole } from "./compose";
+import { resolveExport, type ExportSettings } from "../export/settings";
 
 export const RENDER_PLAN_SCHEMA = "srt-film/render-plan";
 export const RENDER_PLAN_VERSION = 1;
-
-export const EXPORT_W = 1920;
-export const EXPORT_H = 1080;
-export const EXPORT_FPS = 30;
 
 export interface RenderCanvas {
   width: number;
@@ -28,6 +25,8 @@ export interface RenderPlanExport {
   container: "mp4";
   /** 本项目固定无音轨 */
   audio: false;
+  /** 视频码率（bps）—— Phase 8 面板可改，记录下来才可复现同一份产物 */
+  bitrate?: number;
 }
 
 /** 一拍的规划（对应 plan() 产出的 Shot，附加溯源与转场元数据）。 */
@@ -82,20 +81,23 @@ function toScene(shot: Shot, i: number): ScenePlan {
   };
 }
 
-/** 把规划结果包成完整的、可序列化的 RenderPlan。 */
+/** 把规划结果包成完整的、可序列化的 RenderPlan。
+ *  `export` 传入用户在导出面板上选的档位（缺省走 1080p30/8Mbps），记录进 canvas + export
+ *  两处 —— 这样保存下来的工程 JSON 与实际导出的 MP4 是同一份参数，可复现。 */
 export function toRenderPlan(
   result: PlanResult,
-  opts: { srt: string; projectId?: string; styleProfile?: string },
+  opts: { srt: string; projectId?: string; styleProfile?: string; export?: Partial<ExportSettings> },
 ): RenderPlan {
+  const cfg = resolveExport(opts.export);
   return {
     schema: RENDER_PLAN_SCHEMA,
     version: RENDER_PLAN_VERSION,
     projectId: opts.projectId ?? "srt-film",
     sourceSrt: opts.srt,
-    canvas: { width: EXPORT_W, height: EXPORT_H, fps: EXPORT_FPS },
+    canvas: { width: cfg.width, height: cfg.height, fps: cfg.fps },
     styleProfile: opts.styleProfile ?? "editorial",
     scenes: result.shots.map(toScene),
-    export: { codec: "avc", container: "mp4", audio: false },
+    export: { codec: "avc", container: "mp4", audio: false, bitrate: cfg.bitrate },
     generatedAt: new Date().toISOString(),
   };
 }

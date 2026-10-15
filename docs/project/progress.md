@@ -204,3 +204,30 @@
 本阶段解决的问题：转场库无连续性语汇（继承只发生在内容层）；density token 四轮无消费方；seek 一致性只有两点抽样、缺全片批量门禁。
 是否可以进入下一阶段：是。
 下一阶段入口：Phase 8 — 交付层（导出设置面板/多分辨率/帧率）；母版角标 BEAT NN 无条件渲染问题（baseline-audit 第 1 项）可择机插入。
+
+## Phase 8 第一刀 — 交付层：导出设置面板 + 多分辨率/帧率（2026-10-15 深夜）
+
+**目标**：让成片规格可选（三档分辨率 × 四档帧率 × 码率），并顺手修掉 baseline-audit 缺陷 1（BEAT NN 母版角标进成片）。
+
+- `src/export/settings.ts`（新）：导出档位的**唯一事实来源**。此前 `EXPORT_W/H/FPS` 在 `mp4.ts` 与 `render-plan.ts` 各存一份 —— 用户一旦能改档，两处必然分叉（「面板选 720p、工程 JSON 还写着 1080p」）。现在两边都从这里取。
+  - `avcLevelFor(w,h,fps)`：按 H.264 表 A-1 的 MaxFS/MaxMBPS 逐级匹配（720p→3.1 / 1080p→4.0 / 1440p@60→5.1），超 5.1 抛错。**这是必要修复不是锦上添花**：codec 串硬编码 `avc1.420028`，用户选 1440p 就会配到编码器拒绝的 level（不是降质，是导出直接失败）。
+  - `avcLevelLabel`：level_idc 的可读写法（40 → “4.0”）。面板若显示 `28` 会被读成「28 级」。
+  - `defaultBitrate(w,h)`：码率按像素数缩放，以「1080p = 8Mbps」为锚点（既有产物逐位不变），1440p→14Mbps、720p→4Mbps。
+  - 档位常量 `EXPORT_RESOLUTIONS`（720p/1080p/1440p）、`EXPORT_FPS_OPTIONS`（24/25/30/60）、`EXPORT_BITRATE_OPTIONS`（4/8/12/16 Mbps）。
+- `src/export/mp4.ts`：`exportMp4` 收 `opts.width/height/fps/bitrate`（缺省 = `DEFAULT_EXPORT`，既有行为不变）；`t = f/fps`、`frame = f`、`duration = 1e6/fps`、关键帧间隔 `fps*2` 全部按档位派生。
+- `src/core/render-plan.ts`：`toRenderPlan` 收 `opts.export`，把档位写进 `canvas` 并新增 `export.bitrate` —— 保存的工程 JSON 与实际 MP4 是同一份参数，可复现。
+- `index.html` + `src/ui/main.ts` + `src/styles/main.css`：新增「导出设置」面板（三个下拉 + 一行摘要）。摘要摊开实际参数含 H.264 Level，因为「超 level 会直接失败」这件事用户在点导出前必须知道。码率下拉首项是「自动（按分辨率）」——换分辨率时忘改码率是最容易犯的错（1440p 配 4Mbps 明显发糊）。
+- `src/ui/stage.tsx`（缺陷 1 修复）：`<BeatMark>` 与 `<DecorLayer>` 同走 `layout.decor !== false` 门控。`LayoutSVG` 里本来就受门控，舞台这条旁路渲染绕过了它，导致 4 个暗底定版式的成片左下角挂母版角标。`Stage` 组件改为导出以便测试。
+- `tools/e2e-export.mjs`：加 `--w/--h/--fps`，并新增一条断言「ffprobe 分辨率 = 请求档位」——面板选 720p 却导出 1080p 是「设置没接上」的典型症状。
+- 测试：235 全过（+16：新 `tests/export-settings.test.ts` 14 例覆盖 level 表/码率派生/缺省补全/RenderPlan 记录一致性；`layouts.test.ts` +2 覆盖角标门控）。
+- **回归与多档 e2e 验收（全部实跑）**：
+  - tsc 零错；build 成功；plan-dry **6/6 语料**门禁过；constraint-audit 212 版式 0 错误 0 告警。
+  - e2e 默认档 03 语料 **14/14**：73.93s / 2218 帧精确（= 时长×30，与改动前逐帧一致）。
+  - e2e **720p@24** 08 语料 **15/15**：19.00s / **456 帧精确**（= 时长×24），ffprobe 分辨率 = 1280×720。
+  - e2e **1440p@30** 08 语料 **15/15**：19.00s / **570 帧精确**，ffprobe 分辨率 = 2560×1440。三档均无全黑/爆白帧。
+  - 两档非默认 MP4 抽 t=8s 帧目视：内容一致（同一时刻不同分辨率）、非空非糊。
+  - qa-frames 批量 seek 一致性 01 语料 33/33 帧同时刻两次渲染逐字节相同、页面零报错（6 镜头 Δ<1.2 仍是上轮已 A/B 实证的存量判定）。
+- 顺手核实的**存量**问题（非本刀引入，已 stash 旧码实测对照）：左栏 5 个按钮被挤成竖排文字（68/74/52/67/80px 宽 × 80px 高）。旧构建尺寸逐项相同，确认与本刀无关 —— 380px 栏宽放不下 5 个并排按钮，Phase 9 可顺手做响应式换行。
+本阶段解决的问题：成片规格写死 1920×1080@30/8Mbps；H.264 level 硬编码（换分辨率即导出失败）；导出档位两处定义会分叉；BEAT NN 母版角标进成片。
+是否可以进入下一阶段：是。
+下一阶段入口：左栏按钮响应式换行（存量 UI 问题）；baseline-audit 缺陷 2（v2 特效层 4/16）与 6（image 组板式）待用户选方向；缺陷 5 的槽级 m×mx 自动门禁仍未做。
