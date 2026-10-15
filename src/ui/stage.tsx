@@ -9,8 +9,7 @@ import gsap from "gsap";
 import { BeatMark, LayoutLayer } from "../layouts/render";
 import { DecorLayer } from "../layouts/decor";
 import { applyMotion } from "../motion/apply";
-import { MOTION_BY_ID } from "../motion/catalog";
-import { buildMotionSchedule, clampPace, enterForSlot, staggerAt } from "../motion/schedule";
+import { buildMotionSchedule, slotTweens } from "../motion/schedule";
 import type { Shot } from "../core/shot";
 import { STAGE_FPS, STAGE_H, STAGE_W, renderFrame } from "../render/frame";
 
@@ -121,24 +120,13 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
     }
     applyMotion(plan.transition.motion, { tl, el: layer, at: plan.transition.at, dur: plan.transition.dur });
 
+    // 槽位入场 / 槽级 mx / 拍级 emphasis：全部由 slotTweens 统一排期（见 schedule.ts 的注释）。
+    // 这里只读 DOM 上声明的 intent（data-motion / data-mx）喂进去，不再自己算时间。
     const slots = Array.from(layer.querySelectorAll<SVGGElement>("[data-anim]"));
     slots.forEach((slotEl, k) => {
-      const id = enterForSlot(plan, k, slotEl.getAttribute("data-motion"));
-      const def = MOTION_BY_ID.get(id) ?? MOTION_BY_ID.get("m-fade-up")!;
-      const slotAt = staggerAt(plan, k);
-      const enterDur = clampPace(def.dur, plan.pace);
-      applyMotion(def.id, { tl, el: slotEl, at: slotAt, dur: enterDur });
-      // 槽级强调（版式在槽上声明的 mx）：入场收尾后再触发，避免和入场抢同一个 transform 属性。
-      const mxId = slotEl.getAttribute("data-mx");
-      const mxDef = mxId ? MOTION_BY_ID.get(mxId) : undefined;
-      if (mxDef) applyMotion(mxDef.id, { tl, el: slotEl, at: slotAt + enterDur + 0.12, dur: clampPace(mxDef.dur, plan.pace) });
+      const tws = slotTweens(plan, k, { m: slotEl.getAttribute("data-motion"), mx: slotEl.getAttribute("data-mx") });
+      for (const tw of tws) applyMotion(tw.motion, { tl, el: slotEl, at: tw.at, dur: tw.dur });
     });
-
-    // 拍级强调：作用于首个主槽，时机由 schedule 定（入场收尾后）
-    if (plan.emphasis) {
-      const main = slots[0];
-      if (main) applyMotion(plan.emphasis.motion, { tl, el: main, at: plan.emphasis.at, dur: plan.emphasis.dur });
-    }
 
     // 环境动效：贯穿整拍图层（schedule 保证总长不超出拍长）
     if (plan.ambient) {

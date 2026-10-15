@@ -422,6 +422,41 @@ export function staggerAt(plan: MotionPlan, k: number): number {
   return plan.at + plan.enters.staggerStep * Math.min(k, 4);
 }
 
+/** 槽级强调与入场的间隔（原 stage 口径：入场收尾后 0.12s）。 */
+export const MX_GAP = 0.12;
+
+/** 一条落在某元素上的 tween：只记点与时长，不关心它具体怎么画。 */
+export interface SlotTween {
+  role: "enter" | "mx" | "emphasis";
+  motion: string;
+  /** 全局时间轴上的绝对起点 */
+  at: number;
+  dur: number;
+}
+
+/**
+ * 落在第 k 个槽上的**全部** tween —— 入场、槽级 mx、拍级 emphasis（只落首个主槽）。
+ *
+ * 为什么必须是唯一权威：缺陷 5 的根源就是舞台算一套时间、门禁算另一套。两处各写
+ * 一遍 `slotAt + enterDur + 0.12`，改了舞台忘了改门禁（或反之），「Peak 冲突」
+ * 这种只在特定 pace/拍长下才出现的错就会从缝里漏过去。stage.tsx 与 plan.ts 的
+ * 门禁都走这里，谁都不许自己算。
+ */
+export function slotTweens(plan: MotionPlan, k: number, slot?: { m?: string | null; mx?: string | null }): SlotTween[] {
+  const at = staggerAt(plan, k);
+  const enterId = enterForSlot(plan, k, slot?.m ?? null);
+  const enterDur = clampPace(MOTION_BY_ID.get(enterId)?.dur ?? 0.5, plan.pace);
+  const out: SlotTween[] = [{ role: "enter", motion: enterId, at, dur: enterDur }];
+
+  const mxDef = slot?.mx ? MOTION_BY_ID.get(slot.mx) : undefined;
+  if (mxDef) {
+    out.push({ role: "mx", motion: mxDef.id, at: at + enterDur + MX_GAP, dur: clampPace(mxDef.dur, plan.pace) });
+  }
+  // 拍级强调：stage 原实现挂在 slots[0] 上
+  if (k === 0 && plan.emphasis) out.push({ role: "emphasis", ...plan.emphasis });
+  return out;
+}
+
 /** 出场/转场兜底校验：未知 id 一律回落安全值（构建期门禁另在 tests 里全覆盖）。 */
 export function safeMotion(id: string | undefined, fallback: string): string {
   return id && MOTION_BY_ID.has(id) ? id : fallback;

@@ -15,6 +15,8 @@ import { checkLayout } from "../layouts/constraints";
 import type { Group } from "../layouts/types";
 import { resolveProfile } from "../styles/style-system";
 import { MOTION_BY_ID, validateMotionSet } from "../motion/catalog";
+import { buildMotionSchedule } from "../motion/schedule";
+import { describeConflict, slotConflicts } from "../motion/conflict";
 
 export interface PlanResult {
   shots: Shot[];
@@ -166,6 +168,20 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
     }
 
     out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id), narrative, continuity });
+  });
+
+  // 第四遍：槽级动效冲突门禁（baseline-audit 缺陷 5）。
+  // 版式级 enter 冲突早在第二遍查过；这里补的是「同一个槽上，两条 tween 在同一段
+  // 时间里写同一个属性」—— 槽级 mx 与入场/拍级 emphasis 撞车的情况。
+  // 时间与演出共用一个 slotTweens（schedule.ts），门禁不再自己算一份：
+  // 两处各算一遍的话，「只在某种 pace/拍长下才撞」的错就会从缝里漏过去。
+  const sched = buildMotionSchedule(out);
+  sched.plans.forEach((mp, i) => {
+    const shot = out[i]!;
+    if (shot.layout.custom) return; // 手绘满版画面不走槽位 / 槽级动效
+    for (const c of slotConflicts(shot.layout, mp)) {
+      problems.push(`拍 ${shot.content.beat}：${describeConflict(c)}`);
+    }
   });
 
   return { shots: out, problems, warnings, styles };
