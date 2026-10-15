@@ -14,4 +14,7 @@ export interface Shot {
   cueIds?: number[];
   /** Phase 4 叙事层：本拍的角色、目的与禁区（不臆造） */
   narrative?: { role: NarrativeRole; purpose: string; forbidden: string[] };
+  /** Phase 7 跨镜头连续性：与上一拍共享的数字原文（enrichNarrative 派生）。
+   *  非空 = 本拍视觉上继承上一拍的 motif（见 render/continuity.ts）。 */
+  continuity?: string[];
 }

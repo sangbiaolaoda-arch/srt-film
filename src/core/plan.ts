@@ -51,7 +51,9 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
     if (ovr?.left) content.left = ovr.left;
     if (ovr?.right) content.right = ovr.right;
     const narrative = { role: applied.narrativeRole, purpose: applied.purpose, forbidden: applied.forbidden };
-    return { beat, ovr, content, narrative };
+    // continuity 必须在这里接住：enrichNarrative 在 baseScenes 上算好了共享数字，
+    // 不往 prepared/shot 带的话这条数据就死在第一遍（渲染层无从消费）。
+    return { beat, ovr, content, narrative, continuity: applied.continuityIn };
   });
 
   // 第二遍：全片定风格（覆写优先，自动兜底按配额+锚点选海报风拍）
@@ -68,7 +70,7 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
   const used = new Map<Group, number>();
   const bump = (g: Group) => used.set(g, (used.get(g) ?? 0) + 1);
 
-  prepared.forEach(({ beat, ovr, content, narrative }, i) => {
+  prepared.forEach(({ beat, ovr, content, narrative, continuity }, i) => {
     const decision = decisions[i]!;
     // 版式来源优先级：内联完整版式（ovr.layout，如专属场景）> catalog 查表（ovr.layoutId）> 自动挑选
     let layout = ovr?.layout ?? (ovr?.layoutId ? LAYOUT_BY_ID.get(ovr.layoutId) : undefined);
@@ -151,7 +153,7 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
       if (!MOTION_BY_ID.has(id)) problems.push(`拍 ${beat.index}：版式引用了未知动效 ${id}`);
     }
 
-    out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id), narrative });
+    out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id), narrative, continuity });
   });
 
   return { shots: out, problems, warnings, styles };

@@ -175,5 +175,17 @@
 真实渲染证据：`dist/three-style-sheet.html` 重生成；坐标柱刻度 `font-size="20"` 11 处、`"18"` 清零（图表风列刻度放大生效）。
 本阶段解决的问题：运动编排不可测/不可说明；transitionBias 与 motionPace 两个风格 token 无消费方；转场三系雷同（原固定轮转数组）。
 尚存缺陷：跨镜头连续性（continuityIn/Out 的形状/位置/方向/颜色继承）未进渲染层；无头浏览器截图验收今日三次卡死（agent-browser 首启慢），刻度放大仅 DOM 级验证待补看；`density` token 仍无消费方。
+## Phase 7 第二刀 — 跨镜头连续性进渲染层
+
+- `src/core/shot.ts` + `src/core/plan.ts`：**接活 continuity 字段** —— enrichNarrative 算出的共享数字原先死在第一遍（prepared 不带 scene），现 Shot 带 `continuity?: string[]`。
+- `src/core/compose.ts`：**continuity 规则从死到活**。原文匹配级在真实语料几乎为 0（每片最多 1 对）→ 数字承接改为**值级匹配**（跨单位：「120 毫秒」↔「120」），且只认度量值（measure）——「第三步」序号曾与上拍「3 次」值同级误配（01 语料实证，已修+回归测试）；新增**角色承接表** `HANDOFF`（问→答、概念→数据、数据→推论/结论、机制→数据、结果→总结），每支片开场拍必然命中（hook→explanation），连续性不再是死字段。
+- 新增 `src/render/continuity.ts`：母版标记体系。`motifOf(shot)` 纯函数（形状/角落按叙事角色定、色调按是否带主数字定）；`continuityAt` 纯决策（有 continuity → ghost 全量继承上拍 motif：形状/位置/色调）；`drawContinuity` canvas 绘制（ghost 空心 + 自标记实面 + 虚线连接线，四角外框带不抢内容）。**跨角不变量**：HANDOFF 每个承接对都跨角（hook→explanation 曾同角 tl 致连接线零长度，qa-frames 实测后重排角落表，导出 HANDOFF 供测试断言）。
+- `src/render/frame.ts` 接线：SVG 层之后、后期层之前调 drawContinuity —— 预览/导出同源，v2 满版板（custom，不过 DecorLayer）也覆盖。
+- 颜色继承的字面含义：ghost 用**上一拍**风格档取色（跨风格继承不被重新染色）。
+- `tools/plan-dry.ts`：新增连续性报告行（哪些拍继承什么）。
+- 测试：新增 `tests/continuity.test.ts` 26 例（承接规则含序号误配回归 / motifOf 确定性与七形状互异 / 跨角不变量 / continuityAt 的 ghost 开关与 seek 确定性 / drawContinuity 记录型 ctx 桩断言取色与坐标与缩放 / plan 集成：01 语料 continuity 拍 >0 且 ghost 与上拍一致）。**208 测试全过**；tsc 零错；build 成功。
+- 真实渲染证据（无头浏览器 + canvas 画素探针，非仅 DOM 级）：拍 1 自标记圆@tl；拍 2 ghost 空心圆@tl + 竖虚线连接线 + 自标记三角@bl；拍 3 ghost 空心三角@bl + 横虚线 + 自标记@br；连接线可辨度实测（x=36 列 52% 采样点暗于参照列、maxDiff 64，与虚线占空比 56% 吻合）；两次独立 qa-frames 运行同帧**逐字节相同**（seek 确定性实证）；页面零报错。证据样片 `dist/qa-continuity/contact-sheet.png`。
+- 调试教训（已记入代码注释）：qa-frames `--shots 2.6` 曾一直落在拍 1（01 语料拍 1 长 7.52s），画素探针因此误判「连接线没画」—— 探时间点必须对照 `__stage.shots` 的 tlStart，不能按 SRT 秒数估。
+本阶段解决的问题：continuity 字段半死（算了不传）；数字承接规则在真实语料零命中；跨镜头连续性无视觉消费方。
 是否可以进入下一阶段：是。
-下一阶段入口：Phase 7 第二刀 — 跨镜头连续性字段进渲染层（前一镜形状/位置/方向/颜色向下一镜继承或转化，抽样检查）；随后转场库细化与逐帧 seek 一致性测试。
+下一阶段入口：Phase 7 第三刀 — 转场库细化（形状匹配/对位剪辑类转场原语）与逐帧 seek 一致性批量测试；`density` token 消费点（网格疏密/板内元素密度）择机插入。

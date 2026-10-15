@@ -5,6 +5,7 @@ import type { Shot } from "../core/shot";
 import { hashSeed } from "../core/rng";
 import { layerOpacity, rasterizeLayer } from "./rasterize";
 import { applyPost, postForStyle } from "./post";
+import { drawContinuity } from "./continuity";
 import { type FxOpts, glowPulse, nestedTunnel, particleField, polyhedron } from "./effects";
 import { resolveProfile } from "../styles/style-system";
 
@@ -148,6 +149,12 @@ export async function renderFrame(input: FrameInput): Promise<void> {
     ctx.drawImage(img, 0, 0, W, H);
     ctx.restore();
   }
+
+  // 3.5 跨镜头连续性层（Phase 7）：与上一拍共享数字时，上一拍的母版标记以 ghost
+  // 形态（形状/位置/颜色全继承上拍）进入本拍，虚线接到本拍标记 ——「前一镜头的
+  // 形状/位置/颜色向下一镜头继承」由此可见、可抽样检查。canvas 直画：预览与导出
+  // 同走 renderFrame，同一描述同一像素；v2 满版板（custom）也照常覆盖。
+  if (shot) drawContinuity(ctx, shots, active, W, H);
 
   // 4. 后期层
   applyPost(ctx, W, H, postForStyle(style), frame);

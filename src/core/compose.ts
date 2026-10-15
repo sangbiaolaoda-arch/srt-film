@@ -71,15 +71,38 @@ export function classifyRole(beat: Beat): NarrativeRole {
   return "explanation";
 }
 
-/** 找出两串文本共同出现的数字原文 token（用于镜头承接）。 */
-function sharedNums(a: string, b: string): string[] {
-  const ra = new Set(extractNumbers(a).map((n) => n.raw));
-  return extractNumbers(b).map((n) => n.raw).filter((r) => ra.has(r));
+/** 叙事承接（角色链）：上一拍的任务直接孕育本拍的任务。
+ *  表小且可解释：问→答、概念→数据、数据→推论/结论、机制→数据、结果→总结。
+ *  同角色相邻不算承接（两拍各讲各的）；结论拍是终点，不孕育下一拍。
+ *  纯角色表判定、不读文本 —— 确定性；且每支片子的开场拍都必然命中
+ *  （hook→explanation/definition），连续性不会永远是死字段。
+ *  导出供测试断言不变量：每个承接对在 continuity.ts 的角落表里都必须跨角。 */
+export const HANDOFF: Record<NarrativeRole, NarrativeRole[]> = {
+  hook: ["definition", "explanation"],
+  definition: ["evidence"],
+  evidence: ["consequence", "conclusion"],
+  comparison: ["consequence"],
+  explanation: ["evidence"],
+  consequence: ["conclusion"],
+  conclusion: [],
+};
+
+/** 相邻拍的数字承接：按**值**匹配（原文可能带不同单位：「120 毫秒」↔「120」），
+ *  标签取本拍原文。实测原文级匹配在真实语料几乎为 0（每片最多 1 对），值级才活的。
+ *  只认度量值（measure）：序号（第三步）与跨度（十年）不参与 —— 它们和测量值
+ *  同数值时会造出假承接（01 语料实测：拍 6「3 次」↔ 拍 7「第三步」值同级误判）。 */
+function sharedNums(prevText: string, curText: string): string[] {
+  const prevVals = new Set(extractNumbers(prevText).filter((n) => n.kind === "measure").map((n) => n.value));
+  const raws = extractNumbers(curText)
+    .filter((n) => n.kind === "measure" && prevVals.has(n.value))
+    .map((n) => n.raw);
+  return [...new Set(raws)];
 }
 
 /**
  * 在已分好版式的拍序列上补叙事承接关系（continuityIn/Out）。
  * 必须在全部拍就绪后统一跑，因为它要向前/后看邻居。
+ * 承接 = 数字承接（同值）或角色承接（任务孕育）；两者可同时成立。
  */
 export function enrichNarrative(scenes: BeatScene[]): BeatScene[] {
   return scenes.map((scene, i) => {
@@ -90,6 +113,9 @@ export function enrichNarrative(scenes: BeatScene[]): BeatScene[] {
     if (prev) {
       const shared = sharedNums(prev.beat.text, scene.beat.text);
       if (shared.length) continuityIn.push(`沿用上拍数字 ${shared.join("、")}`);
+      if (HANDOFF[prev.narrativeRole]?.includes(scene.narrativeRole)) {
+        continuityIn.push(`承接上拍${prev.narrativeRole}→${scene.narrativeRole}`);
+      }
     }
     if (next) {
       const shared = sharedNums(scene.beat.text, next.beat.text);

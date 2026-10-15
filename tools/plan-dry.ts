@@ -71,6 +71,14 @@ console.log(
     ` · 估算时长 ${tlEnd.toFixed(2)}s（${Math.round(tlEnd * STAGE_FPS)} 帧 @ ${STAGE_FPS}fps）`,
 );
 console.log(`风格判定：${styles.join("　")}`);
+const contShots = shots.filter((s) => s.continuity?.length);
+if (contShots.length > 0) {
+  console.log(
+    `跨镜头连续性：${contShots.length} 拍继承上拍母版标记（` +
+      contShots.map((s) => `拍${s.content.beat} ${s.continuity!.join(" + ")}`).join("；") +
+      `）`,
+  );
+}
 
 if (warnings && warnings.length > 0) {
   console.log(`\n⚠ 布局告警 ${warnings.length} 条（不拦截播放）：`);
