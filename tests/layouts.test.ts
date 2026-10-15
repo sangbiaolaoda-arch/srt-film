@@ -5,6 +5,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { LAYOUTS, LAYOUT_BY_ID, LAYOUT_GROUPS } from "../src/layouts/catalog";
 import { LayoutSVG } from "../src/layouts/render";
+import { DecorLayer } from "../src/layouts/decor";
 import { MOTIONS, MOTION_BY_ID, conflictsOf, validateMotionSet } from "../src/motion/catalog";
 import { APPLIED_MOTION_IDS } from "../src/motion/apply";
 import { decideStyle, eligible, pickLayout, planStyles } from "../src/layouts/pick";
@@ -490,5 +491,43 @@ describe("v2 满版构图池", () => {
     const plain: RenderContent = { ...demoContent(), numbers: [], bignum: undefined };
     const picked = pickLayout(plain, "editorial");
     expect(picked.id.startsWith("v2-")).toBe(true);
+  });
+});
+
+describe("decor 层 · density token 消费（Phase 7 第三刀）", () => {
+  const render = (style: Style) =>
+    renderToStaticMarkup(createElement(DecorLayer, { beat: 3, total: 11, style }));
+
+  it("网格步长由密度派生：图表风 40/200 锚点不变，编辑风最疏", () => {
+    const cm = render("chart-motion");
+    expect(cm).toContain('width="40"'); // 细网格 0.7 → 40（Phase 6 标定值）
+    expect(cm).toContain('width="200"'); // 粗网格 0.7 → 200
+    expect(cm).toContain('d="M40 0 L0 0 L0 40"'); // 路径随步长参数化
+    const ed = render("editorial");
+    expect(ed).toContain('width="61"'); // 加号栅格 0.35 → 61（原 48）
+    expect(ed).not.toContain('width="48"');
+  });
+
+  it("扁平风不走网格分支（grid token 关闭），只受影响不到的 ticks/rings", () => {
+    const fv = render("flat-vector");
+    expect(fv).not.toContain("decor-grid");
+    expect(fv).not.toContain('width="52"'); // fine 52 无消费方，不出现在 markup
+  });
+
+  it("图表风比扁平风密：标尺短刻度更多、角环 3 vs 2", () => {
+    const cm = render("chart-motion");
+    const fv = render("flat-vector");
+    // 标尺短刻度 x2="35"（5px）：n=10 → 5 个；n=8 → 4 个
+    expect(cm.match(/x2="35"/g)?.length ?? 0).toBe(5);
+    expect(fv.match(/x2="35"/g)?.length ?? 0).toBe(4);
+    // 同心环：图表风 3 环（21/15/6），扁平风 2 环（15/6）
+    expect(cm).toContain('r="21"');
+    expect(fv).not.toContain('r="21"');
+  });
+
+  it("编辑风（纸纹分支）不画标尺与角环", () => {
+    const ed = render("editorial");
+    expect(ed).not.toContain('r="21"');
+    expect(ed).not.toContain("decor-vig"); // 暗角只归净底分支
   });
 });

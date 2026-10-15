@@ -92,6 +92,9 @@ export const MOTIONS: MotionDef[] = [
   M("m-wipe-diagonal", "斜切擦除", "transition", "shape", 0.6, ["m-wipe-panel"]),
   M("m-sweep-light", "扫光转入", "transition", "any", 0.5, ["m-push-left"]),
   M("m-mask-circle", "圆形遮罩", "transition", "shape", 0.55, ["m-split-open"]),
+  // —— 转场 +2（Phase 7 第三刀：连续性感知，形状匹配/对位剪辑）——
+  M("m-shape-match", "形状匹配", "transition", "shape", 0.55, ["m-mask-circle"], ["m-cross-dissolve"], "新拍从上一拍连续性标记角放大展开——继承关系从内容层延伸到运动层"),
+  M("m-match-cut", "对位剪辑", "transition", "any", 0.35, ["m-cross-dissolve"], ["m-push-left"], "近瞬时落位的低位移转场；上拍水平滑出时带对位方向（硬切感的可导出近似）"),
   // —— 环境 +3 ——
   M("m-drift-slow", "缓慢漂移", "ambient", "any", 3.2, ["m-float"]),
   M("m-breathe-bg", "背景呼吸", "ambient", "shape", 3.2, []),

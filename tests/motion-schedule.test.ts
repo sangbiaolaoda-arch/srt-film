@@ -23,9 +23,9 @@ import type { Shot } from "../src/core/shot";
 const root = resolve(import.meta.dirname, "..");
 const SRT = readFileSync(resolve(root, "examples/01-explanatory-tech.srt"), "utf-8");
 
-const SLIDE_POOL = ["m-cross-dissolve", "m-push-left", "m-sweep-light"];
-const WIPE_POOL = ["m-wipe-diagonal", "m-wipe-panel", "m-cross-dissolve"];
-const MASK_POOL = ["m-mask-circle", "m-split-open", "m-cross-dissolve"];
+const SLIDE_POOL = ["m-cross-dissolve", "m-push-left", "m-sweep-light", "m-match-cut"];
+const WIPE_POOL = ["m-wipe-diagonal", "m-wipe-panel", "m-cross-dissolve", "m-shape-match"];
+const MASK_POOL = ["m-mask-circle", "m-split-open", "m-cross-dissolve", "m-shape-match"];
 
 function contentOf(beat: number): RenderContent {
   return {
@@ -135,6 +135,68 @@ describe("Phase 7 · 统一时间轴与运动关系模型", () => {
   it("导演指定的 transition 优先于风格池", () => {
     const { plans } = buildMotionSchedule(threeShots({ style: "editorial", transition: "m-zoom-through" }));
     for (const p of plans) expect(p.transition.motion).toBe("m-zoom-through");
+  });
+
+  /* ── ③+ 连续性感知转场（Phase 7 第三刀）── */
+  it("连续性拍转场承接继承关系：图形系形状匹配、排版系对位剪辑", () => {
+    // 拍 2 带 continuity（与拍 1 共享数字）→ 触发连续性转场
+    const mk = (style: Layout["style"]) => {
+      const shots = threeShots({ style });
+      shots[1]!.continuity = ["85%"];
+      return buildMotionSchedule(shots).plans;
+    };
+    expect(mk("editorial")[1]!.transition.motion).toBe("m-match-cut");
+    expect(mk("flat-vector")[1]!.transition.motion).toBe("m-shape-match");
+    expect(mk("chart-motion")[1]!.transition.motion).toBe("m-shape-match");
+    // 无连续性的拍仍走池轮转（第 3 拍 i=2 = 池第 3 项）
+    expect(mk("chart-motion")[2]!.transition.motion).toBe("m-cross-dissolve");
+  });
+
+  it("首拍没有上一拍，不走连续性转场", () => {
+    const shots = threeShots({ style: "flat-vector" });
+    shots[0]!.continuity = ["85%"]; // 即使标了也没对象可继承
+    expect(buildMotionSchedule(shots).plans[0]!.transition.motion).toBe("m-wipe-diagonal");
+  });
+
+  it("导演指定优先于连续性转场", () => {
+    const shots = threeShots({ style: "flat-vector", transition: "m-push-left" });
+    shots[1]!.continuity = ["85%"];
+    expect(buildMotionSchedule(shots).plans[1]!.transition.motion).toBe("m-push-left");
+  });
+
+  it("形状匹配的锚点 = 上一拍母版标记角（新画面从旧标记里长出来）", () => {
+    const shots = threeShots({ style: "flat-vector" });
+    shots[0]!.narrative = { role: "hook", purpose: "开场", forbidden: [] }; // hook → tl
+    shots[1]!.continuity = ["85%"];
+    const m = buildMotionSchedule(shots).plans[1]!.transition.match;
+    expect(m).toEqual({ anchor: "tl" });
+  });
+
+  it("对位剪辑继承上一拍的出场方向（水平滑出才构成承接）", () => {
+    const shots = threeShots({ style: "editorial", exit: "m-slide-out-left" });
+    shots[1]!.continuity = ["85%"];
+    const m = buildMotionSchedule(shots).plans[1]!.transition.match;
+    expect(m).toEqual({ anchor: "center", handoff: "left" });
+    // 竖直/缩放类出场不带方向
+    const shots2 = threeShots({ style: "editorial", exit: "m-fade-out" });
+    shots2[1]!.continuity = ["85%"];
+    expect(buildMotionSchedule(shots2).plans[1]!.transition.match).toEqual({ anchor: "center" });
+  });
+
+  it("池轮转到形状匹配时同样带锚点（跟随转场 id，不跟随选择路径）", () => {
+    // chart-motion 池第 4 项是 m-shape-match；拍 4（i=3）无 continuity 也会轮到
+    const shots = Array.from({ length: 4 }, (_, i) => shotOf(
+      { id: "t-x", name: "测试", group: "statement", enter: ["m-fade-up"], style: "chart-motion", slots: [] },
+      i,
+    ));
+    const p3 = buildMotionSchedule(shots).plans[3]!;
+    expect(p3.transition.motion).toBe("m-shape-match");
+    expect(p3.transition.match?.anchor).toBeTruthy();
+  });
+
+  it("motionPath：形状匹配/对位剪辑带真实参数", () => {
+    expect(motionPath("m-shape-match")).toContain("0.55");
+    expect(motionPath("m-match-cut")).toContain("24px");
   });
 
   /* ── motionPace 消费 ── */

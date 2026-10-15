@@ -189,3 +189,18 @@
 本阶段解决的问题：continuity 字段半死（算了不传）；数字承接规则在真实语料零命中；跨镜头连续性无视觉消费方。
 是否可以进入下一阶段：是。
 下一阶段入口：Phase 7 第三刀 — 转场库细化（形状匹配/对位剪辑类转场原语）与逐帧 seek 一致性批量测试；`density` token 消费点（网格疏密/板内元素密度）择机插入。
+
+## Phase 7 第三刀 — 转场库细化（连续性感知）+ density 消费 + seek 一致性批量验收（2026-10-15 深夜）
+
+- `src/motion/catalog.ts` + `src/motion/apply.ts`：转场 5→10。新增**形状匹配 `m-shape-match`**（新拍从上一拍母版标记角 0.55→1 放大展开，锚点读层 `data-match-anchor`）与**对位剪辑 `m-match-cut`**（1.06→1 近瞬时落位 + 上拍水平滑出时 24px 同侧对位位移，读 `data-handoff`）—— 真硬切在导出链（只认 transform/opacity）做不了，这两个是可导出近似里最接近的两档。catalog 总数 60→62。
+- `src/motion/schedule.ts`：三系池各扩到 4 项（编辑 +match-cut / 扁平 +shape-match / 图表 +shape-match）；新增**连续性优先规则**——本拍 `continuity` 非空时转场改走 `CONTINUITY_TRANSITION`（图形系形状匹配、排版系对位剪辑），导演指定仍然优先；落位参数 `transition.match`（anchor=上一拍 motif 角 / handoff=上一拍出场方向）纯函数派生，seek 确定性的组成部分。`MOTION_PATH` 补两条。
+- `src/ui/stage.tsx`：只做翻译——把 `plan.transition.match` 写成层 data 属性，apply.ts 读取。
+- `src/layouts/decor.tsx`：**density token 从签名稀释到真消费**。装饰层几何参数全部由密度派生（细网格步长 40+(0.7−d)×60、粗网格=细×5、标尺格数 4+8d、角环数 1+⌈2d⌉）；图表风 0.7 锚定 Phase 6 标定值 40/200 原样不动（v2.tsx MeasGrid 硬编码同参数，两边不同步会撕裂母版签名），编辑风加号栅格 48→61（全系最疏），图表风标尺 8→10 格、角环 2→3 个。
+- 测试：219 全过（+11：motion-schedule 7 例覆盖连续性转场三系分流/首拍不继承/导演优先/锚点=上拍标记角/handoff 只有水平滑出/池轮转也带锚点；layouts 4 例覆盖 decor 密度派生与扁平风不走网格分支）。
+- 回归：tsc 零错；build 成功；plan-dry 6/6 门禁过；constraint-audit 212 版式 0 错误 0 告警；**e2e-export 03 语料 14/14**（73.93s / 2218 帧 / 无全黑爆白）。
+- **逐帧 seek 一致性批量验收**（本刀主验收）：qa-frames `--determinism` 01 语料全 11 拍 × 3 采样点 = 33 帧，每帧同时刻渲染两次比原始分辨率像素——**33/33 差 0.000（逐字节相同）**，页面零报错，无黑屏/爆白。证据 `dist/qa-transition/`（report.md + contact-sheet.png + shots/ + repeat/）。
+- 「6 镜头镜内 Δ<1.2」问号闭合（A/B 实证）：暂存本刀改动回 e41f6dc 旧码重建重跑同参数 qa-frames——判定集与 Δ 值逐位同级（拍 1、2、4、6、9、10 同样低于门槛，Δ 1.146/0.413/0.201/0.314/0.927/0.247 与旧码一致）。根因：这些拍的主运动是 7–9s 缓推（1.10→1.14）作用在文字为主的 v2 满版板上，缩到 32×18 后结构差低于按图形密集样片标定的 1.2 门槛；11/11 拍实测均有真实机位移主运动（cam=move）。属量法内容依赖性（qa-frames 文档已注明「行星」场 ROI Δ 1.97 的先例），非本刀回归。
+- 踩坑记录：vite build 清空 dist 时对 `dist/qa-transition` 的 trash 被残留 chrome 句柄挡下（Permission denied）——QA 截图目录与 build 输出混在同一 dist 时会互相锁；解法是 build 到独立 outDir 再拷回，QA 目录留在原地。
+本阶段解决的问题：转场库无连续性语汇（继承只发生在内容层）；density token 四轮无消费方；seek 一致性只有两点抽样、缺全片批量门禁。
+是否可以进入下一阶段：是。
+下一阶段入口：Phase 8 — 交付层（导出设置面板/多分辨率/帧率）；母版角标 BEAT NN 无条件渲染问题（baseline-audit 第 1 项）可择机插入。

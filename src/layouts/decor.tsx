@@ -37,11 +37,10 @@ function CornerMarks({ stroke }: { stroke: string }): JSX.Element {
 }
 
 /** 左缘竖排刻度：等分 8 格的短横线 + 一根通长细线，「仪器面板」的秩序感。 */
-function SideRuler({ stroke }: { stroke: string }): JSX.Element {
+function SideRuler({ stroke, n }: { stroke: string; n: number }): JSX.Element {
   const x = 30;
   const y0 = 88;
   const y1 = 720 - 88;
-  const n = 8;
   const ticks = [];
   for (let i = 0; i <= n; i++) {
     const y = y0 + ((y1 - y0) * i) / n;
@@ -56,6 +55,22 @@ function SideRuler({ stroke }: { stroke: string }): JSX.Element {
   );
 }
 
+/** density token 的消费点：装饰层全部几何参数由风格密度派生。
+ *  三系密度 0.35/0.5/0.7 → 编辑风最疏、图表风最密。图表风的 40/200 是
+ *  Phase 6 标定值（且 v2.tsx MeasGrid 硬编码同参数），作为密度 0.7 的
+ *  锚点原样保留；编辑风的加号栅格随之变疏（48→61），扁平风两值都
+ *  不走网格分支（grid token 关闭），不受影响。 */
+function decorDensity(d: number): { fine: number; coarse: number; ticks: number; rings: number } {
+  // 细网格步长：密度 0.7 处锚定 40px，每低 1 密度 +60px（更疏）
+  const fine = Math.round(40 + (0.7 - d) * 60);
+  return {
+    fine, // 0.35→61 · 0.5→52 · 0.7→40
+    coarse: fine * 5, // 粗网格步长（细的 5 倍）：0.35→305 · 0.5→260 · 0.7→200
+    ticks: Math.round(4 + d * 8), // 左缘标尺格数：0.35→7 · 0.5→8 · 0.7→10
+    rings: 1 + Math.ceil(d * 2), // 右上角同心环数：0.35→2 · 0.5→2 · 0.7→3
+  };
+}
+
 export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
   const c = colorsOf(style);
   const p = resolveProfile(style);
@@ -63,22 +78,25 @@ export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
   // 图表风母版：测量网格（对位栅格的数据版）—— token grid 的消费方。
   // 没有它，图表风的非图表拍只剩「白底」，签名被稀释成换色。
   const gridded = p.grid;
+  const dd = decorDensity(p.density);
   const frac = total && total > 0 ? Math.min(1, beat / total) : 1;
   const x0 = 64;
   const x1 = 1280 - 64;
   const span = x1 - x0;
   const pid = `decor-dots-${beat}`;
+  const h = dd.fine / 2; // 加号栅格的中心（步长的一半）
 
   return (
     <g data-decor="">
       {textured ? (
         <>
           {/* 加号对位栅格（画法 A16）：印刷制版标记语汇，比圆点更像「被装帧的纸」。
-              仅编辑风（paperTexture）启用：seed 固定，逐拍不跳变。 */}
+              仅编辑风（paperTexture）启用：seed 固定，逐拍不跳变。
+              步长由 density 派生（编辑风 0.35 → 61px，全系最疏）。 */}
           <defs>
-            <pattern id={pid} width={48} height={48} patternUnits="userSpaceOnUse">
+            <pattern id={pid} width={dd.fine} height={dd.fine} patternUnits="userSpaceOnUse">
               <path
-                d="M24 21 L24 27 M21 24 L27 24"
+                d={`M${h} ${h - 3} L${h} ${h + 3} M${h - 3} ${h} L${h + 3} ${h}`}
                 stroke={c.dim}
                 strokeWidth={0.9}
                 opacity={0.22}
@@ -100,15 +118,16 @@ export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
       ) : (
         <>
           {gridded && (
-            /* 图表风：40px 细网格 + 200px 粗网格（坐标纸语汇）。网格是恒定刻度，
+            /* 图表风：细网格 + 粗网格（坐标纸语汇），步长由 density 派生
+               （图表风 0.7 → 40/200，与 v2.tsx MeasGrid 同参数）。网格是恒定刻度，
                不随拍跳变；透明度压低到不抢内容。id 带拍号（多拍共存同一棵 DOM）。 */
             <g opacity={0.55}>
               <defs>
-                <pattern id={`decor-grid-${beat}`} width={40} height={40} patternUnits="userSpaceOnUse">
-                  <path d="M40 0 L0 0 L0 40" fill="none" stroke={c.hairline} strokeWidth={1} />
+                <pattern id={`decor-grid-${beat}`} width={dd.fine} height={dd.fine} patternUnits="userSpaceOnUse">
+                  <path d={`M${dd.fine} 0 L0 0 L0 ${dd.fine}`} fill="none" stroke={c.hairline} strokeWidth={1} />
                 </pattern>
-                <pattern id={`decor-grid5-${beat}`} width={200} height={200} patternUnits="userSpaceOnUse">
-                  <path d="M200 0 L0 0 L0 200" fill="none" stroke={c.hairline} strokeWidth={1.6} />
+                <pattern id={`decor-grid5-${beat}`} width={dd.coarse} height={dd.coarse} patternUnits="userSpaceOnUse">
+                  <path d={`M${dd.coarse} 0 L0 0 L0 ${dd.coarse}`} fill="none" stroke={c.hairline} strokeWidth={1.6} />
                 </pattern>
               </defs>
               <rect x={0} y={0} width={1280} height={720} fill={`url(#decor-grid-${beat})`} />
@@ -126,12 +145,14 @@ export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
         </>
       )}
       <CornerMarks stroke={c.hairline} />
-      {!textured && <SideRuler stroke={c.hairline} />}
+      {!textured && <SideRuler stroke={c.hairline} n={dd.ticks} />}
       {!textured && (
         <g>
-          {/* 右上角同心圆环：与右下角标呼应的几何锚点 */}
-          <circle cx={1216} cy={56} r={15} fill="none" stroke={c.hairline} strokeWidth={1} />
-          <circle cx={1216} cy={56} r={6} fill="none" stroke={c.hairline} strokeWidth={1} />
+          {/* 右上角同心圆环：与右下角标呼应的几何锚点。环数由 density 决定
+              （图表风 3 环最密）；21 环与四角裁切标保持净距（实测 3px+）。 */}
+          {(dd.rings >= 3 ? [21, 15, 6] : [15, 6]).map((r) => (
+            <circle key={r} cx={1216} cy={56} r={r} fill="none" stroke={c.hairline} strokeWidth={1} />
+          ))}
         </g>
       )}
       {/* 底部进度条：本拍在整支片子里的位置 —— 播放器进度条的书页版 */}

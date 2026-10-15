@@ -105,7 +105,14 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
     const layer = layers[i]!;
     shot.tlStart = plan.at;
 
-    // 转场：作用于整拍图层（与出场同一个 transform 层，从属主运动）
+    // 转场：作用于整拍图层（与出场同一个 transform 层，从属主运动）。
+    // 落位参数先写成层 data 属性 —— apply.ts 的形状匹配/对位剪辑从上面读
+    // 锚点与方向（schedule 纯函数派生，这里只做翻译）。
+    const tm = plan.transition.match;
+    if (tm) {
+      layer.setAttribute("data-match-anchor", tm.anchor);
+      if (tm.handoff) layer.setAttribute("data-handoff", tm.handoff);
+    }
     applyMotion(plan.transition.motion, { tl, el: layer, at: plan.transition.at, dur: plan.transition.dur });
 
     const slots = Array.from(layer.querySelectorAll<SVGGElement>("[data-anim]"));

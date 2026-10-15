@@ -252,6 +252,30 @@ const APPLIERS: Record<string, Applier> = {
     tl.fromTo(el, { autoAlpha: 0, scale: 0.82, transformOrigin: "center center" },
       { autoAlpha: 1, scale: 1, duration: dur, ease: "power3.out", immediateRender: false }, at),
 
+  // ── 转场 +2（Phase 7 第三刀：连续性感知，作用于整拍容器）──
+  /** 形状匹配：新拍从上一拍母版标记所在的角放大展开。
+   *  锚点由 stage 写进层 data-match-anchor（上一拍 motif 角落，缺省 center）——
+   *  「新画面从旧标记里长出来」，跨镜头继承从内容层延伸到运动层。 */
+  "m-shape-match": ({ tl, el, at, dur }) => {
+    const anchor = el.getAttribute("data-match-anchor") || "center";
+    const origin =
+      anchor === "tl" ? "left top" : anchor === "tr" ? "right top" :
+      anchor === "bl" ? "left bottom" : anchor === "br" ? "right bottom" :
+      "center center";
+    tl.fromTo(el, { autoAlpha: 0, scale: 0.55, transformOrigin: origin },
+      { autoAlpha: 1, scale: 1, duration: dur, ease: "power3.out", immediateRender: false }, at);
+  },
+  /** 对位剪辑：近瞬时落位的低位移转场（硬切感的可导出近似 —— 导出链只认
+   *  transform/opacity，做不了真硬切以外的帧级操作）。
+   *  上拍水平滑出时 stage 在层上写 data-handoff=left/right：新拍从同一侧
+   *  24px 微移入位，两次剪接读作一次连续的机位运动。 */
+  "m-match-cut": ({ tl, el, at, dur }) => {
+    const dir = el.getAttribute("data-handoff");
+    const x = dir === "left" ? -24 : dir === "right" ? 24 : 0;
+    tl.fromTo(el, { autoAlpha: 0, scale: 1.06, x, transformOrigin: "center center" },
+      { autoAlpha: 1, scale: 1, x: 0, duration: dur, ease: "power4.out", immediateRender: false }, at);
+  },
+
   // ── 环境 +3 ──
   "m-drift-slow": ({ tl, el, at, dur }) =>
     // 同 m-grain-drift：yoyo 往返总长 = 2×duration，传 dur/2。

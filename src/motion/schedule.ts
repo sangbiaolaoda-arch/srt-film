@@ -14,6 +14,7 @@ import { MOTION_BY_ID } from "./catalog";
 import type { Shot } from "../core/shot";
 import { resolveProfile } from "../styles/style-system";
 import type { StyleProfile } from "../styles/style-system";
+import { motifOf, type MotifCorner } from "../render/continuity";
 
 /** 拍间交叠：交叉溶解窗口，无黑场。 */
 export const OVERLAP = 0.25;
@@ -39,6 +40,9 @@ export interface TweenPlan {
   motion: string;
   at: number;
   dur: number;
+  /** 连续性感知转场的落位参数（stage 翻译成层 data 属性，apply.ts 读取）。
+   *  仅形状匹配/对位剪辑有 —— 其余转场不消费锚点与方向。 */
+  match?: { anchor: MotifCorner | "center"; handoff?: "left" | "right" };
 }
 
 /** 主运动的五问（计划 Phase 7 通过标准：「每镜存在可说明的主运动」）。 */
@@ -153,6 +157,8 @@ const MOTION_PATH: Record<string, string> = {
   "m-wipe-diagonal": "斜切擦除入场",
   "m-sweep-light": "右移 34px 扫光入场",
   "m-mask-circle": "圆形遮罩展开",
+  "m-shape-match": "自上一拍标记角 0.55→1 放大展开（锚点见层 data-match-anchor）",
+  "m-match-cut": "1.06→1 近瞬时落位（带对位方向时叠加 24px 同侧位移）",
   // 环境
   "m-grain-drift": "±6px 颗粒漂移往返",
   "m-cursor-blink": "光标闪烁",
@@ -170,14 +176,34 @@ export function motionPath(id: string): string {
 /* ── 转场池：transitionBias 的三个消费方向 ─────────────────────────────── */
 
 const TRANSITION_POOL: Record<StyleProfile["transitionBias"], string[]> = {
-  // 编辑排版风：滑移/溶解 —— 排版画面经不起大位移，转场要「轻」
-  slide: ["m-cross-dissolve", "m-push-left", "m-sweep-light"],
-  // 扁平矢量风：擦除 —— 色块画面配板擦/斜切，图形感一致
-  wipe: ["m-wipe-diagonal", "m-wipe-panel", "m-cross-dissolve"],
-  // 图表动态图形风：遮罩 —— 测量画面用遮罩揭示，像翻开图纸
-  mask: ["m-mask-circle", "m-split-open", "m-cross-dissolve"],
+  // 编辑排版风：滑移/溶解 + 对位剪辑 —— 排版画面经不起大位移，转场要「轻」；
+  // 对位剪辑是池里位移最小的一个（近瞬时落位），补上「硬切感」这一档。
+  slide: ["m-cross-dissolve", "m-push-left", "m-sweep-light", "m-match-cut"],
+  // 扁平矢量风：擦除 + 形状匹配 —— 色块画面配板擦/斜切，图形感一致；
+  // 形状匹配让新画面从上一拍的标记里长出来。
+  wipe: ["m-wipe-diagonal", "m-wipe-panel", "m-cross-dissolve", "m-shape-match"],
+  // 图表动态图形风：遮罩 + 形状匹配 —— 测量画面用遮罩揭示，像翻开图纸；
+  // 形状匹配的锚点角即上一拍注册标记所在角，与坐标纸语汇同源。
+  mask: ["m-mask-circle", "m-split-open", "m-cross-dissolve", "m-shape-match"],
   // 硬切：只有导演显式指定 transition 才会出现
   cut: ["m-cross-dissolve"],
+};
+
+/** 连续性拍的转场（Phase 7 第三刀）：本拍继承上一拍母版标记时，转场也承接
+ *  继承关系 —— 图形系（wipe/mask）用形状匹配（新画面从标记角展开），
+ *  排版系（slide）用对位剪辑（低位移落位，不破坏排版画面的稳定感）。
+ *  导演指定优先；非连续性拍仍按系内池轮转，保证转场不雷同。 */
+const CONTINUITY_TRANSITION: Record<StyleProfile["transitionBias"], string> = {
+  slide: "m-match-cut",
+  wipe: "m-shape-match",
+  mask: "m-shape-match",
+  cut: "m-cross-dissolve",
+};
+
+/** 出场方向：只有水平滑出有明确方向（对位剪辑「对位」的来源）。
+ *  竖直/缩放类出场不构成方向承接，查不到就不带 handoff。 */
+const EXIT_DIRECTION: Record<string, "left" | "right"> = {
+  "m-slide-out-left": "left",
 };
 
 /* ── 主运动选择与五问 ──────────────────────────────────────────────────── */
@@ -285,14 +311,26 @@ export function buildMotionSchedule(shots: Shot[]): MotionSchedule {
     // 与上一拍的所有 tween 交叠 0.25s（原 stage 口径：tl.duration() - 0.25）
     const at = i === 0 ? 0 : Math.max(running - OVERLAP, 0);
 
-    // 转场：导演指定优先 → transitionBias 池轮转（每系内部按拍序轮换，不雷同）
-    const transId = layout.transition ?? TRANSITION_POOL[profile.transitionBias][i % TRANSITION_POOL[profile.transitionBias].length]!;
+    // 转场：导演指定优先 → 连续性拍走连续性转场 → transitionBias 池轮转
+    // （每系内部按拍序轮换，不雷同）
+    const pool = TRANSITION_POOL[profile.transitionBias];
+    const inherits = i > 0 && (shot.continuity?.length ?? 0) > 0;
+    const transId = layout.transition ?? (inherits ? CONTINUITY_TRANSITION[profile.transitionBias] : pool[i % pool.length]!);
     const transDef = MOTION_BY_ID.get(transId);
     const transition: TweenPlan = {
       motion: transDef?.id ?? "m-cross-dissolve",
       at,
       dur: transDef?.dur ?? 0.5,
     };
+    // 落位参数跟随转场 id（纯函数派生，seek 确定性的组成部分）：
+    // 形状匹配的锚点 = 上一拍母版标记角（新画面从旧标记里长出来）；
+    // 对位剪辑的方向 = 上一拍出场方向（只有水平滑出构成承接）。
+    if (transition.motion === "m-shape-match") {
+      transition.match = { anchor: i > 0 ? motifOf(shots[i - 1]!).corner : "center" };
+    } else if (transition.motion === "m-match-cut") {
+      const dir = i > 0 ? EXIT_DIRECTION[plans[i - 1]!.exit.motion] : undefined;
+      transition.match = { anchor: "center", handoff: dir };
+    }
 
     // 入场池：原样继承版式声明（槽级 data-motion 优先的规则不变）
     const enters: EnterAssign = { pool: layout.enter, staggerStep: STAGGER_STEP };
