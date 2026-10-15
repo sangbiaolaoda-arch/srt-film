@@ -722,7 +722,7 @@ export const V2_LAYOUTS: Layout[] = [
   B("list-marks", "清单刻度", "list", { note: "bullets ≥ 3", enter: ["m-fade-up"], bg: "dots-fade" }),
   B("vertical", "竖排大字", "statement", { note: "短句（≤9 字）最佳", enter: ["m-fade-up", "m-scale-soft"], bg: "halftone" }),
   B("chapter", "章节卡", "bookend", { note: "开场 / 定版", enter: ["m-char-rise", "m-bar-sweep"], bg: "dots-fade" }),
-  B("steps", "单线生长", "process", { note: "过程 / 递进", enter: ["m-stroke-draw", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.1 } }),
+  B("steps", "单线生长", "process", { note: "过程 / 递进", enter: ["m-stroke-draw", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.1 }, bg: "dots-fade" }),
   B("duo", "双圆对峙", "poster-geo", { style: "flat-vector", note: "非对称对峙（参考 136 非对称跨页）", enter: ["m-slide-right", "m-slide-left"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "particles-vortex", fxAccent: "ember", fxStrength: 0.8 }),
   B("dark-word", "暗底大字", "poster-focus", { style: "flat-vector", note: "金句定场", enter: ["m-char-rise", "m-glow"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "glow", fxAccent: "ember", fxStrength: 1.0 }),
   B("strata", "水平色带", "poster-field", { style: "flat-vector", note: "氛围场 + 大字，配缓推", enter: ["m-slide-right", "m-scale-soft"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "particles-converge", fxAccent: "accent", fxStrength: 0.8 }),

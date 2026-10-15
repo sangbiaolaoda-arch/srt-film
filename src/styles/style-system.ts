@@ -10,7 +10,7 @@
 //   flat-vector 扁平矢量叙事风：明亮平涂、粗描边、圆角、扁平填充，无纸纹，明快运动。
 //   chart-motion 图表/动态图形风：白底 + 网格 + 坐标轴 + 等宽数字，数据感，揭示式运动。
 
-import type { Tone } from "../layouts/types";
+import type { FxKind, Tone } from "../layouts/types";
 import type { SemTone } from "../layouts/emphasis";
 
 export type StyleProfileId = "editorial" | "flat-vector" | "chart-motion";
@@ -63,6 +63,13 @@ export interface StyleProfile {
   sem: Record<SemTone, string>;
   /** Tone 调色板：槽位版式、装饰层、底色层消费 */
   tone: Record<Tone, string>;
+  /**
+   * 动效签名：板式没显式声明 fx 时由此派生（板式声明优先，"none" 是显式关闭）。
+   * 三系各有一种「属于自己的动」，而不是把同一套粒子刷三遍 —— 那正是「敷衍」的另一种写法。
+   */
+  fxBias: FxKind;
+  /** 动效强度 0..1：编辑风最克制（浮尘只是呼吸）、扁平风最外放 */
+  fxStrength: number;
 }
 
 const SERIF = '"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif';
@@ -78,6 +85,9 @@ export const STYLE_PROFILES: Record<StyleProfileId, StyleProfile> = {
     blush: "#e8c9c2", sand: "#d9c8ae", clay: "#b0603c",
     fontDisplay: SERIF, fontText: SERIF, fontNum: SERIF,
     lineWidth: 2.5, radius: 0, density: 0.35, motionPace: 1.0, transitionBias: "slide",
+    // 编辑风的「动」只能是纸面掠光：大面积低对比 —— 一眼看到有东西掠过，又不脏不抢字。
+    // （浮尘试过，稀疏小点单帧看不出差异，峰值拉到 66 也白搭，见 effects.ts paperSheen 注释。）
+    fxBias: "paper-sheen", fxStrength: 0.45,
     grid: false, axis: false, rounded: false, flat: false, monoNum: false, paperTexture: true,
     sem: { danger: "#a5170a", cost: "#9a6b1c", safe: "#1a6b52", warm: "#c8401f" },
     tone: { ink: "#1d1a16", dim: "#8a867c", accent: "#c8401f", paper: "#f2ede4", hairline: "rgba(29,26,22,0.14)" },
@@ -90,6 +100,8 @@ export const STYLE_PROFILES: Record<StyleProfileId, StyleProfile> = {
     blush: "#ffd6cc", sand: "#ffe2a8", clay: "#ff8a3d",
     fontDisplay: SANS, fontText: SANS, fontNum: SANS,
     lineWidth: 6, radius: 18, density: 0.5, motionPace: 1.18, transitionBias: "wipe",
+    // 扁平风的色粉颗粒（板式自带粒子场的仍用粒子场，其余落回浮尘 —— 见 plan.ts 的派生）。
+    fxBias: "drift-motes", fxStrength: 0.7,
     grid: false, axis: false, rounded: true, flat: true, monoNum: false, paperTexture: false,
     sem: { danger: "#d63a1f", cost: "#c77a12", safe: "#0f9d6b", warm: "#ff5a3c" },
     tone: { ink: "#15233b", dim: "#7b8499", accent: "#ff5a3c", paper: "#fbf7f0", hairline: "rgba(21,35,59,0.14)" },
@@ -102,6 +114,8 @@ export const STYLE_PROFILES: Record<StyleProfileId, StyleProfile> = {
     blush: "#dfeeff", sand: "#eef3f7", clay: "#0c7b5e",
     fontDisplay: SANS, fontText: SANS, fontNum: MONO,
     lineWidth: 3, radius: 4, density: 0.7, motionPace: 0.9, transitionBias: "mask",
+    // 图表风是网格在呼吸：脉冲点落在板内既有 40px 网格上，不是另加一层装饰。
+    fxBias: "grid-pulse", fxStrength: 0.5,
     grid: true, axis: true, rounded: false, flat: true, monoNum: true, paperTexture: false,
     sem: { danger: "#d6391f", cost: "#b9740f", safe: "#0c8a5e", warm: "#ff6a00" },
     tone: { ink: "#10243a", dim: "#5b6b80", accent: "#ff6a00", paper: "#ffffff", hairline: "rgba(16,36,58,0.16)" },

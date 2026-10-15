@@ -6,7 +6,7 @@ import { hashSeed } from "../core/rng";
 import { layerOpacity, rasterizeLayer } from "./rasterize";
 import { applyPost, postForStyle } from "./post";
 import { drawContinuity } from "./continuity";
-import { type FxOpts, glowPulse, nestedTunnel, particleField, polyhedron } from "./effects";
+import { type FxOpts, driftMotes, glowPulse, gridPulse, nestedTunnel, paperSheen, particleField, polyhedron } from "./effects";
 import { resolveProfile } from "../styles/style-system";
 
 export const STAGE_W = 1280;
@@ -56,6 +56,15 @@ function fxAccentOf(layout: Shot["layout"]): string {
   return p.ember;
 }
 
+/** 底色是否亮：相对亮度 > 0.55。三系名义底色都在 0.9 以上；暗底定版式会低到 0.15 以下。
+ *  判据取**这一拍的实际底色**（layout.paper 覆写优先），不是 profile 的名义底色。 */
+function isLightPaper(hex: string): boolean {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55;
+}
+
 function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number, h: number): void {
   const layout = shot.layout;
   const fx = layout.fx ?? "glow";
@@ -73,6 +82,7 @@ function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number,
     accent: fxAccentOf(layout),
     ink: p.tone.dim,
     dim: p.tone.dim,
+    onLight: isLightPaper(layout.paper ?? p.paper),
   };
   const strength = layout.fxStrength ?? 0.6;
 
@@ -83,9 +93,15 @@ function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number,
     case "polyhedron": polyhedron(ctx, o, 0.24); break;
     case "tunnel": nestedTunnel(ctx, o, 2.3, 9); break;
     case "glow": break;
+    // 数量跟着 density token 走（编辑风 154 / 扁平风 190）：浮尘的「密度」和装饰层
+    // 的网格疏密是同一个旋钮，不该各定一套。
+    case "drift-motes": driftMotes(ctx, o, Math.round(70 + p.density * 240), strength); break;
+    case "grid-pulse": gridPulse(ctx, o, 40, strength); break;
+    case "paper-sheen": paperSheen(ctx, o, strength); break;
     default: break;
   }
-  glowPulse(ctx, o, strength);
+  // 光晕只跟光效系 fx：浮尘／脉冲／掠光是「素底上的呼吸」，再叠中央一团暖色就变脏了。
+  if (fx !== "drift-motes" && fx !== "grid-pulse" && fx !== "paper-sheen") glowPulse(ctx, o, strength);
 }
 
 /** 把一帧画进 ctx。调用前需先把 GSAP 时间轴 seek 到位。
@@ -127,10 +143,7 @@ export async function renderFrame(input: FrameInput): Promise<void> {
     ctx.restore();
   }
 
-  // 2. 扁平矢量风：canvas 特效（背景层，在文字之下）
-  if (shot && shot.layout.fx && shot.layout.fx !== "none") drawFx(ctx, shot, t, W, H);
-
-  // 3. SVG 层：只画真正可见的（通常 1 层，交叉溶解期 2 层）
+  // 2. SVG 层：只画真正可见的（通常 1 层，交叉溶解期 2 层）
   const lo = Math.max(0, active - 1);
   const hi = Math.min(shots.length - 1, active + 1);
   for (let i = lo; i <= hi; i++) {
@@ -150,11 +163,18 @@ export async function renderFrame(input: FrameInput): Promise<void> {
     ctx.restore();
   }
 
-  // 3.5 跨镜头连续性层（Phase 7）：与上一拍共享数字时，上一拍的母版标记以 ghost
+  // 2.5 跨镜头连续性层（Phase 7）：与上一拍共享数字时，上一拍的母版标记以 ghost
   // 形态（形状/位置/颜色全继承上拍）进入本拍，虚线接到本拍标记 ——「前一镜头的
   // 形状/位置/颜色向下一镜头继承」由此可见、可抽样检查。canvas 直画：预览与导出
   // 同走 renderFrame，同一描述同一像素；v2 满版板（custom）也照常覆盖。
+  // 位置压在特效层之下：继承标记是**内容**，不该被前景浮尘盖住。
   if (shot) drawContinuity(ctx, shots, active, W, H);
+
+  // 3. canvas 特效层：画在**内容之上**、后期之下 —— 「镜头前的空气」。
+  //    此前它在 SVG 之下，实测被满版板整个盖住（strata 五条色带铺满 1360×760，
+  //    开/关特效的像素差是 0.000），素底板也只能从空白缝隙里透出一点。浮尘与粒子
+  //    在真实镜头里本就在前景，放在内容之上既合语汇，也让 19 个板式的动效一致可见。
+  if (shot && shot.layout.fx && shot.layout.fx !== "none") drawFx(ctx, shot, t, W, H);
 
   // 4. 后期层
   applyPost(ctx, W, H, postForStyle(style), frame);

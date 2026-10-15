@@ -20,7 +20,12 @@ export type Style = "editorial" | "flat-vector" | "chart-motion";
 /** 海报风的 canvas 特效。粒子三种运动方式 + 3D 投影 + 隧道 + 纯发光。 */
 export type FxKind =
   | "particles-converge" | "particles-vortex" | "particles-burst"
-  | "polyhedron" | "tunnel" | "glow" | "none";
+  | "polyhedron" | "tunnel" | "glow"
+  // 亮底专用（三系底色全是亮的，见 effects.ts 的 onLight 说明）：
+  // drift-motes 浮尘缓漂（扁平风色粉颗粒）· grid-pulse 网格逐点脉冲（图表风）
+  // · paper-sheen 纸面掠光（编辑风：大面积低对比，才看得出又不抢字）
+  | "drift-motes" | "grid-pulse" | "paper-sheen"
+  | "none";
 
 /**
  * 编辑风满版 SVG 图形背景（画法套装 A 组移植）：确定性纯图形，无 filter，
@@ -132,7 +137,7 @@ export interface Layout {
   decor?: boolean;
   /** 满版图形背景（编辑风）：dots-fade 圆点渐隐 / halftone 半调 / contour 山形 / rays 放射 / waves 水波 */
   bg?: BgKind;
-  /** 扁平矢量风的 canvas 特效（背景层） */
+  /** canvas 特效（前景层：画在内容之上、后期之下）。缺省按风格派生，见 StyleProfile.fxBias */
   fx?: FxKind;
   /** 特效强度 0..1，缺省 0.6 */
   fxStrength?: number;

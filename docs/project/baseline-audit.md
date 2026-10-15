@@ -66,11 +66,11 @@ RenderContent 数字溯源：`extractNumbers`（阿拉伯 + 中文数字两层�
 | 逐帧 QA | `qa-frames.mjs` | 静止帧/黑白帧/结构差/重复渲染差（determinism）/接触印相 |
 | 视觉盲评 | `outputs/.../v2-印相.html`（44 张）、e2e 抽帧 17 张 | 用户盲评入口 |
 
-盲区：① MP4 导出与浏览器原生 DOM 渲染的像素级对比（DOM SVG 为离屏序列化源，该对比对产品无决策价值，见 §3）；② image 图像组无版式；③ 特效层只覆盖 4/16 氛围板式（2026-10-14 挂载，升级项 A/B 待用户定）；④ 风格「实际差异」目前依赖人工印相，无自动量化。
+盲区：① MP4 导出与浏览器原生 DOM 渲染的像素级对比（DOM SVG 为离屏序列化源，该对比对产品无决策价值，见 §3）；② image 图像组无版式；③ ~~特效层只覆盖 4/16 氛围板式~~ **已于 Phase 9 关闭**（fx 改为按风格派生 + 亮底分支修复，全板式覆盖；原描述低估了范围，见 §7 附表缺陷 2）；④ 风格「实际差异」目前依赖人工印相，无自动量化（Phase 9 的 `tools/fx-ab.mjs` 补上了 fx 通道的自动量化，风格整体差异仍待做）。
 
 ## 6. 风格数量与实际差异（不按 ID 计数）
 
-- v2 满版库 16 套：编辑风 10 组（statement/number/compare/chart/timeline/quote/list/process/bookend）+ 海报风 4 套（strata/dust/dark-word/duo）。构造规律五条（满版出血/单一图形主角/大衬线字/克制三色/小字注脚），与旧 catalog 212 版式的「槽位排版器」是两种构造方式——不是换色关系。
+- v2 满版库 19 套（Phase 0 审计时为 16 套，Phase 8 起陆续增补）：编辑风 11（split-blocks / ink-line / num-giant / num-band / bars / timeline / quote-card / list-marks / vertical / chapter / steps，语义组覆盖 statement/number/compare/chart/timeline/quote/list/process/bookend）+ 扁平海报风 5（duo / dark-word / strata / balance / dust）+ 图表动态图形风 3（data-giant / axis-columns / measure-note）。构造规律五条（满版出血/单一图形主角/大衬线字/克制三色/小字注脚），与旧 catalog 212 版式的「槽位排版器」是两种构造方式——不是换色关系。
 - 实际差异证据：03 语料 12 拍用 9 版式（strata 色带/bars 数据条/split-blocks 分屏/竖排定版/双圆对峙构图语法互异）；印相 44 张 + 成片抽帧 17 张经用户盲评（m-A~m-E 为基准）。
 - 专属场景（kaojin 60s / wangji 20s）为一拍一幅手绘，与 v2 参数化板式并存，覆写点名进入。
 
@@ -79,7 +79,7 @@ RenderContent 数字溯源：`extractNumbers`（阿拉伯 + 中文数字两层�
 | # | 缺陷 | 影响 | 状态 |
 |---|---|---|---|
 | 1 | BEAT NN 母版角标 stage 母版无条件渲染（`stage.tsx:55`），`decor:false` 管不到——成片左下角挂角标 | 用户可见，成片不像成品 | **已修（Phase 8）**（见下方附表） |
-| 2 | v2 特效层仅 4/16（strata/dust/dark-word/duo），用户评「敷衍」 | 氛围拍有粒子，编辑风 8 拍纯排版 | 升级项 A（粒子扩编辑风）/B（BgKind 背景）待选 |
+| 2 | v2 特效层仅 4/16（strata/dust/dark-word/duo），用户评「敷衍」 | 氛围拍有粒子，编辑风 8 拍纯排版 | **已修（Phase 9）**——实际根因比本行所记严重得多（整个 fx 通道在亮底上无可见输出），见下方附表 |
 | 3 | `layout.emphasis` 全库无渲染消费点（死字段） | 代码卫生 | 已记待定，不删（保旧兼容） |
 | 4 | 01/05 语料长句 headline 需人工覆写缩句（05-overrides 拍 11/12） | 自动规划对长句的处理上限 | 部分缓解（custom 豁免安全区），根治在 Phase 6 布局引擎 |
 | 5 | 槽级 `m`×`mx` 同元素冲突无门禁（只有版式级 enter 冲突校验） | 潜在动效冲突漏网 | 部分缓解（Phase 7 第一刀：`stage.tsx` 把槽级强调 `mx` 改到入场收尾后再 0.12s 触发，避开同一 transform 属性争用）；**自动门禁仍未做** —— 冲突检测要靠逐元素比对 tween 归属性，当前只在版式级校验 `enter` |
@@ -111,8 +111,9 @@ curl api.github.com/repos/heygen-com/hyperframes  # 63.9k★ TS Apache-2.0，pro
 
 ---
 
-## 附：缺陷状态更新（Phase 8 收尾）
+## 附：缺陷状态更新（Phase 8 / Phase 9 收尾）
 
 | # | 缺陷 | 状态 |
 |---|---|---|
 | 1 | BEAT NN 母版角标进成片 | **已修（Phase 8）**：`stage.tsx` 的 `<BeatMark>` 与 `<DecorLayer>` 同走 `layout.decor !== false` 门控（`LayoutSVG` 里本来就受门控，舞台这条旁路渲染绕过了）。3 个 catalog 暗底定版式 + v2 `dark-word` 共 4 个版式的成片左下角不再挂角标。回归见 `tests/layouts.test.ts`「舞台层 · 拍号角标门控」。 |
+| 2 | v2 特效层仅 4/16 | **已修（Phase 9）**，但需更正本审计的缺陷描述：**真实根因不是「覆盖不足」，是「整个 fx 通道自挂载以来在亮底上没有任何可见输出」**。四个旧原语（`particleField`/`glowPulse`/`polyhedron`/`nestedTunnel`）全用 `globalCompositeOperation = "lighter"`（加光），而三系底色（`#f2ede4`/`#fbf7f0`/`#ffffff`）全是亮底 —— `lighter` 叠深色零增量、叠近白还是白。受影响范围是 **50 个旧 `P()` 板（12 glow + 38 粒子）+ v2 四套板式全部失效**，远超「4/16」。<br>修复：① 四个原语加 `onLight` 分支改 `source-over`（`isLightPaper` 按相对亮度 > 0.55 判定）；② **fx 层从 SVG 之下移到内容之上、后期之下**（原位置被 v2 满版板完全遮住，拍 1 开/关差 0.000 → 2.892）；③ 新增三个亮底专用原语 `paper-sheen` / `drift-motes` / `grid-pulse`，经 `StyleProfile.fxBias` + `fxStrength` 在 `plan.ts` 按风格派生（编辑风掠光 0.45 / 扁平风颗粒 0.7 / 图表风网格扫描 0.5），layout 显式声明优先、`"none"` 为显式关闭。<br>验收：fx A/B 12/12（静态均差 0.274–2.892、纯 fx 层运动量 0.220–10.633）、268 测试、plan-dry 6/6、e2e 14/14（2218 帧精确）、qa-frames 确定性 33/33。见 `progress.md` Phase 9。<br>**诚实缩范围**：原计划的 `bgBias`（bg.tsx 网格渐隐画法派生到图表风 3 板）未实现 —— 图表风板板内自绘 `MeasGrid`、扁平风板自带色块构图，叠加会打架；「背景方向」的实际交付只是补了 `steps` 缺失的 `bg`。 |

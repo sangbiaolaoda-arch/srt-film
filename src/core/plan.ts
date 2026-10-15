@@ -13,6 +13,7 @@ import { LAYOUT_BY_ID } from "../layouts/catalog";
 import { eligible, pickLayout, planStyles } from "../layouts/pick";
 import { checkLayout } from "../layouts/constraints";
 import type { Group } from "../layouts/types";
+import { resolveProfile } from "../styles/style-system";
 import { MOTION_BY_ID, validateMotionSet } from "../motion/catalog";
 
 export interface PlanResult {
@@ -84,6 +85,17 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
     // decision.style 已是最终值（自动判定或导演覆写，见 decideStyle/planStyles），
     // 无条件同步 —— 否则自动判定的图表风/扁平风拍会用错 profile 渲染。
     layout = { ...layout, style: decision.style };
+
+    // 动效签名同样按风格派生：板式显式声明优先，"none" 仍是显式关闭（wangji 专属场景靠它）。
+    // 不派生的话，19 个 v2 板式里有 15 个一帧 canvas 动效都没有（编辑风 11 个全裸）——
+    // fx 此前只写在四个海报套上，用户看到的「敷衍」就是这个。强度一并派生：
+    // 编辑风 0.35（浮尘只做呼吸，不能抢排版）／图表风 0.5／扁平风 0.7。
+    const prof = resolveProfile(decision.style);
+    layout = {
+      ...layout,
+      fx: layout.fx ?? prof.fxBias,
+      fxStrength: layout.fxStrength ?? prof.fxStrength,
+    };
 
     // 槽级动效覆写：克隆一份版式，只改被点名的槽 —— 不能就地改 LAYOUT_BY_ID 里的原对象，
     // 否则同一版式被别的语料复用时会被这支片的动效污染。

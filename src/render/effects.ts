@@ -14,6 +14,13 @@ export interface FxOpts {
   accent: string;
   ink: string;
   dim: string;
+  /**
+   * 底色是否亮色。三系底色（#f2ede4 / #fbf7f0 / #ffffff）**全都是亮的**，
+   * 而 lighter「加光」在亮底上叠深色 = 零增量、叠近白 = 还是白 —— 实测带 fx 的
+   * 板（旧 catalog 50 个 P() + v2 四套）在成片里看不到任何特效，用户评「敷衍」。
+   * 亮底改走正常混合 + 深色/彩色 tone：把粒子读作「纸上的墨点/浮尘」而不是「光」。
+   */
+  onLight: boolean;
 }
 
 interface Particle {
@@ -95,7 +102,7 @@ export function particleField(ctx: CanvasRenderingContext2D, o: FxOpts, mode: "c
   const p = clamp01(o.t / Math.max(o.dur, 0.001));
 
   ctx.save();
-  ctx.globalCompositeOperation = "lighter";
+  ctx.globalCompositeOperation = o.onLight ? "source-over" : "lighter";
   for (const pt of parts) {
     let x: number;
     let y: number;
@@ -123,7 +130,8 @@ export function particleField(ctx: CanvasRenderingContext2D, o: FxOpts, mode: "c
     }
 
     if (alpha <= 0.02) continue;
-    ctx.globalAlpha = alpha;
+    // 亮底上深色点的视觉重量远大于暗底上的光点，同 alpha 会过火 —— 压到一半。
+    ctx.globalAlpha = o.onLight ? alpha * 0.5 : alpha;
     ctx.fillStyle = pt.tone > 0.72 ? o.accent : pt.tone > 0.4 ? mix(o.dim, o.accent, 0.35) : o.ink;
     const s = pt.size * (mode === "burst" ? 1 - p * 0.5 : 1);
     ctx.beginPath();
@@ -143,11 +151,20 @@ export function glowPulse(ctx: CanvasRenderingContext2D, o: FxOpts, strength = 0
   const r = Math.min(o.w, o.h) * 0.72;
 
   ctx.save();
-  ctx.globalCompositeOperation = "lighter";
   const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
-  g.addColorStop(0, `rgba(255,250,235,${0.16 * strength * fade * (0.6 + pulse * 0.4)})`);
-  g.addColorStop(0.26, hexToRgba(o.accent, 0.22 * strength * fade));
-  g.addColorStop(1, hexToRgba(o.accent, 0));
+  if (o.onLight) {
+    // 亮底上「加光」不成立：底色已接近白，叠暖白仍是白、叠深色则变脏。
+    // 改读作「纸上晕开的一团色」—— 仍是中心浓、边缘收，但走正常混合。
+    ctx.globalCompositeOperation = "source-over";
+    g.addColorStop(0, hexToRgba(o.accent, 0.1 * strength * fade * (0.65 + pulse * 0.35)));
+    g.addColorStop(0.45, hexToRgba(o.accent, 0.045 * strength * fade));
+    g.addColorStop(1, hexToRgba(o.accent, 0));
+  } else {
+    ctx.globalCompositeOperation = "lighter";
+    g.addColorStop(0, `rgba(255,250,235,${0.16 * strength * fade * (0.6 + pulse * 0.4)})`);
+    g.addColorStop(0.26, hexToRgba(o.accent, 0.22 * strength * fade));
+    g.addColorStop(1, hexToRgba(o.accent, 0));
+  }
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, o.w, o.h);
   ctx.restore();
@@ -178,7 +195,7 @@ export function polyhedron(ctx: CanvasRenderingContext2D, o: FxOpts, radius = 0.
 
   ctx.save();
   ctx.translate(o.w / 2, o.h / 2);
-  ctx.globalCompositeOperation = "lighter";
+  ctx.globalCompositeOperation = o.onLight ? "source-over" : "lighter";
   ctx.lineWidth = 1.6;
   for (let i = 0; i < V.length; i++) {
     for (let j = i + 1; j < V.length; j++) {
@@ -216,7 +233,7 @@ export function nestedTunnel(ctx: CanvasRenderingContext2D, o: FxOpts, zoom = 2.
   const travel = (o.t / Math.max(o.dur, 0.001)) * 1.2;
 
   ctx.save();
-  ctx.globalCompositeOperation = "lighter";
+  ctx.globalCompositeOperation = o.onLight ? "source-over" : "lighter";
   for (let i = layers; i >= 0; i--) {
     const z = Math.pow(zoom, i - travel - layers);
     const size = base * z * Math.pow(zoom, layers);
@@ -233,6 +250,121 @@ export function nestedTunnel(ctx: CanvasRenderingContext2D, o: FxOpts, zoom = 2.
     ctx.strokeRect(-half, -half * 0.62, size, size * 0.62);
     ctx.restore();
   }
+  ctx.restore();
+}
+
+/**
+ * ⑤ 浮尘漂移：亮底上的微粒缓漂 —— 编辑风的「纸面浮尘」、扁平风的「色粉颗粒」。
+ *
+ * 与粒子场的分工：粒子场是**叙事**的（汇聚/漩涡/炸散，有起点有终点，配「变化」的拍）；
+ * 浮尘是**背景**的 —— 不汇聚不旋转，只缓慢上浮 + 横向摆动，像空气里悬着的尘。
+ * 画面主体完全不受干扰，素底上只多一层呼吸。这是编辑风唯一拿得出手的动效语言：
+ * 它克制到「不细看会以为画面是静的」，但两块画面并排时立刻能看出差别。
+ *
+ * 位置是 t 的**纯函数**（上浮用取模循环，不是逐帧累加），所以 seek 到任意时刻都可复现。
+ */
+export function driftMotes(ctx: CanvasRenderingContext2D, o: FxOpts, count = 96, strength = 1): void {
+  const p = clamp01(o.t / Math.max(o.dur, 0.001));
+  const fade = Math.sin(p * Math.PI); // 进出都收，跨拍不硬边
+  if (fade <= 0.02) return;
+  const rnd = mulberry32(o.seed ^ 0x51ed270b);
+  const scale = o.w / 1280;
+  const k = clamp01(strength);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  for (let i = 0; i < count; i++) {
+    const x0 = rnd();
+    const y0 = rnd();
+    const r = 0.55 + rnd() * 1.3;
+    const phase = rnd() * Math.PI * 2;
+    const rise = 0.012 + rnd() * 0.05; // 归一化高度/秒
+    const sway = 0.004 + rnd() * 0.014;
+    const tone = rnd();
+    const y = (((y0 - o.t * rise) % 1) + 1) % 1;
+    const x = (x0 + Math.sin(o.t * 0.32 + phase) * sway) * o.w;
+    // 峰值（单点对比度）才是浮尘的可见性指标：它是稀疏小点，均差天然很低（0.05% 面积覆盖）。
+    // 系数按「dim 在纸白上约 104 级色差 × alpha」反推 —— 目标峰值 30 上下：看得出来，但不抢字。
+    ctx.globalAlpha = (0.35 + r * 0.25) * fade * k;
+    ctx.fillStyle = tone > 0.86 ? o.accent : tone > 0.62 ? o.dim : o.ink;
+    ctx.beginPath();
+    ctx.arc(x, y * o.h, r * scale, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * ⑥ 网格脉冲：一条扫描带自上而下扫过，带内的横网格线依次被点亮，像仪器逐行采样。
+ *
+ * 步长与板内自绘网格同为 40px，所以亮的线正好落在**既有**网格上 —— 读作网格在呼吸，
+ * 而不是又多了一层网格（图表风最忌讳给测量画面加装饰）。
+ *
+ * 早先画的是「交点脉冲」（波前上的格点变亮），A/B 实测运动量 0.010 —— 百来个 1.5px
+ * 的点只覆盖 0.08% 画面，等于没有。**线才是网格的本体**，也让「大面积低对比」成立。
+ */
+export function gridPulse(ctx: CanvasRenderingContext2D, o: FxOpts, step = 40, strength = 1): void {
+  const p = clamp01(o.t / Math.max(o.dur, 0.001));
+  const fade = Math.sin(p * Math.PI);
+  if (fade <= 0.02) return;
+  const s = o.w / 1280;
+  const stepPx = step * s;
+  const k = clamp01(strength);
+  const front = (-0.15 + p * 1.3) * o.h;
+  const band = o.h * 0.22; // 带内约 8 条横线
+
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  ctx.strokeStyle = o.accent;
+  for (let y = stepPx / 2; y < o.h; y += stepPx) {
+    const d = Math.abs(y - front) / band;
+    if (d >= 1) continue;
+    ctx.globalAlpha = (1 - d) * (1 - d) * 0.55 * fade * k;
+    ctx.lineWidth = Math.max(1, 1.3 * s);
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(o.w, y);
+    ctx.stroke();
+  }
+  // 扫描头：一条比网格更亮的线，让「正在扫」有明确的当前位置。
+  if (front > -2 && front < o.h + 2) {
+    ctx.globalAlpha = 0.5 * fade * k;
+    ctx.lineWidth = Math.max(1.4, 2.2 * s);
+    ctx.beginPath();
+    ctx.moveTo(0, front);
+    ctx.lineTo(o.w, front);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * ⑦ 纸面掠光：一条极淡的斜向色带缓慢掠过画面，像纸在光下被翻动时的那道反光。
+ *
+ * 为什么编辑风需要它：浮尘（drift-motes）是**稀疏小点** —— 覆盖不到 0.1% 的画面，
+ * 峰值再高也只是「几个灰点」，单帧看不出、成片里也看不出。实测过：把浮尘的峰值从
+ * 14 拉到 66（26% 对比度），开/关两帧并排仍然肉眼无差。
+ * 掠光是**大面积低对比**：覆盖两成画面、带内色差只有几级 —— 一眼能看到「有东西掠过」，
+ * 又不脏不抢字。「克制」的正确解法是大面积 + 低对比，不是小面积 + 高对比。
+ */
+export function paperSheen(ctx: CanvasRenderingContext2D, o: FxOpts, strength = 1): void {
+  const p = clamp01(o.t / Math.max(o.dur, 0.001));
+  const fade = Math.sin(p * Math.PI);
+  if (fade <= 0.02) return;
+  const diag = Math.hypot(o.w, o.h);
+  const half = diag * 0.14; // 带宽约 0.28×对角 → 覆盖两成上下画面
+  const nx = Math.cos(-0.52);
+  const ny = Math.sin(-0.52);
+  const cx = o.w * (-0.2 + p * 1.4);
+  const cy = o.h * (-0.15 + p * 1.3);
+  ctx.save();
+  ctx.globalCompositeOperation = "source-over";
+  const g = ctx.createLinearGradient(cx - nx * half, cy - ny * half, cx + nx * half, cy + ny * half);
+  g.addColorStop(0, hexToRgba(o.accent, 0));
+  g.addColorStop(0.5, hexToRgba(o.accent, 0.075 * strength * fade));
+  g.addColorStop(1, hexToRgba(o.accent, 0));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, o.w, o.h);
   ctx.restore();
 }
 
