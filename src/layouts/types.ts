@@ -10,11 +10,12 @@ export type Group =
   // 编辑风（纸白 + 朱红）
   | "statement" | "number" | "compare" | "process" | "list"
   | "chart" | "image" | "quote" | "timeline" | "bookend" | "figure"
-  // 海报风（暗底 + 高饱和），只在 style === "poster" 时被选中
+  // 扁平矢量叙事风（明亮平涂 + 粗描边 + 圆角），只在 style === "flat-vector" 时被选中
   | "poster-focus" | "poster-field" | "poster-geo" | "poster-nest";
 
-/** 视觉风格。editorial = 纸白朱红极简；poster = 暗底高饱和 + canvas 特效。 */
-export type Style = "editorial" | "poster";
+/** 视觉风格档（Phase 5 三系）。editorial = 纸白朱红极简；flat-vector = 明亮扁平矢量；
+ *  chart-motion = 白底数据图表。三系共享构图逻辑，只换风格 token（见 styles/style-system.ts）。 */
+export type Style = "editorial" | "flat-vector" | "chart-motion";
 
 /** 海报风的 canvas 特效。粒子三种运动方式 + 3D 投影 + 隧道 + 纯发光。 */
 export type FxKind =
@@ -27,7 +28,8 @@ export type FxKind =
  */
 export type BgKind = "dots-fade" | "halftone" | "contour" | "rays" | "waves";
 
-export const POSTER_GROUPS: Group[] = ["poster-focus", "poster-field", "poster-geo", "poster-nest"];
+/** 扁平矢量叙事风的版式组（明亮平涂 + 粗描边 + 圆角）。 */
+export const FLATVECTOR_GROUPS: Group[] = ["poster-focus", "poster-field", "poster-geo", "poster-nest"];
 
 export type SlotKind =
   // 文字
@@ -130,13 +132,13 @@ export interface Layout {
   decor?: boolean;
   /** 满版图形背景（编辑风）：dots-fade 圆点渐隐 / halftone 半调 / contour 山形 / rays 放射 / waves 水波 */
   bg?: BgKind;
-  /** 海报风的 canvas 特效（背景层） */
+  /** 扁平矢量风的 canvas 特效（背景层） */
   fx?: FxKind;
   /** 特效强度 0..1，缺省 0.6 */
   fxStrength?: number;
-  /** 特效主色，缺省 POSTER_ACCENT。满版板式（v2）有自己的色板，特效必须纳入其中 */
+  /** 特效主色，缺省 profile 的 ember。满版板式（v2）有自己的色板，特效必须纳入其中 */
   fxAccent?: string;
-  /** 底色，缺省按 style 取（编辑风纸白 / 海报风暗黑） */
+  /** 底色，缺省按 style 取（编辑风纸白 / 扁平风暖白 / 图表风纯白） */
   paper?: string;
   /**
    * 是否绘制满版底色层（wash）：受光渐变 + 柔光斑 + 边缘衰减，按拍号走色彩脚本。

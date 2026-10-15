@@ -57,7 +57,7 @@ export interface RenderPlan {
   /** 可追溯的字幕摘要/原文（复现用） */
   sourceSrt: string;
   canvas: RenderCanvas;
-  /** 全片风格档 id（本项目为 editorial/poster 两系，记录主系） */
+  /** 全片风格档 id（本项目为 editorial / flat-vector / chart-motion 三系，记录主系） */
   styleProfile: string;
   scenes: ScenePlan[];
   export: RenderPlanExport;

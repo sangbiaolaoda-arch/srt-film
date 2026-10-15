@@ -4,21 +4,13 @@
 import type { Shot } from "../core/shot";
 import { hashSeed } from "../core/rng";
 import { layerOpacity, rasterizeLayer } from "./rasterize";
-import { POST_EDITORIAL, POST_POSTER, applyPost } from "./post";
+import { applyPost, postForStyle } from "./post";
 import { type FxOpts, glowPulse, nestedTunnel, particleField, polyhedron } from "./effects";
+import { resolveProfile } from "../styles/style-system";
 
 export const STAGE_W = 1280;
 export const STAGE_H = 720;
 export const STAGE_FPS = 30;
-
-/** 编辑风纸白底 */
-export const PAPER = "#faf9f6";
-/** 海报风暗底 */
-export const DARK = "#0b0b0f";
-/** 海报风强调色 */
-export const POSTER_ACCENT = "#38e8c6";
-export const POSTER_HOT = "#ff3fa4";
-export const POSTER_DIM = "#46465a";
 
 export interface FrameInput {
   ctx: CanvasRenderingContext2D;
@@ -55,6 +47,14 @@ export function shotAt(shots: Shot[], t: number): number {
   return idx;
 }
 
+/** 把版式上的 fxAccent（"ember"/"steel"/"accent" 等 profile 色键）解析成实际颜色。 */
+function fxAccentOf(layout: Shot["layout"]): string {
+  const p = resolveProfile(layout.style);
+  const key = layout.fxAccent;
+  if (key && key in p) return (p as unknown as Record<string, string>)[key]!;
+  return p.ember;
+}
+
 function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number, h: number): void {
   const layout = shot.layout;
   const fx = layout.fx ?? "glow";
@@ -62,15 +62,16 @@ function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number,
 
   const start = shot.tlStart ?? shot.start;
   const local = Math.max(0, t - start);
+  const p = resolveProfile(layout.style);
   const o: FxOpts = {
     w,
     h,
     t: local,
     dur: Math.max(shot.end - shot.start, 0.8),
     seed: (hashSeed(layout.id) ^ Math.imul(shot.content.beat, 7919)) >>> 0,
-    accent: layout.fxAccent ?? POSTER_ACCENT,
-    ink: POSTER_DIM,
-    dim: POSTER_DIM,
+    accent: fxAccentOf(layout),
+    ink: p.tone.dim,
+    dim: p.tone.dim,
   };
   const strength = layout.fxStrength ?? 0.6;
 
@@ -100,7 +101,7 @@ export async function renderFrame(input: FrameInput): Promise<void> {
   const style = shot?.layout.style ?? "editorial";
 
   const bgOf = (s?: Shot): string =>
-    s?.layout.paper ?? ((s?.layout.style ?? "editorial") === "poster" ? DARK : PAPER);
+    s?.layout.paper ?? resolveProfile(s?.layout.style).paper;
 
   // 1. 底色。
   // 相邻两拍交叠 0.25s（下一拍的入场与上一拍的出场同时进行）。底色**不能**在这 0.25s
@@ -125,8 +126,8 @@ export async function renderFrame(input: FrameInput): Promise<void> {
     ctx.restore();
   }
 
-  // 2. 海报风：canvas 特效（背景层，在文字之下）
-  if (style === "poster" && shot) drawFx(ctx, shot, t, W, H);
+  // 2. 扁平矢量风：canvas 特效（背景层，在文字之下）
+  if (shot && shot.layout.fx && shot.layout.fx !== "none") drawFx(ctx, shot, t, W, H);
 
   // 3. SVG 层：只画真正可见的（通常 1 层，交叉溶解期 2 层）
   const lo = Math.max(0, active - 1);
@@ -149,5 +150,5 @@ export async function renderFrame(input: FrameInput): Promise<void> {
   }
 
   // 4. 后期层
-  applyPost(ctx, W, H, style === "poster" ? POST_POSTER : POST_EDITORIAL, frame);
+  applyPost(ctx, W, H, postForStyle(style), frame);
 }

@@ -16,32 +16,14 @@ import { WashLayer } from "./wash";
 import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
 import { stripPunct } from "../core/text";
+import { resolveProfile } from "../styles/style-system";
 
-/** 编辑风色板：纸白 + 朱红。 */
-export const COLORS: Record<Tone, string> = {
-  ink: "#1c1b18",
-  dim: "#8a867c",
-  accent: "#c8401f",
-  paper: "#faf9f6",
-  hairline: "rgba(28,27,24,0.14)",
-};
-
-/** 海报风色板：暗底 + 电光青绿。 */
-export const COLORS_POSTER: Record<Tone, string> = {
-  ink: "#eceae6",
-  dim: "#8b8a9c",
-  accent: "#38e8c6",
-  paper: "#0b0b0f",
-  hairline: "rgba(236,234,230,0.16)",
-};
-
+/** 风格档色板：直接取 style-system 的 tone token，不写死颜色。 */
 export function colorsOf(style?: Style): Record<Tone, string> {
-  return style === "poster" ? COLORS_POSTER : COLORS;
+  return resolveProfile(style).tone;
 }
 
 const FONT_SIZE = { xs: 14, s: 18, m: 24, l: 34, xl: 48, xxl: 72, huge: 104, mega: 168 } as const;
-const SERIF = '"Source Han Serif SC","Noto Serif SC","Songti SC",SimSun,serif';
-const SANS = '"Source Han Sans SC","Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
 
 /** 英文/数字按 0.55 字宽计，其余按 1 字宽计 —— 决定一行能放多少字。 */
 function charWidth(ch: string): number {
@@ -219,6 +201,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
   const h = (gh / rows) * 720;
   const tone = slot.tone ?? (slot.k === "bignum" ? "accent" : "ink");
   const C = colorsOf(ctx.layout.style);
+  const prof = resolveProfile(ctx.layout.style);
   const fill = C[tone];
   const size: number = FONT_SIZE[slot.size ?? "m"];
   const anchor = textAnchor(slot.align);
@@ -292,7 +275,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
         <g>
           {list.map((t, i) => (
             <Fragment key={i}>
-              {slot.k === "listnum" && <text x={x} y={y + lineH * (i + 0.85)} fontSize={size * 0.7} fill={C.dim} fontFamily={SANS}>{`${i + 1}.`}</text>}
+              {slot.k === "listnum" && <text x={x} y={y + lineH * (i + 0.85)} fontSize={size * 0.7} fill={C.dim} fontFamily={prof.fontText}>{`${i + 1}.`}</text>}
               {slot.k === "checklist" && <circle cx={x + 9} cy={y + lineH * (i + 0.72)} r={7} fill="none" stroke={C.accent} strokeWidth={2} />}
               {/* 项目符号用图形画，不用「—」字符 —— 画面文字零标点（见 core/text.ts） */}
               {slot.k === "bullets" && <rect x={x + 3} y={y + lineH * (i + 0.72) - 4} width={8} height={8} fill={fill} />}
@@ -301,7 +284,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
                 y={y + lineH * (i + 0.85)}
                 fontSize={size}
                 fill={fill}
-                fontFamily={SANS}
+                fontFamily={prof.fontText}
                 data-part=""
               >
                 {t.slice(0, 22)}
@@ -319,7 +302,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
           {list.map((t, i) => (
             <Fragment key={i}>
               <rect x={x + cw * i + 4} y={y} width={cw - 12} height={h} rx={h / 2} fill={slot.k === "pills" ? fill : "none"} stroke={fill} strokeWidth={2} opacity={0.95} />
-              <text x={x + cw * (i + 0.5)} y={y + h * 0.68} fontSize={Math.min(size, h * 0.5)} fill={slot.k === "pills" && tone === "accent" ? C.paper : fill} fontFamily={SANS} textAnchor="middle" data-part="">
+              <text x={x + cw * (i + 0.5)} y={y + h * 0.68} fontSize={Math.min(size, h * 0.5)} fill={slot.k === "pills" && tone === "accent" ? C.paper : fill} fontFamily={prof.fontText} textAnchor="middle" data-part="">
                 {t.slice(0, 6)}
               </text>
             </Fragment>
@@ -331,7 +314,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       const val = numericValue(slot, ctx);
       const text = slot.k === "num2" && !val ? ctx.content.bignum ?? "" : val;
       return g(
-        <text x={tx} y={y + h * 0.82} fontSize={size} fill={fill} fontFamily={SERIF} fontWeight={700} textAnchor={anchor} data-numeric="">
+        <text x={tx} y={y + h * 0.82} fontSize={size} fill={fill} fontFamily={prof.fontNum} fontWeight={700} textAnchor={anchor} data-numeric="">
           {text}
         </text>,
       );
@@ -339,7 +322,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
     case "delta": {
       const n = ctx.content.numbers.at(-1) ?? 0;
       return g(
-        <text x={tx} y={y + h * 0.8} fontSize={size} fill={fill} fontFamily={SERIF} fontWeight={700} data-numeric="">
+        <text x={tx} y={y + h * 0.8} fontSize={size} fill={fill} fontFamily={prof.fontNum} fontWeight={700} data-numeric="">
           {`+${n}%`}
         </text>,
       );
@@ -348,7 +331,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       const t = stripPunct(slotText(slot, ctx.content));
       if (!t) return g(<g />);
       return g(
-        <text x={tx} y={y + h * 0.72} fontSize={size} fill={fill} fontFamily={SANS} textAnchor={anchor} letterSpacing={slot.k === "kicker" || slot.k === "badge" ? 2 : 0}>
+        <text x={tx} y={y + h * 0.72} fontSize={size} fill={fill} fontFamily={prof.fontText} textAnchor={anchor} letterSpacing={slot.k === "kicker" || slot.k === "badge" ? 2 : 0}>
           {t}
         </text>,
       );
@@ -373,7 +356,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
         return g(
           <g data-line="">
             {chars.map((ch, j) => (
-              <text key={j} x={txV} y={startYV + j * step} fontSize={sizeV} fill={fill} fontFamily={SERIF} fontWeight={600} textAnchor={anchorV === "middle" ? "middle" : "start"} data-char="">
+              <text key={j} x={txV} y={startYV + j * step} fontSize={sizeV} fill={fill} fontFamily={prof.fontDisplay} fontWeight={600} textAnchor={anchorV === "middle" ? "middle" : "start"} data-char="">
                 {ch}
               </text>
             ))}
@@ -381,7 +364,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
         );
       }
 
-      const family = slot.k === "source" || slot.k === "attribution" || slot.k === "caption" ? SANS : SERIF;
+      const family = slot.k === "source" || slot.k === "attribution" || slot.k === "caption" ? prof.fontText : prof.fontDisplay;
       // 短句放大（海报法则：hook 必须是画面最大的元素 —— 字越少，字就该越大）。
       // 「说」单独成拍时若只有 48px，画面必然空；放到贴满槽宽才是海报语言。
       // 出处：Adobe《How to design a poster》Step 3（本轮 Agent-Reach 实抓）+
@@ -410,7 +393,7 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       const sem = SEM_COLORS[ctx.layout.style ?? "editorial"];
       // 海报风大字拆成逐字符独立 <text>：这样逐字动效（上浮／打出）才有对象，
       // 每个字也都是可以单独做变换的图形。编辑风保持整行，不动既有视觉。
-      const splitChars = isHeadlineLike && fs >= 24 && ctx.layout.style === "poster";
+      const splitChars = isHeadlineLike && fs >= 24 && ctx.layout.style === "flat-vector";
       return g(
         <g>
           {rows.map((row, i) => {
@@ -491,7 +474,7 @@ export function LayoutLayer({ layout, content }: { layout: Layout; content: Rend
         {layout.bg && (
           <BgLayer kind={layout.bg} seed={content.beat} colorDim={C.dim} colorHairline={C.hairline} accent={C.accent} />
         )}
-        {board({ content: { ...content, headline: stripPunct(content.headline) }, beat: content.beat, style: layout.style ?? "editorial" })}
+        {board({ content: { ...content, headline: stripPunct(content.headline) }, beat: content.beat, profile: resolveProfile(layout.style) })}
       </g>
     );
   }
@@ -535,8 +518,9 @@ export function LayoutSVG({ layout, content, paper }: LayoutSVGProps): JSX.Eleme
 
 /** 拍号角标 */
 export function BeatMark({ beat, style }: { beat: number; style?: Style }): JSX.Element {
+  const prof = resolveProfile(style);
   return (
-    <text x={1280 * 0.08} y={720 - 24} fontSize={13} fill={colorsOf(style).dim} fontFamily={SANS} data-beat="">
+    <text x={1280 * 0.08} y={720 - 24} fontSize={13} fill={colorsOf(style).dim} fontFamily={prof.fontText} data-beat="">
       {`BEAT ${String(beat).padStart(2, "0")}`}
     </text>
   );

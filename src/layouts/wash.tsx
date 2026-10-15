@@ -19,6 +19,7 @@
 
 import { colorsOf } from "./render";
 import type { Style } from "./types";
+import { resolveProfile, type StyleProfileId } from "../styles/style-system";
 
 interface WashProps {
   /** 拍号：驱动色彩脚本档位与光位轮转 */
@@ -36,13 +37,41 @@ const PAPER_RAMP = [
   ["#fbfaf4", "#edf0e7"], // 微绿
 ] as const;
 
-/** 色彩脚本 · 海报风：四档暗底，色相偏移更小。 */
-const DARK_RAMP = [
-  ["#14131b", "#0a0910"],
-  ["#101319", "#080a0e"],
-  ["#15111c", "#0a0710"],
-  ["#101415", "#070a0b"],
+/** 色彩脚本 · 扁平矢量风：四档亮底，暖白到奶白，平涂感。 */
+const FLAT_RAMP = [
+  ["#fffaf3", "#f6efe3"],
+  ["#fdf7f4", "#f3ece6"],
+  ["#fff8f2", "#f7ece2"],
+  ["#fdfbf5", "#f1f0e8"],
 ] as const;
+
+/** 色彩脚本 · 图表动态图形风：四档近白底，极淡冷调，保持「屏幕截图」般的干净。 */
+const WHITE_RAMP = [
+  ["#ffffff", "#f6f8fb"],
+  ["#ffffff", "#f4f7fa"],
+  ["#ffffff", "#f7f9fb"],
+  ["#ffffff", "#f3f6f9"],
+] as const;
+
+/** 按风格档返回底色层的光照 / 暗角 / 提压暗参数。 */
+function washCfg(style: StyleProfileId): {
+  ramp: readonly (readonly [string, string])[];
+  lightColor: string;
+  lightOpacity: number;
+  vigOpacity: number;
+  lift: number;
+  drop: number;
+} {
+  switch (style) {
+    case "flat-vector":
+      return { ramp: FLAT_RAMP, lightColor: "#fff7ec", lightOpacity: 0.42, vigOpacity: 0.1, lift: 0.05, drop: -0.08 };
+    case "chart-motion":
+      return { ramp: WHITE_RAMP, lightColor: "#ffffff", lightOpacity: 0.22, vigOpacity: 0.06, lift: 0.03, drop: -0.04 };
+    case "editorial":
+    default:
+      return { ramp: PAPER_RAMP, lightColor: "#fffdf6", lightOpacity: 0.5, vigOpacity: 0.16, lift: 0.02, drop: -0.055 };
+  }
+}
 
 /** 光位轮转：左上 / 右上 / 左下 / 右下。 */
 const LIGHT_POS = [
@@ -72,17 +101,18 @@ function shade(hex: string, amt: number): string {
  * 三样都刻意做轻 —— 它的作用是让画面「有空间」，不是自己抢戏。
  */
 export function WashLayer({ beat, style, paper }: WashProps): JSX.Element {
-  const poster = style === "poster";
+  const p = resolveProfile(style);
   const C = colorsOf(style);
-  const ramp = poster ? DARK_RAMP : PAPER_RAMP;
+  const cfg = washCfg(p.id);
+  const ramp = cfg.ramp;
   const idx = paper ? -1 : (((beat - 1) % ramp.length) + ramp.length) % ramp.length;
 
   // 渐变两端：给了 paper 就从 paper 推出；否则取色彩脚本档位。
   let from: string;
   let to: string;
   if (paper) {
-    from = shade(paper, poster ? 0.06 : 0.02);
-    to = shade(paper, poster ? -0.22 : -0.055);
+    from = shade(paper, cfg.lift);
+    to = shade(paper, cfg.drop);
   } else {
     const pair = ramp[idx]!;
     from = pair[0];
@@ -93,9 +123,9 @@ export function WashLayer({ beat, style, paper }: WashProps): JSX.Element {
   const gid = `wash-g-${beat}`;
   const lid = `wash-l-${beat}`;
   const vid = `wash-v-${beat}`;
-  // 柔光颜色：编辑风用近白暖光，海报风用极淡的冷光（不能用强调色，否则每拍都在发光）
-  const lightColor = poster ? "#8f9bd8" : "#fffdf6";
-  const lightOpacity = poster ? 0.1 : 0.5;
+  // 柔光颜色：沿风格档取（图表风近白、扁平风暖白、编辑风暖白），不能用强调色，否则每拍都在发光
+  const lightColor = cfg.lightColor;
+  const lightOpacity = cfg.lightOpacity;
 
   return (
     <g data-wash="">
@@ -111,7 +141,7 @@ export function WashLayer({ beat, style, paper }: WashProps): JSX.Element {
         </radialGradient>
         <radialGradient id={vid} cx="0.5" cy="0.46" r="0.78">
           <stop offset="0.55" stopColor={C.paper} stopOpacity={0} />
-          <stop offset="1" stopColor={C.paper} stopOpacity={poster ? 0.5 : 0.16} />
+          <stop offset="1" stopColor={C.paper} stopOpacity={cfg.vigOpacity} />
         </radialGradient>
       </defs>
       <rect x={0} y={0} width={1280} height={720} fill={`url(#${gid})`} />

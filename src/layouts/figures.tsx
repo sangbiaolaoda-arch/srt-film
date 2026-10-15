@@ -51,10 +51,11 @@ interface Palette {
   hairline: string;
 }
 
-/** 图形色板与 render.tsx 的两套主题保持同色，但不 import —— 避免与渲染器互相依赖。 */
+/** 图形色板与 style-system 的三系风格保持同色，但不 import —— 避免与渲染器互相依赖。 */
 const PALETTE: Record<Style, Palette> = {
   editorial: { ink: "#1c1b18", dim: "#8a867c", accent: "#c8401f", hairline: "rgba(28,27,24,0.18)" },
-  poster: { ink: "#eceae6", dim: "#8b8a9c", accent: "#38e8c6", hairline: "rgba(236,234,230,0.2)" },
+  "flat-vector": { ink: "#15233b", dim: "#7b8499", accent: "#ff5a3c", hairline: "rgba(21,35,59,0.18)" },
+  "chart-motion": { ink: "#10243a", dim: "#5b6b80", accent: "#ff6a00", hairline: "rgba(16,36,58,0.2)" },
 };
 
 interface FigCtx extends Palette {

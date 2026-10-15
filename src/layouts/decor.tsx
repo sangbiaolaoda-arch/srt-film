@@ -11,6 +11,7 @@
 
 import type { Style } from "./types";
 import { colorsOf } from "./render";
+import { resolveProfile } from "../styles/style-system";
 
 interface DecorProps {
   beat: number;
@@ -57,7 +58,8 @@ function SideRuler({ stroke }: { stroke: string }): JSX.Element {
 
 export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
   const c = colorsOf(style);
-  const poster = style === "poster";
+  const p = resolveProfile(style);
+  const textured = p.paperTexture;
   const frac = total && total > 0 ? Math.min(1, beat / total) : 1;
   const x0 = 64;
   const x1 = 1280 - 64;
@@ -66,21 +68,10 @@ export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
 
   return (
     <g data-decor="">
-      {poster ? (
-        <>
-          {/* 半调暗角（画法 A03 + vignette）：四角压暗聚焦中心，海报风的「舞台灯」 */}
-          <defs>
-            <radialGradient id={`decor-vig-${beat}`} cx="50%" cy="46%" r="78%">
-              <stop offset="55%" stopColor="#000" stopOpacity={0} />
-              <stop offset="100%" stopColor="#000" stopOpacity={0.4} />
-            </radialGradient>
-          </defs>
-          <rect x={0} y={0} width={1280} height={720} fill={`url(#decor-vig-${beat})`} />
-        </>
-      ) : (
+      {textured ? (
         <>
           {/* 加号对位栅格（画法 A16）：印刷制版标记语汇，比圆点更像「被装帧的纸」。
-              seed 固定：纹理是同一张纸，逐拍不跳变。 */}
+              仅编辑风（paperTexture）启用：seed 固定，逐拍不跳变。 */}
           <defs>
             <pattern id={pid} width={48} height={48} patternUnits="userSpaceOnUse">
               <path
@@ -103,10 +94,21 @@ export function DecorLayer({ beat, total, style }: DecorProps): JSX.Element {
           {/* 纸纹颗粒：极低透明度的分形噪声，给纯色底一点「纤维」 */}
           <rect x={0} y={0} width={1280} height={720} filter={`url(#decor-grain-${beat})`} />
         </>
+      ) : (
+        <>
+          {/* 半调暗角（画法 A03 + vignette）：扁平矢量风与图表风净底，四角压暗聚焦中心 */}
+          <defs>
+            <radialGradient id={`decor-vig-${beat}`} cx="50%" cy="46%" r="78%">
+              <stop offset="55%" stopColor="#000" stopOpacity={0} />
+              <stop offset="100%" stopColor="#000" stopOpacity={0.4} />
+            </radialGradient>
+          </defs>
+          <rect x={0} y={0} width={1280} height={720} fill={`url(#decor-vig-${beat})`} />
+        </>
       )}
       <CornerMarks stroke={c.hairline} />
-      {!poster && <SideRuler stroke={c.hairline} />}
-      {!poster && (
+      {!textured && <SideRuler stroke={c.hairline} />}
+      {!textured && (
         <g>
           {/* 右上角同心圆环：与右下角标呼应的几何锚点 */}
           <circle cx={1216} cy={56} r={15} fill="none" stroke={c.hairline} strokeWidth={1} />

@@ -23,7 +23,7 @@ export interface SceneProps {
   text: string;
   /** 拍序号 */
   beat: number;
-  /** 视觉风格 —— 决定语义色取值（editorial 暗调 / poster 电光） */
+  /** 视觉风格 —— 决定语义色取值（editorial 朱红 / flat-vector 橙蓝 / chart-motion 橙蓝） */
   style: Style;
 }
 

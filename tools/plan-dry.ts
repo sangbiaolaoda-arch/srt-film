@@ -12,6 +12,9 @@ import { displayHeadline, displayWidth } from "../src/core/compose";
 import { stripPunct } from "../src/core/text";
 import { STAGE_FPS } from "../src/render/frame";
 
+const styleTag = (s: string | undefined): string =>
+  s === "chart-motion" ? "图表" : s === "flat-vector" ? "扁平" : "编辑";
+
 const root = resolve(import.meta.dirname, "..");
 const srtPath = resolve(root, process.argv[2] ?? "examples/01-explanatory-tech.srt");
 const ovPath = process.argv[3] ? resolve(root, process.argv[3]) : null;
@@ -51,15 +54,20 @@ for (const { i, at, dur, shot } of rows) {
     `${String(i + 1).padStart(2, "0")}  ` +
       `${at.toFixed(2).padStart(6)}–${(at + dur).toFixed(2).padStart(6)}s  ` +
       `${dur.toFixed(2).padStart(5)}s  ` +
-      `${(shot.layout.style === "poster" ? "海报" : "编辑")}  ` +
+      `${styleTag(shot.layout.style)}  ` +
       `${shot.layout.id.padEnd(20)} w=${w.toFixed(1).padStart(4)}${over}  ${h}`,
   );
 }
 
-const poster = shots.filter((s) => s.layout.style === "poster").length;
+const tally: Record<string, number> = {};
+for (const s of shots) tally[s.layout.style ?? "editorial"] = (tally[s.layout.style ?? "editorial"] ?? 0) + 1;
+const tallyStr = (["editorial", "flat-vector", "chart-motion"] as const)
+  .filter((k) => (tally[k] ?? 0) > 0)
+  .map((k) => `${styleTag(k)}风 ${tally[k]} 拍`)
+  .join(" / ");
 console.log(
   `\n${shots.length} 拍 · ${new Set(shots.map((s) => s.layout.id)).size} 个版式` +
-    ` · 海报风 ${poster} 拍 / 编辑风 ${shots.length - poster} 拍` +
+    ` · ${tallyStr}` +
     ` · 估算时长 ${tlEnd.toFixed(2)}s（${Math.round(tlEnd * STAGE_FPS)} 帧 @ ${STAGE_FPS}fps）`,
 );
 console.log(`风格判定：${styles.join("　")}`);

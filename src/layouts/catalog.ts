@@ -12,17 +12,17 @@ const L = (
   extra: { emphasis?: string; ambient?: string; note?: string; needs?: number; paper?: string; bg?: BgKind; decor?: boolean; flagship?: boolean } = {},
 ): Layout => ({ id, name, group, enter, slots, ...extra });
 
-/** 海报风版式：暗底 + canvas 特效，fx 决定背景特效种类。 */
+/** 扁平矢量叙事风版式：亮底 + canvas 特效，fx 决定背景特效种类。 */
 const P = (
   id: string, name: string, group: Group, enter: string[], fx: FxKind,
   slots: Slot[],
   extra: { emphasis?: string; ambient?: string; note?: string; needs?: number; fxStrength?: number } = {},
-): Layout => ({ id, name, group, enter, slots, style: "poster", fx, ...extra });
+): Layout => ({ id, name, group, enter, slots, style: "flat-vector", fx, ...extra });
 
 const CHART_ENTER = ["m-rise-lines", "m-fade-up"];
 const TEXT_ENTER = ["m-stagger-words", "m-fade-up"];
 const CARD_ENTER = ["m-scale-soft", "m-fade-up"];
-// 海报风的四套入场池（池内互不冲突）
+// 扁平矢量风的四套入场池（池内互不冲突）
 const PO_RISE = ["m-char-rise", "m-zoom-in"];
 const PO_TYPE = ["m-char-type", "m-skew-in"];
 const PO_SPIN = ["m-char-rise", "m-rotate-in"];

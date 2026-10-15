@@ -74,11 +74,10 @@ export function plan(srt: string, ovRaw: string): PlanResult {
     layout = layout ?? pickLayout(content, decision.style, prevLayout, { used, total: prepared.length });
     bump(layout.group);
 
-    // 显式风格覆写灌进 layout：底色 / 图形调色板 / 特效路径全部由 layout.style 驱动，
-    // 不灌的话 ovr.style 只影响挑选、不影响渲染（编辑版式在海报拍会黑底黑线）。
-    if (ovr?.style && layout.style !== ovr.style) {
-      layout = { ...layout, style: ovr.style };
-    }
+    // 风格档灌进 layout：底色 / 图形调色板 / 特效路径全部由 layout.style 驱动。
+    // decision.style 已是最终值（自动判定或导演覆写，见 decideStyle/planStyles），
+    // 无条件同步 —— 否则自动判定的图表风/扁平风拍会用错 profile 渲染。
+    layout = { ...layout, style: decision.style };
 
     // 槽级动效覆写：克隆一份版式，只改被点名的槽 —— 不能就地改 LAYOUT_BY_ID 里的原对象，
     // 否则同一版式被别的语料复用时会被这支片的动效污染。
@@ -111,8 +110,9 @@ export function plan(srt: string, ovRaw: string): PlanResult {
     prevLayout = layout.id;
 
     const realStyle = layout.style ?? "editorial";
+    const styleTag = realStyle === "chart-motion" ? "图表" : realStyle === "flat-vector" ? "扁平" : "编辑";
     styles.push(
-      `${String(beat.index).padStart(2, "0")} ${realStyle === "poster" ? "海报" : "编辑"}（${ovr?.layoutId || ovr?.layout ? "覆写版式" : decision.reason}）`,
+      `${String(beat.index).padStart(2, "0")} ${styleTag}（${ovr?.layoutId || ovr?.layout ? "覆写版式" : decision.reason}）`,
     );
 
     // 资格门禁：图表版式必须拿得到足够多的可溯源数字

@@ -9,19 +9,20 @@ import { LayoutSVG } from "../layouts/render";
 import { MOTIONS, MOTION_BY_ID } from "../motion/catalog";
 import { applyMotion } from "../motion/apply";
 import type { Layout, RenderContent } from "../layouts/types";
+import type { StyleProfileId } from "../styles/style-system";
 import "../styles/gallery.css";
 
 const GROUP_LABEL: Record<string, string> = {
   // 编辑风（纸白 + 朱红）
   statement: "文字陈述", number: "数字焦点", compare: "对照", process: "因果流程",
   list: "列表要点", chart: "图表", image: "图像素材", quote: "引语", timeline: "时间序列", bookend: "片头片尾",
-  // 动态海报风（暗底 + 粒子/发光/3D）
-  "poster-focus": "海报 · 发光焦点", "poster-field": "海报 · 粒子场",
-  "poster-geo": "海报 · 3D 几何", "poster-nest": "海报 · 无限嵌套",
+  // 扁平矢量叙事风（亮底 + 粒子/发光/3D）
+  "poster-focus": "扁平 · 发光焦点", "poster-field": "扁平 · 粒子场",
+  "poster-geo": "扁平 · 3D 几何", "poster-nest": "扁平 · 无限嵌套",
 };
 
-const GROUP_STYLE: Record<string, "editorial" | "poster"> = Object.fromEntries(
-  LAYOUT_GROUPS.map((g) => [g, g.startsWith("poster-") ? "poster" : "editorial"]),
+const GROUP_STYLE: Record<string, StyleProfileId> = Object.fromEntries(
+  LAYOUT_GROUPS.map((g) => [g, g.startsWith("poster-") ? "flat-vector" : "editorial"]),
 );
 
 /** 画廊演示内容：全部来自一段真实旁白切出来的素材，数字可溯源。 */
@@ -91,14 +92,14 @@ function Card({ layout, index }: { layout: Layout; index: number }) {
 
 function Gallery() {
   const groups = LAYOUT_GROUPS.filter((g) => LAYOUTS.some((l) => l.group === g));
-  const count = (style: "editorial" | "poster") =>
+  const count = (style: StyleProfileId) =>
     LAYOUTS.filter((l) => (l.style ?? "editorial") === style).length;
   return (
     <>
       <header className="gh">
         <h1>版式画廊 · {LAYOUTS.length}</h1>
         <p className="tagline">
-          动效原语 {MOTIONS.length} 个 · 悬停任意版式即重播它的入场动效 · 分组 {groups.length} 类（编辑风 {count("editorial")} / 海报风 {count("poster")}）
+          动效原语 {MOTIONS.length} 个 · 悬停任意版式即重播它的入场动效 · 分组 {groups.length} 类（编辑风 {count("editorial")} / 扁平矢量风 {count("flat-vector")}）
         </p>
         <nav className="g-nav">
           {groups.map((g) => (

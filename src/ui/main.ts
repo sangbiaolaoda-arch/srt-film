@@ -140,12 +140,21 @@ btnLoad.addEventListener("click", () => {
   // 阶段 4：预览
   setStep("plan", "done");
   setStep("preview", "active");
-  const posterCount = shots.filter((s) => s.layout.style === "poster").length;
+  const styleCounts: Record<string, number> = { editorial: 0, "flat-vector": 0, "chart-motion": 0 };
+  for (const s of shots) {
+    const st = s.layout.style ?? "editorial";
+    styleCounts[st] = (styleCounts[st] ?? 0) + 1;
+  }
+  const styleLabel: Record<string, string> = { editorial: "编辑", "flat-vector": "扁平矢量", "chart-motion": "图表动态" };
+  const styleReport = (["editorial", "flat-vector", "chart-motion"] as const)
+    .filter((st) => styleCounts[st]! > 0)
+    .map((st) => `${styleLabel[st]}风 ${styleCounts[st]} 拍`)
+    .join(" / ");
   report(lines.concat([
     { text: `门禁通过：${shots.length} 拍，用到 ${new Set(shots.map((s) => s.layout.id)).size} 个版式，画面数字全部可溯源。`, kind: "ok" },
-    { text: `风格：编辑风 ${shots.length - posterCount} 拍 / 海报风 ${posterCount} 拍 —— ${result.styles.join("　")}`, kind: "ok" },
+    { text: `风格：${styleReport} —— ${result.styles.join("　")}`, kind: "ok" },
   ]));
-  log(`规划完成：${shots.length} 拍（编辑 ${shots.length - posterCount} / 海报 ${posterCount}）`);
+  log(`规划完成：${shots.length} 拍（${styleReport}）`);
 
   renderBeatList();
   stage = buildStage(stageHost, shots);

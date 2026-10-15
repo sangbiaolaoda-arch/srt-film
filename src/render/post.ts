@@ -4,6 +4,7 @@
 // 改为在 SVG 层对文字双份偏移绘制，更便宜也更可控。
 
 import { mulberry32 } from "../core/rng";
+import type { StyleProfileId } from "../styles/style-system";
 
 export interface PostConfig {
   /** 颗粒强度 0..1 */
@@ -21,10 +22,23 @@ export interface PostConfig {
 /** 编辑风：一层可感知的「纸感」+ 轻微暗角，让静止帧也有呼吸。 */
 export const POST_EDITORIAL: PostConfig = { grain: 0.06, vignette: 0.12, scanline: 0, warm: 0.02 };
 
-/** 海报风：明显的胶片质感。 */
-export const POST_POSTER: PostConfig = { grain: 0.11, vignette: 0.34, scanline: 0.045, warm: 0, grainBlend: "overlay" };
+/** 扁平矢量叙事风：明快，略带胶片质感与暗角，但比编辑风更亮。 */
+export const POST_FLATVECTOR: PostConfig = { grain: 0.11, vignette: 0.28, scanline: 0.03, warm: 0, grainBlend: "overlay" };
+
+/** 图表动态图形风：极轻颗粒、近乎无暗角，保持「屏幕截图」般的干净数据感。 */
+export const POST_CHARTMOTION: PostConfig = { grain: 0.04, vignette: 0.08, scanline: 0, warm: 0.02 };
 
 export const POST_NONE: PostConfig = { grain: 0, vignette: 0, scanline: 0, warm: 0 };
+
+/** 按风格档返回对应的后期配置。 */
+export function postForStyle(style: StyleProfileId): PostConfig {
+  switch (style) {
+    case "flat-vector": return POST_FLATVECTOR;
+    case "chart-motion": return POST_CHARTMOTION;
+    case "editorial":
+    default: return POST_EDITORIAL;
+  }
+}
 
 const GRAIN_SIZE = 160;
 let grainTile: HTMLCanvasElement | null = null;

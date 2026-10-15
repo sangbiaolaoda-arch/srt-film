@@ -40,8 +40,10 @@ export interface SemRoleDef {
   why: string;
   /** 编辑风取值：低饱和老派印刷色，适配纸白 */
   editorial: string;
-  /** 海报风取值：电光高饱和，适配暗底 */
-  poster: string;
+  /** 扁平矢量叙事风取值：明亮平涂，适配浅底 */
+  flatVector: string;
+  /** 图表动态图形风取值：数据感配色，适配白底 */
+  chartMotion: string;
   /** 触发词白名单（只收旁白真实用词，不引入稿子没说过的话） */
   terms: string[];
 }
@@ -53,7 +55,8 @@ export const SEM_ROLES: SemRoleDef[] = [
     anchor: "#dc2626",
     why: "红 = 血与火，跨文化最强的「停下 / 注意」信号；明度压暗一档，表达「已经发生的负向」而不是紧急警报",
     editorial: "#a5170a",
-    poster: "#ff4d2e",
+    flatVector: "#d63a1f",
+    chartMotion: "#d6391f",
     terms: ["痛苦", "危险", "伤害", "失恋", "亏损", "可怕", "风险", "疼", "痛", "损失", "失去", "孤独", "失败"],
   },
   {
@@ -62,7 +65,8 @@ export const SEM_ROLES: SemRoleDef[] = [
     anchor: "#d97706",
     why: "琥珀 = 警示而非灾祸，暖而不刺，保留「交易 / 代价」的意味，不与危险的红抢",
     editorial: "#9a6b1c",
-    poster: "#ffd166",
+    flatVector: "#c77a12",
+    chartMotion: "#b9740f",
     terms: ["价格", "代价", "付出", "保费", "成本", "止损"],
   },
   {
@@ -71,7 +75,8 @@ export const SEM_ROLES: SemRoleDef[] = [
     anchor: "#16a34a",
     why: "绿 = 植被与安全，生理唤起最低；用来标注「不让它发生」的底线，与 danger 构成对冲",
     editorial: "#1a6b52",
-    poster: "#38e8c6",
+    flatVector: "#0f9d6b",
+    chartMotion: "#0c8a5e",
     terms: ["底线", "安全", "通透", "不怕", "保险", "止损线"],
   },
   {
@@ -80,7 +85,8 @@ export const SEM_ROLES: SemRoleDef[] = [
     anchor: "—（品牌色，无业界锚点）",
     why: "品牌朱红承载全片主轴「在乎」；与 danger 同色系但更亮更饱和 —— 明度差即语义差，画面自我复述「同源」",
     editorial: "#c8401f",
-    poster: "#ff9ecd",
+    flatVector: "#ff5a3c",
+    chartMotion: "#ff6a00",
     terms: ["在乎", "心动", "幸福", "爱", "喜欢", "珍重"],
   },
 ];
@@ -96,7 +102,8 @@ export const SEM_RULES: Rule[] = SEM_ROLES.flatMap((r) => r.terms.map((t) => ({ 
 /** 语义色板：从角色定义派生，避免两处各写一份色值。 */
 export const SEM_COLORS: Record<Style, Record<SemTone, string>> = {
   editorial: Object.fromEntries(SEM_ROLES.map((r) => [r.tone, r.editorial])) as Record<SemTone, string>,
-  poster: Object.fromEntries(SEM_ROLES.map((r) => [r.tone, r.poster])) as Record<SemTone, string>,
+  "flat-vector": Object.fromEntries(SEM_ROLES.map((r) => [r.tone, r.flatVector])) as Record<SemTone, string>,
+  "chart-motion": Object.fromEntries(SEM_ROLES.map((r) => [r.tone, r.chartMotion])) as Record<SemTone, string>,
 };
 
 /** 强调片段的放大倍数（换行也按它算宽，避免放大后溢出槽位）。 */

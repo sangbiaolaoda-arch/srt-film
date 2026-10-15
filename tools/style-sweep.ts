@@ -14,10 +14,15 @@ for (const f of readdirSync(dir).filter((x) => x.endsWith(".srt")).sort()) {
   const beats = planBeats(parseSRT(readFileSync(resolve(dir, f), "utf8")));
   const contents = beats.map((b) => buildContent(composeScenes([b])[0]!, b, false));
   const planned = planStyles(contents);
-  const poster = planned.filter((d) => d.style === "poster").length;
-  console.log(`\n${f}  ${beats.length} 拍 → 海报风 ${poster} 拍（${Math.round((poster / beats.length) * 100)}%）`);
+  const tag = (s: string): string => (s === "chart-motion" ? "图表" : s === "flat-vector" ? "扁平" : "编辑");
+  const tally: Record<string, number> = {};
+  for (const d of planned) tally[d.style] = (tally[d.style] ?? 0) + 1;
+  const tallyStr = (["editorial", "flat-vector", "chart-motion"] as const)
+    .map((k) => `${tag(k)} ${tally[k] ?? 0}`)
+    .join(" / ");
+  console.log(`\n${f}  ${beats.length} 拍 → ${tallyStr}`);
   planned.forEach((d, i) => {
-    const mark = d.style === "poster" ? "★海报" : "  编辑";
-    console.log(`  ${String(i + 1).padStart(2, "0")} ${mark} 分=${String(d.score).padStart(5)} ${d.reason} ｜ ${contents[i]!.headline.replace(/\n/g, " / ").slice(0, 26)}`);
+    const star = d.style === "editorial" ? " " : "★";
+    console.log(`  ${String(i + 1).padStart(2, "0")} ${star}${tag(d.style)} 分=${String(d.score).padStart(5)} ${d.reason} ｜ ${contents[i]!.headline.replace(/\n/g, " / ").slice(0, 26)}`);
   });
 }

@@ -106,7 +106,11 @@ export function decideStyle(
 ): StyleDecision {
   if (override) return { style: override, reason: "导演覆写", score: 0 };
   const { score, notes } = styleScore(content, beatIndex, totalBeats);
-  return { style: score >= POSTER_MIN ? "poster" : "editorial", reason: notes.join("／") || "常规", score };
+  // 数据密集（≥2 个可溯源度量值）→ 图表动态图形风；强调信号够 → 扁平矢量叙事风；兜底编辑。
+  const mc = measureCount(content);
+  if (mc >= 2) return { style: "chart-motion", reason: notes.join("／") + "／数据密集", score };
+  if (score >= POSTER_MIN) return { style: "flat-vector", reason: notes.join("／") || "常规", score };
+  return { style: "editorial", reason: notes.join("／") || "常规", score };
 }
 
 /** 自动升级为海报风的最低倾向分。低于它说明这一拍更适合编辑风，不硬凑。 */
@@ -118,7 +122,8 @@ function posterQuota(n: number): number {
 }
 
 /**
- * 全片风格规划：逐拍打分 → 锁定开场/定版锚点 → 按配额与「不相邻」补选。
+ * 全片风格规划：逐拍打分 → 覆写/数据密集锁定 → 按配额与「不相邻」挑扁平矢量重音。
+ * 扁平矢量约每 6 拍一次（重音不是底色）；图表动态由数据驱动，不抢配额。
  * 覆写优先；自动兜底只在分数真的够高时才升级（不够就诚实留编辑风，不硬凑）。
  */
 export function planStyles(
@@ -126,39 +131,46 @@ export function planStyles(
   overrides: (Style | undefined)[] = [],
 ): StyleDecision[] {
   const n = contents.length;
-  const scored = contents.map((c, i) => {
+  // 逐拍初判：覆写优先；否则数据密集 → 图表动态；强调信号够 → 扁平矢量；兜底编辑。
+  const scored: StyleDecision[] = contents.map((c, i) => {
     const ovr = overrides[i];
-    if (ovr) return { style: ovr, reason: "导演覆写", score: 0 } as StyleDecision;
-    const { score, notes } = styleScore(c, i, n);
-    return { style: "editorial" as Style, reason: notes.join("／") || "常规", score };
+    if (ovr) return { style: ovr, reason: "导演覆写", score: 0 };
+    return decideStyle(c, i, n);
   });
 
-  const poster = new Set<number>();
-  scored.forEach((d, i) => { if (d.style === "poster") poster.add(i); }); // 覆写锁定
+  // 锁定：导演覆写与数据密集（图表动态）都不参与扁平矢量配额与去重。
+  const locked = (i: number) => overrides[i] !== undefined || scored[i]!.style === "chart-motion";
+  // 覆写钉成扁平矢量的拍直接进集合：占配额，并作为相邻回避的已占位。
+  const flat = new Set<number>();
+  for (let i = 0; i < scored.length; i++) if (overrides[i] === "flat-vector") flat.add(i);
 
-  // 锚点：开场与定版是结构位，分数够就锁定为海报风（冷开场 + 尾版）
-  const anchors = n > 2 ? [0, n - 1] : [0];
-  for (const i of anchors) {
-    if (!overrides[i] && scored[i]!.score >= POSTER_MIN) poster.add(i);
-  }
-
-  const adjacent = (i: number) => poster.has(i - 1) || poster.has(i + 1);
+  // 候选：未锁定、分数够高；锚点（开场/定版）优先，其余按分数降序、同分按拍序。
+  const anchors = new Set(n > 2 ? [0, n - 1] : [0]);
   const candidates = scored
-    .map((d, i) => ({ i, score: d.score }))
-    .filter(({ i, score }) => !poster.has(i) && score >= POSTER_MIN)
-    .sort((a, b) => b.score - a.score || a.i - b.i);
+    .map((d, i) => ({ i, score: d.score, anchor: anchors.has(i) }))
+    .filter(({ i, score }) => !locked(i) && score >= POSTER_MIN)
+    .sort((a, b) => Number(b.anchor) - Number(a.anchor) || b.score - a.score || a.i - b.i);
 
-  const quota = Math.max(posterQuota(n), poster.size);
+  // 配额 + 不相邻：填到配额为止，跳过与已选（含覆写）相邻的拍 —— 重音之间必须有呼吸。
+  const quota = posterQuota(n);
+  const adjacent = (i: number) => flat.has(i - 1) || flat.has(i + 1);
   for (const { i } of candidates) {
-    if (poster.size >= quota) break;
+    if (flat.size >= quota) break;
     if (adjacent(i)) continue;
-    poster.add(i);
+    flat.add(i);
   }
 
   scored.forEach((d, i) => {
-    if (overrides[i]) return;
-    if (poster.has(i)) d.style = "poster";
-    else if (d.reason === "常规") d.reason = "常规（编辑风兜底）";
+    if (overrides[i] !== undefined) return;   // 导演覆写：风格已定
+    if (d.style === "chart-motion") return;   // 数据密集：图表动态锁定
+    if (flat.has(i)) {
+      d.style = "flat-vector";
+    } else {
+      const demoted = d.score >= POSTER_MIN;  // 分数够但被配额/相邻规则让位
+      d.style = "editorial";
+      if (demoted) d.reason = "让位配额/相邻（编辑风）";
+      else if (d.reason === "常规") d.reason = "常规（编辑风兜底）";
+    }
   });
   return scored;
 }
@@ -167,13 +179,17 @@ export function planStyles(
 function preferredGroups(content: RenderContent, style: Style): Group[] {
   const text = content.headline;
   const out: Group[] = [];
-  if (style === "poster") {
+  if (style === "flat-vector") {
     if (content.numbers.length >= 1) out.push("poster-geo", "poster-focus");
     if (/[?？]$|怎么|为什么|如何/.test(text)) out.push("poster-field");
-    // 兜底把 poster-field 提前：氛围场（strata）是海报风的语言底座，
-    // 排后会被「海报拍本来就少」饿死（实测 97 拍里 strata×0）。
-    // 不担心刷屏 —— 组级帽让 field 达 25% 自动沉底让位。
+    // 兜底把 poster-field 提前：氛围场（strata）是扁平矢量风的语言底座，
+    // 排后会被「矢量拍本来就少」饿死。组级帽让 field 达 25% 自动沉底让位。
     out.push("poster-field", "poster-focus", "poster-nest", "poster-geo");
+    return out;
+  }
+  if (style === "chart-motion") {
+    if (content.numbers.length >= 1) out.push("chart", "number");
+    out.push("chart", "number", "timeline", "image", "bookend");
     return out;
   }
   if (/[?？]$|怎么|为什么|如何/.test(text)) out.push("quote", "statement");
