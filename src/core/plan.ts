@@ -4,7 +4,7 @@
 
 import { parseSRT } from "./srt";
 import { planBeats } from "./beats";
-import { composeScenes, validateScene, displayHeadline, displayWidth, HEADLINE_MAX, type BeatScene } from "./compose";
+import { composeScenes, enrichNarrative, validateScene, displayHeadline, displayWidth, HEADLINE_MAX, type BeatScene } from "./compose";
 import { buildContent } from "./content";
 import { applyOverride, type OverrideMap } from "./overrides";
 import { stripPunct } from "./text";
@@ -32,9 +32,12 @@ export function plan(srt: string, ovRaw: string): PlanResult {
   // 第一遍：把每拍旁白变成内容（并做溯源校验）。
   // 宽度安全区不在这里查：版式还没选，无从判断该拍最终是槽位版式还是 custom 满版画面 ——
   // 挪到第三遍版式确定后按 layout.custom 分流查（见下）。
-  const prepared = beats.map((beat) => {
+  // 叙事层（role/purpose/forbidden/continuity）在全部拍就绪后统一跑 enrichNarrative，
+  // 因为它要向前/后看邻居（共享数字 → 镜头承接）。
+  const baseScenes = enrichNarrative(composeScenes(beats));
+  const prepared = beats.map((beat, i) => {
     const ovr = ov[String(beat.index)];
-    const scene: BeatScene = composeScenes([beat])[0]!;
+    const scene: BeatScene = baseScenes[i]!;
     const applied = ovr ? applyOverride(scene, ovr) : scene;
     problems.push(...validateScene(applied, ovr?.source, true));
 
@@ -43,7 +46,8 @@ export function plan(srt: string, ovRaw: string): PlanResult {
     if (ovr?.bigNumber) content.bignum = ovr.bigNumber;
     if (ovr?.left) content.left = ovr.left;
     if (ovr?.right) content.right = ovr.right;
-    return { beat, ovr, content };
+    const narrative = { role: applied.narrativeRole, purpose: applied.purpose, forbidden: applied.forbidden };
+    return { beat, ovr, content, narrative };
   });
 
   // 第二遍：全片定风格（覆写优先，自动兜底按配额+锚点选海报风拍）
@@ -60,7 +64,7 @@ export function plan(srt: string, ovRaw: string): PlanResult {
   const used = new Map<Group, number>();
   const bump = (g: Group) => used.set(g, (used.get(g) ?? 0) + 1);
 
-  prepared.forEach(({ beat, ovr, content }, i) => {
+  prepared.forEach(({ beat, ovr, content, narrative }, i) => {
     const decision = decisions[i]!;
     // 版式来源优先级：内联完整版式（ovr.layout，如专属场景）> catalog 查表（ovr.layoutId）> 自动挑选
     let layout = ovr?.layout ?? (ovr?.layoutId ? LAYOUT_BY_ID.get(ovr.layoutId) : undefined);
@@ -132,7 +136,7 @@ export function plan(srt: string, ovRaw: string): PlanResult {
       if (!MOTION_BY_ID.has(id)) problems.push(`拍 ${beat.index}：版式引用了未知动效 ${id}`);
     }
 
-    out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id) });
+    out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id), narrative });
   });
 
   return { shots: out, problems, styles };

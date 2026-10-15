@@ -6,6 +6,7 @@
 import type { PlanResult } from "./plan";
 import type { Shot } from "./shot";
 import type { Style } from "../layouts/types";
+import type { NarrativeRole } from "./compose";
 
 export const RENDER_PLAN_SCHEMA = "srt-film/render-plan";
 export const RENDER_PLAN_VERSION = 1;
@@ -41,6 +42,10 @@ export interface ScenePlan {
   layoutName: string;
   style: Style;
   headline: string;
+  /** Phase 4 叙事层：角色/目的/禁区（不臆造） */
+  role: NarrativeRole;
+  purpose: string;
+  forbidden: string[];
   /** GSAP 时间轴上的起点（拍间交叠，≠ SRT 绝对时间） */
   tlStart?: number;
 }
@@ -70,6 +75,9 @@ function toScene(shot: Shot, i: number): ScenePlan {
     layoutName: shot.layout.name,
     style: shot.layout.style ?? "editorial",
     headline: shot.content.headline,
+    role: shot.narrative?.role ?? "explanation",
+    purpose: shot.narrative?.purpose ?? "",
+    forbidden: shot.narrative?.forbidden ?? [],
     tlStart: shot.tlStart,
   };
 }

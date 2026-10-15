@@ -201,6 +201,14 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .beat-list .beat-no { color: var(--ink-dim); font-variant-numeric: tabular-nums; min-width: 34px; }
 .beat-list .beat-layout { color: var(--ink-dim); font-size: 11px; letter-spacing: 0.06em; min-width: 68px; }
 .beat-list .beat-text { flex: 1; }
+.beat-list .beat-role {
+  font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--accent); border: 1px solid var(--accent); border-radius: 2px;
+  padding: 1px 6px; white-space: nowrap; align-self: center;
+}
+.beat-list .beat-purpose {
+  flex-basis: 100%; font-size: 11px; color: var(--ink-dim); padding: 2px 0 6px 46px;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }

@@ -263,11 +263,17 @@ btnSave.addEventListener("click", () => {
 
 function renderBeatList() {
   beatList.innerHTML = shots
-    .map((s, i) => `<li data-beat="${i}">
+    .map((s, i) => {
+      const n = s.narrative;
+      const roleTag = n ? `<span class="beat-role">${n.role}</span>` : "";
+      const purpose = n ? `<span class="beat-purpose">${n.purpose.replace(/</g, "&lt;")}</span>` : "";
+      return `<li data-beat="${i}">
       <span class="beat-no">${String(i + 1).padStart(2, "0")}</span>
       <span class="beat-layout">${s.layout.name}</span>
       <span class="beat-text">${s.content.headline.replace(/</g, "&lt;")}</span>
-    </li>`)
+      ${roleTag}${purpose}
+    </li>`;
+    })
     .join("");
   beatList.querySelectorAll("li").forEach((li) => {
     li.addEventListener("click", () => {
