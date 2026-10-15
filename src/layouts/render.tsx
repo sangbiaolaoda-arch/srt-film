@@ -485,8 +485,12 @@ export function LayoutLayer({ layout, content }: { layout: Layout; content: Rend
   // v2 满版构图板式：同走 custom 通路，但收全量 content（board 是参数化构图，不是一拍一画）。
   const board = layout.custom ? V2_BOARDS[layout.custom] : undefined;
   if (board) {
+    const C = colorsOf(layout.style);
     return (
       <g data-layout={layout.id}>
+        {layout.bg && (
+          <BgLayer kind={layout.bg} seed={content.beat} colorDim={C.dim} colorHairline={C.hairline} accent={C.accent} />
+        )}
         {board({ content: { ...content, headline: stripPunct(content.headline) }, beat: content.beat, style: layout.style ?? "editorial" })}
       </g>
     );

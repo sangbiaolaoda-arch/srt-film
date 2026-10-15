@@ -18,8 +18,8 @@ export interface PostConfig {
   grainBlend?: "overlay" | "soft-light";
 }
 
-/** 编辑风：几乎看不见，只为一层「纸感」。 */
-export const POST_EDITORIAL: PostConfig = { grain: 0.035, vignette: 0.05, scanline: 0, warm: 0.02 };
+/** 编辑风：一层可感知的「纸感」+ 轻微暗角，让静止帧也有呼吸。 */
+export const POST_EDITORIAL: PostConfig = { grain: 0.06, vignette: 0.12, scanline: 0, warm: 0.02 };
 
 /** 海报风：明显的胶片质感。 */
 export const POST_POSTER: PostConfig = { grain: 0.11, vignette: 0.34, scanline: 0.045, warm: 0, grainBlend: "overlay" };

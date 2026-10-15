@@ -313,12 +313,13 @@ const v2Steps: Board = ({ content, style }) => {
 const v2Duo: Board = ({ content, style }) => {
   const L = clean(content.left) || stripPunct(content.headline);
   const R = clean(content.right);
+  // 非对称对角（参考 136 非对称跨页）：大红圆压左下、小青圆抬右上，错位制造张力
   return (
     <g>
-      <circle cx={392} cy={248} r={166} fill={EMBER} data-anim data-motion="m-slide-right" />
-      <circle cx={888} cy={430} r={166} fill={STEEL} data-anim data-motion="m-slide-left" />
-      <VText x={392} y={540} size={fit(L, 44)} fill={CREAM} text={L} style={style} motion="m-fade-up" />
-      {R && <VText x={888} y={678} size={fit(R, 34)} fill={CREAM} text={R} style={style} opacity={0.85} motion="m-fade-up" />}
+      <circle cx={350} cy={300} r={205} fill={EMBER} data-anim data-motion="m-slide-right" />
+      <circle cx={952} cy={470} r={120} fill={STEEL} data-anim data-motion="m-slide-left" />
+      <VText x={350} y={542} size={fit(L, 44)} fill={CREAM} text={L} style={style} motion="m-fade-up" />
+      {R && <VText x={952} y={624} size={fit(R, 32)} fill={CREAM} text={R} style={style} opacity={0.85} motion="m-fade-up" />}
     </g>
   );
 };
@@ -524,26 +525,29 @@ function B(id: string, name: string, group: Layout["group"], opts: Partial<Layou
     custom: `v2:${id}`,
     decor: false,
     wash: false,
+    // 全场默认机位缓推：导出路径现会按此缩放（frame.ts cameraScale），
+    // 预览/导出同源。海报风构图张力更大，推得更多。
+    camera: { scaleFrom: 1.0, scaleTo: 1.1 },
     slots: [{ k: "headline", box: [1, 1, 10, 6] }],
     ...opts,
   };
 }
 
 export const V2_LAYOUTS: Layout[] = [
-  B("split-blocks", "分屏色块", "compare", { note: "left/right 对照，靛蓝色块 2/3 出血", enter: ["m-slide-right", "m-fade-up"] }),
-  B("ink-line", "情绪一笔", "statement", { note: "大字 + 底部墨线", enter: ["m-char-rise", "m-stroke-draw"] }),
-  B("num-giant", "巨号数字", "number", { note: "需要 1 个可溯源数字", needs: 1, enter: ["m-scale-soft", "m-bar-sweep"] }),
-  B("num-band", "数字色带", "number", { note: "需要 1 个可溯源数字", needs: 1, enter: ["m-slide-right", "m-scale-soft"] }),
-  B("bars", "数据条", "chart", { note: "需要 ≥2 个可溯源数字", needs: 2, slots: [{ k: "chart", box: [1, 1, 10, 6], needs: 2 }], enter: ["m-bar-sweep", "m-fade-up"] }),
-  B("timeline", "时间线", "timeline", { note: "bullets ≥3 或长句分段", enter: ["m-stroke-draw", "m-fade-up"] }),
-  B("quote-card", "引语卡", "quote", { note: "金句 / 设问", enter: ["m-char-rise", "m-fade-up"] }),
-  B("list-marks", "清单刻度", "list", { note: "bullets ≥ 3", enter: ["m-fade-up"] }),
-  B("vertical", "竖排大字", "statement", { note: "短句（≤9 字）最佳", enter: ["m-fade-up", "m-scale-soft"] }),
-  B("chapter", "章节卡", "bookend", { note: "开场 / 定版", enter: ["m-char-rise", "m-bar-sweep"] }),
-  B("steps", "单线生长", "process", { note: "过程 / 递进", enter: ["m-stroke-draw", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.05 } }),
-  B("duo", "双圆对峙", "poster-geo", { style: "poster", note: "left/right 对照，暗底", enter: ["m-slide-right", "m-slide-left"], fx: "particles-vortex", fxAccent: EMBER, fxStrength: 0.5 }),
-  B("dark-word", "暗底大字", "poster-focus", { style: "poster", note: "金句定场", enter: ["m-char-rise", "m-glow"], fx: "glow", fxAccent: EMBER, fxStrength: 0.95 }),
-  B("strata", "水平色带", "poster-field", { style: "poster", note: "氛围场 + 大字，配缓推", enter: ["m-slide-right", "m-scale-soft"], camera: { scaleFrom: 1.0, scaleTo: 1.08 }, fx: "particles-converge", fxAccent: VERMILION, fxStrength: 0.55 }),
-  B("balance", "天平", "poster-geo", { style: "poster", note: "权衡对照", enter: ["m-stroke-draw", "m-fade-up"] }),
-  B("dust", "尘埃与主体", "poster-focus", { style: "poster", note: "氛围定场，配缓推", enter: ["m-drift-slow", "m-char-rise"], camera: { scaleFrom: 1.0, scaleTo: 1.08 }, fx: "particles-vortex", fxAccent: STEEL, fxStrength: 0.5 }),
+  B("split-blocks", "分屏色块", "compare", { note: "left/right 对照，靛蓝色块 2/3 出血", enter: ["m-slide-right", "m-fade-up"], bg: "dots-fade" }),
+  B("ink-line", "情绪一笔", "statement", { note: "大字 + 底部墨线", enter: ["m-char-rise", "m-stroke-draw"], bg: "contour" }),
+  B("num-giant", "巨号数字", "number", { note: "需要 1 个可溯源数字", needs: 1, enter: ["m-scale-soft", "m-bar-sweep"], bg: "halftone" }),
+  B("num-band", "数字色带", "number", { note: "需要 1 个可溯源数字", needs: 1, enter: ["m-slide-right", "m-scale-soft"], bg: "halftone" }),
+  B("bars", "数据条", "chart", { note: "需要 ≥2 个可溯源数字", needs: 2, slots: [{ k: "chart", box: [1, 1, 10, 6], needs: 2 }], enter: ["m-bar-sweep", "m-fade-up"], bg: "halftone" }),
+  B("timeline", "时间线", "timeline", { note: "bullets ≥3 或长句分段", enter: ["m-stroke-draw", "m-fade-up"], bg: "dots-fade" }),
+  B("quote-card", "引语卡", "quote", { note: "金句 / 设问", enter: ["m-char-rise", "m-fade-up"], bg: "contour" }),
+  B("list-marks", "清单刻度", "list", { note: "bullets ≥ 3", enter: ["m-fade-up"], bg: "dots-fade" }),
+  B("vertical", "竖排大字", "statement", { note: "短句（≤9 字）最佳", enter: ["m-fade-up", "m-scale-soft"], bg: "halftone" }),
+  B("chapter", "章节卡", "bookend", { note: "开场 / 定版", enter: ["m-char-rise", "m-bar-sweep"], bg: "dots-fade" }),
+  B("steps", "单线生长", "process", { note: "过程 / 递进", enter: ["m-stroke-draw", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.1 } }),
+  B("duo", "双圆对峙", "poster-geo", { style: "poster", note: "暗底非对称对峙（参考 136 非对称跨页）", enter: ["m-slide-right", "m-slide-left"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "particles-vortex", fxAccent: EMBER, fxStrength: 0.8 }),
+  B("dark-word", "暗底大字", "poster-focus", { style: "poster", note: "金句定场", enter: ["m-char-rise", "m-glow"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "glow", fxAccent: EMBER, fxStrength: 1.0 }),
+  B("strata", "水平色带", "poster-field", { style: "poster", note: "氛围场 + 大字，配缓推", enter: ["m-slide-right", "m-scale-soft"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "particles-converge", fxAccent: VERMILION, fxStrength: 0.8 }),
+  B("balance", "天平", "poster-geo", { style: "poster", note: "权衡对照", enter: ["m-stroke-draw", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.14 } }),
+  B("dust", "尘埃与主体", "poster-focus", { style: "poster", note: "氛围定场，配缓推", enter: ["m-drift-slow", "m-char-rise"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "particles-vortex", fxAccent: STEEL, fxStrength: 0.8 }),
 ];

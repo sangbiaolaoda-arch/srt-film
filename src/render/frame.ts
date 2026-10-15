@@ -30,6 +30,20 @@ export interface FrameInput {
   frame: number;
 }
 
+/** 拍内机位缩放：预览在 stage.tsx 套在舞台 SVG 上，导出链路（rasterizeLayer）不序列化它，
+ *  所以这里在绘制每层时补上，保证预览/导出同源。scaleFrom→scaleTo 随拍内进度线性插值。 */
+export function cameraScale(shot: Shot | undefined, t: number): number {
+  const cam = shot?.layout.camera;
+  if (!cam) return 1;
+  const start = shot.tlStart ?? shot.start;
+  const local = Math.max(0, t - start);
+  const dur = Math.max(shot.end - shot.start, 0.8);
+  const p = Math.min(1, Math.max(0, local / dur));
+  const from = cam.scaleFrom ?? 1;
+  const to = cam.scaleTo ?? from;
+  return from + (to - from) * p;
+}
+
 /** 时间轴时间 → 拍序号 */
 export function shotAt(shots: Shot[], t: number): number {
   let idx = 0;
@@ -61,9 +75,9 @@ function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number,
   const strength = layout.fxStrength ?? 0.6;
 
   switch (fx) {
-    case "particles-converge": particleField(ctx, o, "converge", 380); break;
-    case "particles-vortex": particleField(ctx, o, "vortex", 300); break;
-    case "particles-burst": particleField(ctx, o, "burst", 340); break;
+    case "particles-converge": particleField(ctx, o, "converge", 540); break;
+    case "particles-vortex": particleField(ctx, o, "vortex", 440); break;
+    case "particles-burst": particleField(ctx, o, "burst", 480); break;
     case "polyhedron": polyhedron(ctx, o, 0.24); break;
     case "tunnel": nestedTunnel(ctx, o, 2.3, 9); break;
     case "glow": break;
@@ -122,7 +136,13 @@ export async function renderFrame(input: FrameInput): Promise<void> {
     if (op <= 0.012) continue;
     const img = await rasterizeLayer(svg, i, W, H);
     if (!img) continue;
+    const s = cameraScale(shots[i], t);
     ctx.save();
+    if (s !== 1) {
+      ctx.translate(W / 2, H / 2);
+      ctx.scale(s, s);
+      ctx.translate(-W / 2, -H / 2);
+    }
     ctx.globalAlpha = op;
     ctx.drawImage(img, 0, 0, W, H);
     ctx.restore();

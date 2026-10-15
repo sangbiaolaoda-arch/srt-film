@@ -59,7 +59,7 @@ function buildParticles(key: string, seed: number, count: number, layout: "ring"
       oy: Math.sin(a0) * r0 * 0.7,
       tx,
       ty,
-      size: 1.2 + rnd() * 3.2,
+      size: 2.8 + rnd() * 5.6,
       delay: (i / count) * 0.42 + rnd() * 0.2,
       tone: rnd(),
       spin: 0.4 + rnd() * 1.6,
@@ -106,7 +106,7 @@ export function particleField(ctx: CanvasRenderingContext2D, o: FxOpts, mode: "c
       const rr = (0.16 + 0.36 * (0.5 + 0.5 * Math.sin(o.t * 1.6 + pt.spin * 3))) * (0.6 + 0.4 * p);
       x = cx + Math.cos(a) * rr * scale;
       y = cy + Math.sin(a * 1.15) * rr * scale * 0.8;
-      alpha = 0.35 + 0.5 * (0.5 + 0.5 * Math.sin(o.t * 3 + pt.spin * 2));
+      alpha = 0.5 + 0.45 * (0.5 + 0.5 * Math.sin(o.t * 3 + pt.spin * 2));
     } else {
       const q = clamp01((p - pt.delay) / 0.55);
       const e = easeOutQuint(q);
