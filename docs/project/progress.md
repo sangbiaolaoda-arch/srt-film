@@ -320,3 +320,31 @@ baseline-audit 缺陷 2 记的是「v2 特效层仅 4/16」，实际审计发现
 本阶段解决的问题：fx 通道在亮底上完全无输出（比文档所记严重）；19 个 v2 板式 + 50 个旧 `P()` 板一次全覆盖；新增板式不会再漏 fx；「纯排版无氛围」的编辑风有签名动效。
 是否可以进入下一阶段：是。
 下一阶段入口：baseline-audit 缺陷 6（image 组板式，需用户定「图像从哪来」）；缺陷 5 槽级 m×mx 自动门禁。
+
+## Phase 9 收尾刀 — 缺陷 5（槽级动效冲突门禁）+ 缺陷 6（image 组满版化）（2026-10-16）
+
+状态：PASS
+本阶段目标：关闭 baseline-audit 缺陷 5 与缺陷 6，清空 Phase 9 遗留待办。
+
+### 缺陷 5 — 槽级动效冲突门禁（commit 56a2b38）
+
+- 新增 `src/motion/props.ts`（tween 属性占用表）与 `src/motion/conflict.ts`（同一槽上两条 tween 在同一段时间写同一属性的检测）。
+- `schedule.ts` 导出 `slotTweens`：门禁与演出共用同一份排期 —— 两处各算一遍的话，「只在某种 pace/拍长下才撞」的错会从缝里漏过去。
+- `plan.ts` 第四遍把冲突推进 problems（硬门禁）；`stage.tsx` 改为只读 DOM 声明的 intent（data-motion/data-mx）喂给 slotTweens，不再自己算入场/强调时机。
+- 测试：`motion-props` 12 + `motion-conflict` 12 新增。
+
+### 缺陷 6 — image 组满版化（commit d8b1e32）
+
+图像层确立两个来源，都走「预览导出同源」约束：
+
+1. **真实照片**（收编此前未提交 WIP 并修复阻塞）：8 张语义标签照片（`public/photos/*.jpg`）+ `im-photo-bleed/split/duo/note` 四套 photo 槽版式，canvas 图像层直画、SVG 留占位保槽序。plan 挂 `pickPhoto` 语义选图，标签没命中就不用图（配错图比没图更伤）。**修复 build 阻塞**：原 `import x from "./photos/*.jpg"` 指向不存在的 `src/assets/photos/`，`vite build` 直接 Could not resolve；改为 `/photos/<name>.jpg` 同源 URL。安全区门禁为 photo 槽加出血豁免（满幅铺底正是构图意图）。
+2. **程序化 SVG 插画**（本刀新增）：`src/layouts/im-board.tsx` 六套满版 Board —— 管道回路（过程）/ 分层堆栈（依赖）/ 两极对照（比较）/ 生长阶梯（累积）/ 门缝（转折）/ 颗粒场（大量同向）。主体几何由旁白信号驱动：要点数→节点数/层数/级数、左右字数比→体量比、数字量级→颗粒密度；不臆造具体物件。与 v2 共用 Board 契约（profile 换皮、data-anim 钩子、无 Math.random）、共用 custom 渲染通路。全部纯 SVG 图元 —— 无 `<image>`/foreignObject/外链，rasterize 序列化不被污染。
+
+执行命令：`npx tsc --noEmit`、`npm run check`（逐文件）、`npm run build`、`node tools/run-ts.mjs tools/im-shots.tsx`、无头 Chrome 接触印相截图、`node tools/run-ts.mjs tools/dbg-photo.ts`（图表风泄漏定位，已删）。
+测试结果：**19 个测试文件全部通过**（含新增 `im-board.test.tsx` 12 例：渲染安全 / 构图随内容变 / 三系换皮 / 确定性 / 色板归属）。修复两个既有失败：photo 槽安全区误报、覆写图表风时 photo 版式泄漏进三件套断言。
+真实渲染证据：`.tmp/im-board/sheet.png`（6 板 × 3 系接触印相，目视通过：构图随内容变、色板跟 profile、无空板）。
+输出文件验收：vite build 成功（79 模块）；本刀为版式层改动，不产生新 MP4（导出链路未动，e2e 基线仍为 Phase 9 的 14/14）。
+本阶段解决的问题：图像层从「20 个通用图标配 13 套槽位版式」扩成「语义照片 + 程序化满版插画」双通路；缺陷 5 的槽级 tween 撞车从不可见变为硬门禁；vite build 从损坏恢复。
+尚存缺陷：baseline-audit 六项缺陷中 2/5/6 已关闭；**1（BEAT NN 母版角标进成片）与 3（emphasis 死字段）** 状态待核（可能在 Phase 8 第二刀已顺带处理，未复核）；4（长句 headline 依赖人工覆写）仍开放；「风格整体差异自动量化」仅有 fx 通道，整帧层面未做。
+是否可以进入下一阶段：是。
+下一阶段入口：Phase 10 — 端到端视觉质量保证与返修闭环（计划 §5 Phase 10：五类题材测试集 + QA 报告 + 评分规则 §6 落地）。
