@@ -154,3 +154,26 @@
 尚存缺陷：`density` token 仍无消费方（网格疏密不随密度 变）；continuityIn/Out 未进渲染层；charts.tsx（catalog 图表槽）与 v2 图表板是两套图表实现，刻度风格统一但代码未合流；「往上再走一步」类动词+步仍算度量（可接受残留）。
 是否可以进入下一阶段：是。
 下一阶段入口：Phase 7 — 运动、镜头与转场系统（主运动可说明性、跨镜头连续性字段进渲染、转场库与 transitionBias 联动）；image 组版式作为视觉对象模块扩充择机插入。
+
+## Phase 7 第一刀 — 统一时间轴与运动关系模型（2026-10-15）
+
+**目标**：让画面变化有目的并形成跨镜头连续性。本刀先立「可验证的地基」——把运动编排从内联在播放器里（不可测、不可说明）抽成纯函数模型。
+
+**改动**：
+- 新增 `src/motion/schedule.ts`（Phase 7 核心模块）：
+  - `buildMotionSchedule(shots) → MotionSchedule`：转场/入场池/强调/环境/机位/出场的 at/dur 全部声明式；时间轴口径与原实现逐分对齐（拍间 0.25s 交叠，running 精确复刻 GSAP `tl.duration()` 的最远结束点），接线后播放行为不变。
+  - **主运动可说明**：优先级 机位（有位移才算，纯平移也算）> 入场 > 强调 > 显式「有意静止」；五问（任务/主体/时机/方向速度/结束状态）中任务直接取 Phase 4 `narrative.purpose`，不编造。
+  - **transitionBias 首次消费**：slide→交叉溶解/左推/扫光（编辑风轻转场）；wipe→斜切/板擦（扁平风图形感）；mask→圆形遮罩/中缝（图表风掀图纸）；cut 池只有导演显式指定才出现（硬切有理由）；同系内按拍序轮换不雷同。
+  - **motionPace 首次消费**：速度倍率语义，入场/强调/出场 `dur÷pace` 钳制 [0.3,2.5]s（扁平风 1.18 更快、图表风 0.9 更稳）；转场/机位/环境不缩放（保交叠稳定）。
+  - **掩盖静止检查**：无主运动 + 全局氛围位移动效 → warning（不拦截：运动是品味问题，拦截是布局约束引擎职责，不越界）。
+- `src/ui/stage.tsx` 接线：删 `ENTER_TRANSITIONS`/`EXIT_MOTIONS` 常量，编排块整体改为消费 MotionPlan；warnings 进 console。
+- `src/layouts/v2.tsx`：坐标柱 y 轴刻度字号 18→20（1280 画布上 18px 偏小）。
+- 新增 `tests/motion-schedule.test.ts` 19 例：确定性深相等 / 时间轴口径 / 全 catalog 每拍有主运动或有意静止 / 五问非空 / 三系转场分流 / 导演指定优先 / pace 排序 / 槽分配规则 / 掩盖静止检出 / catalog 动效 id 构建期门禁 / 01 语料端到端。
+
+执行命令：`npx tsc --noEmit`、`npx vitest run`、`npm run build`、`three-style-sheet` 重生成。
+测试结果：tsc 零错；**182 测试全过**（163 旧 + 19 新）；build 成功。
+真实渲染证据：`dist/three-style-sheet.html` 重生成；坐标柱刻度 `font-size="20"` 11 处、`"18"` 清零（图表风列刻度放大生效）。
+本阶段解决的问题：运动编排不可测/不可说明；transitionBias 与 motionPace 两个风格 token 无消费方；转场三系雷同（原固定轮转数组）。
+尚存缺陷：跨镜头连续性（continuityIn/Out 的形状/位置/方向/颜色继承）未进渲染层；无头浏览器截图验收今日三次卡死（agent-browser 首启慢），刻度放大仅 DOM 级验证待补看；`density` token 仍无消费方。
+是否可以进入下一阶段：是。
+下一阶段入口：Phase 7 第二刀 — 跨镜头连续性字段进渲染层（前一镜形状/位置/方向/颜色向下一镜继承或转化，抽样检查）；随后转场库细化与逐帧 seek 一致性测试。
