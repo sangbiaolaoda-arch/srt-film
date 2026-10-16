@@ -31,19 +31,24 @@ function demo(over: Partial<RenderContent> = {}): RenderContent {
   };
 }
 
-/** 两个度量值 + 一个跨度值：度量拍的标准形态（span 不进图表）。
+/** 两个**同单位族**的度量值 + 一个跨度值：度量拍的标准形态（span 不进图表）。
  *  numbers 与管线一致地包含全部 token 的值（含 span）—— eligible 的 needs 门
- *  看 numbers.length，chart 资格门看度量值数，两层语义不同都要喂真数据。 */
+ *  看 numbers.length，chart 资格门看度量值数，两层语义不同都要喂真数据。
+ *
+ * ⚠ 2026-10-17 改：旧夹具是「120 毫秒 + 85%」—— 跨单位族（时间 vs 比率）。
+ *  core/units 的量纲归一按「跨族不可同轴」判不可作图，该拍退回文字板。
+ * 这正是仓库自己钉过的原则（pick.ts：「85%」与「十年」同条对比是量纲崩坏），
+ * 所以旧夹具画出来的柱本身就是错误隐喻。改为同族（毫秒 vs 秒，换算后可比）。 */
 function measures(): RenderContent["numberTokens"] {
   return [
     { kind: "measure", value: 120, raw: "120 毫秒" },
-    { kind: "measure", value: 85, raw: "85%" },
+    { kind: "measure", value: 2, raw: "2 秒" },
     { kind: "span", value: 10, raw: "十年" },
   ];
 }
 
 const MEASURE_CONTENT = (): RenderContent =>
-  demo({ numbers: [120, 85, 10], numberTokens: measures() });
+  demo({ numbers: [120, 2, 10], numberTokens: measures() });
 
 function render(layout: Layout, content: RenderContent): string {
   return renderToStaticMarkup(createElement(LayoutSVG, { layout, content }));
@@ -107,16 +112,33 @@ describe("图表风三件套 · 图形语法", () => {
     const html = render(byId("axis-columns"), MEASURE_CONTENT());
     expect(html).toContain("JetBrains Mono");                 // 等宽签名（fontNum 的引号被 HTML 转义，断言无引号片段）
     expect(html).toContain("120 毫秒");                       // 柱顶标 raw 原文
-    expect(html).toContain(">85%<");                          // 第二柱原文
-    // 刻度按 max=120 现算四档：0 / 30 / 60 / 90 / 120 —— 不是装饰假数
-    for (const t of [">0<", ">30<", ">60<", ">90<", ">120<"]) expect(html).toContain(t);
+    expect(html).toContain(">2 秒<");                          // 第二柱原文
+    // 量纲归一后 max = 2 秒 = 2000ms，刻度按基准值现算五档（万/亿缩写不触发）
+    // —— 刻度是真实换算值，不是装饰假数
+    for (const t of [">0<", ">500<", ">1000<", ">1500<", ">2000<"]) expect(html).toContain(t);
     expect(html).toContain("N=2");                            // 度量值计数（span 不计入）
+  });
+
+  it("坐标柱：跨单位族不可同轴，退回文字板（量纲崩坏防线）", () => {
+    const cross = demo({
+      numbers: [120, 85],
+      numberTokens: [
+        { kind: "measure", value: 120, raw: "120 毫秒" },
+        { kind: "measure", value: 85, raw: "85%" },
+      ],
+    });
+    const html = render(byId("axis-columns"), cross);
+    // 时间 vs 比率同轴就是错误隐喻：不画柱，退回整句文字。
+    // 柱的签名是 rx 圆角 + data-motion="m-bar-sweep"（MeasGrid 的满版底 rect 不算）。
+    expect(html).not.toContain('data-motion="m-bar-sweep"');
+    expect(html).not.toContain("120 毫秒");                    // 柱顶标签也不该出现
+    expect(html).toContain("第二步是建立 TCP 连接");            // 整句作主视觉
   });
 
   it("坐标柱：编辑风 profile 下无轴无刻度（token 降级，不是硬编码图表风）", () => {
     const html = render({ ...byId("axis-columns"), style: "editorial" }, MEASURE_CONTENT());
     expect(html).not.toContain("JetBrains");                  // 编辑风 fontNum 是衬线
-    expect(html).not.toContain(">90<");                       // 刻度标签整组消失
+    expect(html).not.toContain(">1500<");                     // 刻度标签整组消失
     expect(html).toContain("120 毫秒");                       // 柱与原文仍在
   });
 

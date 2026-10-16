@@ -14,6 +14,7 @@ import { emphasize, SEM_SCALE, SEM_WEIGHT } from "./emphasis";
 import { fit, lines } from "./kaojin";
 import { stripPunct } from "../core/text";
 import { displayWidth } from "../core/compose";
+import { normalizeSeries, tickLabel as unitsTickLabel } from "../core/units";
 import type { Layout, RenderContent, Style } from "./types";
 import type { StyleProfile } from "../styles/style-system";
 
@@ -470,7 +471,9 @@ const v2Bars: Board = ({ content, profile: p }) => {
   const joined = nums.map((n) => n.raw).join(" ");
   const kick = foot(content.caption, joined);
   const footT = foot(content.subhead, joined);
-  const max = nums.reduce((m, n) => Math.max(m, n.value), 0);
+  // 量纲归一：旧代码 w = Math.max(140, value/max*720) 会把 882 倍差粉饰成
+  // 140/720（19%），比例是假的。归一后 frac 才是真比例；跨族不硬画。
+  const series = normalizeSeries(nums);
   const top = 220;
   const rowH = 88;
   const barH = 46;
@@ -478,8 +481,8 @@ const v2Bars: Board = ({ content, profile: p }) => {
     <g>
       {kick && <VText x={110} y={120} size={26} fill={p.ink} text={kick} profile={p} anchor="start" spacing={6} opacity={0.7} motion="m-fade-up" />}
       <rect x={-40} y={150} width={1360} height={2} fill={p.ink} opacity={0.5} data-anim data-motion="m-bar-sweep" />
-      {nums.map((n, i) => {
-        const w = Math.max(140, Math.round((n.value / max) * 720));
+      {series.points.map((n, i) => {
+        const w = Math.max(140, Math.round(n.frac * 720));
         const y = top + i * rowH;
         const fill = i === 0 ? p.accent : i === 1 ? p.aux : p.ink;
         return (
@@ -578,10 +581,11 @@ function VNum(props: {
   );
 }
 
-/** 刻度标签格式：≥10 取整，<10 留一位小数 —— 真实值的可读形式，不四舍五入出假精度。 */
+/** 刻度标签格式：统一走 core/units 的 tickLabel（含 万/亿 缩写 ——
+ *  归一后的基准值动辄 30 万米，不缩写刻度文字会比图还宽）。
+ *  ≥10 取整、<10 留一位小数的可读性原则由 units.tickLabel 保证。 */
 function tickLabel(v: number): string {
-  if (v === 0) return "0";
-  return v >= 10 ? String(Math.round(v)) : v.toFixed(1);
+  return unitsTickLabel(v);
 }
 
 /* ── 14 数据巨号（number 组，图表风的数字主角）──────────────────────
@@ -643,24 +647,28 @@ const v2AxisColumns: Board = ({ content, beat, profile: p }) => {
   const joined = nums.map((t) => t.raw).join(" ");
   const kick = foot(content.caption, joined);
   const footT = foot(content.subhead, joined);
-  const max = nums.reduce((m, t) => Math.max(m, t.value), 0);
+  // 量纲归一：同族才可比，跨族（长度 vs 时间）硬画就是错误隐喻。
+  // 归一前「30 万公里 vs 340 米」会画成一根 300px 柱 + 一根 6px 牙签（实测 882 倍差），
+  // 观众眼里等于没有图表。归一后同轴可比；不可归一则退回文字板，不硬画。
+  const series = normalizeSeries(nums);
+  const max = series.max;
   const baseY = 560;
   const plotH = 300;
   const x0 = 230;
   const x1 = 1140;
-  const slot = (x1 - x0) / Math.max(1, nums.length);
+  const slot = (x1 - x0) / Math.max(1, series.points.length);
   const barW = Math.min(120, slot * 0.52);
   return (
     <g>
       <MeasGrid beat={beat} p={p} />
       {kick && <VNum x={110} y={120} size={22} fill={p.ink} text={kick} p={p} opacity={0.7} motion="m-fade-up" />}
       <VNum x={1170} y={120} size={20} fill={p.ink} text={`N=${nums.length}`} p={p} anchor="end" opacity={0.5} />
-      {nums.length === 0 ? (
+      {!series.chartable ? (
         <VText x={170} y={400} size={Math.min(72, fit(stripPunct(content.headline), 900))}
           fill={p.ink} text={stripPunct(content.headline)} profile={p} anchor="start" motion="m-char-rise" />
       ) : (
         <>
-          {/* y 轴刻度：0 / ¼ / ½ / ¾ / max 五档，标签是真实值 */}
+          {/* y 轴刻度：0 / ¼ / ½ / ¾ / max 五档，标签是真实值（基准单位，缩写到万/亿） */}
           {p.axis && [0, 0.25, 0.5, 0.75, 1].map((f) => (
             <g key={f}>
               <line x1={x0 - 14} y1={baseY - plotH * f} x2={x1} y2={baseY - plotH * f}
@@ -671,14 +679,15 @@ const v2AxisColumns: Board = ({ content, beat, profile: p }) => {
           ))}
           {/* 基线 */}
           <line x1={x0 - 14} y1={baseY} x2={x1} y2={baseY} stroke={p.ink} strokeWidth={2} data-anim data-motion="m-bar-sweep" />
-          {nums.map((t, i) => {
-            const h = Math.max(6, (t.value / max) * plotH);
+          {series.points.map((t, i) => {
+            const h = Math.max(6, t.frac * plotH);
             const cx = x0 + slot * i + slot / 2;
             const fill = i === 0 ? p.accent : p.ink;
             return (
               <g key={i}>
                 <rect x={cx - barW / 2} y={baseY - h} width={barW} height={h} rx={p.radius}
                   fill={fill} opacity={i === 0 ? 1 : 0.72} data-anim data-motion="m-bar-sweep" />
+                {/* 标签显示原文 raw（旁白原话，可溯源），高度用归一后的 frac */}
                 <VNum x={cx} y={baseY - h - 16} size={34} fill={fill} text={t.raw} p={p} anchor="middle" motion="m-fade-up" />
                 <VNum x={cx} y={baseY + 32} size={18} fill={p.ink} text={String(i + 1).padStart(2, "0")} p={p} anchor="middle" opacity={0.5} />
               </g>
