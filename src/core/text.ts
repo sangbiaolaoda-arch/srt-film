@@ -11,22 +11,62 @@
 //
 // 范围：只处理来自 SRT 文案的字符串。系统生成的数值（bignum / delta 的 +% ）与
 // 拍号角标（BEAT 01）不在此列 —— 它们是数据与元信息，不是文案。
+//
+// 数字里的分隔符不是标点（2026-10-16 修）：小数点、千分位属于**数值本身**。
+// 早先把 `.` 和 `,` 一律换成空格，「0.06 美元」上画面变成「0 06 美元」——
+// 数字被改了值，这是数据错误不是排版问题（03 语料拍4 实测）。
 
 /** 半角标点与符号：0x21-0x2F / 0x3A-0x40 / 0x5B-0x60 / 0x7B-0x7E（数字与字母除外）。 */
 const ASCII_PUNCT = /[!-/:-@[-`{-~]/g;
 /** 拉丁补充 + 通用标点 + CJK 标点 + CJK 兼容符号 + 全角标点。 */
 const CJK_PUNCT = /[\u00A1-\u00BF\u2000-\u206F\u3000-\u303F\uFE30-\uFE4F\uFF01-\uFF0F\uFF1A-\uFF20\uFF3B-\uFF40\uFF5B-\uFF65]/g;
 
+/** 数字语境：小数点、千分位、以及它们两侧的空白（`0.06` / `1, 200`）。 */
+const NUMERIC = /(\d)\s*[.,]\s*(?=\d)/g;
+
+/** 数值后缀：紧跟数字的百分号。它是数值的单位（12.75% = 0.1275），不是标点。 */
+const PCT = /(\d)\s*%/g;
+
+// 占位符：私用区码位 U+E000 起。ASCII_PUNCT 覆盖 0x21-0x7E、CJK_PUNCT 覆盖
+// 0xA1-0xFF65，两段都盖不住这里，所以放进去不会被净化误删，也不会撞上真实标点。
+const MARK = "\uE000";
+const HOLE = /\uE000(\d+)\uE000/g;
+
 /** 检测用（测试与门禁）：是否含标点。空白先剥掉 —— 全角空格 U+3000 是空白不是标点。 */
 export const HAS_PUNCT = new RegExp(`[${ASCII_PUNCT.source.slice(1, -1)}${CJK_PUNCT.source.slice(1, -1)}]`);
 
 export function hasPunct(text: string): boolean {
-  return HAS_PUNCT.test(text.replace(/\s+/g, ""));
+  // 数字内的 . , % 不是标点 —— 与 stripPunct 同口径，否则门禁会把 0.06 判成含标点。
+  // 用占位符而不是替换回 "." / "%"：HAS_PUNCT 里就含这两个字符，留着照样被判成标点。
+  const shielded = text
+    .replace(/\s+/g, "")
+    .replace(NUMERIC, (_m, d: string) => `${d}${MARK}`)
+    .replace(PCT, (_m, d: string) => `${d}${MARK}`);
+  return HAS_PUNCT.test(shielded);
 }
 
-/** 标点 → 空格；压连续空格；去首尾。 */
+/** 标点 → 空格；压连续空格；去首尾。**数字内的小数点/千分位原样保留。**
+ *
+ *  实现：先把 `0.06` 里的分隔符（含它周围的空白 —— 旁白常写「0. 06」）换成私用区
+ *  占位，净化完再还原。直接改 ASCII_PUNCT 会连带误伤句末句号、顿号 —— 那些必须
+ *  去掉，否则画面上就是一片标点。占位落在 U+E000 起的私用区：ASCII_PUNCT 覆盖
+ *  0x21-0x7E、CJK_PUNCT 覆盖 0xA1-0xFF65，两段都盖不住那里。 */
 export function stripPunct(text: string): string {
-  return text.replace(ASCII_PUNCT, " ").replace(CJK_PUNCT, " ").replace(/\s+/g, " ").trim();
+  const holes: string[] = [];
+  const shielded = text
+    .replace(NUMERIC, (m, d: string) => {
+      // 记下原分隔符（. 还是 ,），不能一律还原成 "."
+      const sep = /\s*[.,]\s*/.exec(m)?.[0] ?? ".";
+      holes.push(sep.trim());
+      return `${d}${MARK}${holes.length - 1}${MARK}`;
+    })
+    .replace(PCT, (_m, d: string) => `${d}${MARK}${holes.push("%") - 1}${MARK}`);
+  const cleaned = shielded
+    .replace(ASCII_PUNCT, " ")
+    .replace(CJK_PUNCT, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned.replace(HOLE, (_m, i: string) => holes[Number(i)] ?? "");
 }
 
 // —— 文字测量原语（2026-10-15 从 layouts/render.tsx 下沉）——

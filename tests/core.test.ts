@@ -7,7 +7,7 @@ import { extractNumbers, isTraceable } from "../src/core/trace";
 import { composeScene, validateScene } from "../src/core/compose";
 import { applyOverride } from "../src/core/overrides";
 import { plan } from "../src/core/plan";
-import { stripPunct } from "../src/core/text";
+import { stripPunct, hasPunct } from "../src/core/text";
 
 const SRT = `1
 00:00:00,000 --> 00:00:02,000
@@ -77,6 +77,25 @@ describe("stripPunct（画面文字零标点规则）", () => {
   });
   it("保留字母与数字，压连续空格并去首尾", () => {
     expect(stripPunct("  耗时 120 毫秒 ，  提升 85 倍  ")).toBe("耗时 120 毫秒 提升 85 倍");
+  });
+  // 小数点属于数值本身，不是标点。早先一律换成空格，「0.06 美元」上画面变成
+  // 「0 06 美元」—— 数字被改了值（03 语料拍4 成片实测）。
+  it("数字里的小数点保留（值不能被净化改掉）", () => {
+    expect(stripPunct("每度大约 0.06 美元")).toBe("每度大约 0.06 美元");
+    expect(stripPunct("响应 120.5 毫秒。")).toBe("响应 120.5 毫秒");
+    expect(stripPunct("占比 12.75%。")).toBe("占比 12.75%");
+  });
+  it("千分位逗号保留，句末逗号照常去掉", () => {
+    expect(stripPunct("总量 1,200 次。")).toBe("总量 1,200 次");
+    expect(stripPunct("前段, 后段")).toBe("前段 后段");
+  });
+  it("小数点紧贴/带空格都还原成同一个值", () => {
+    expect(stripPunct("0. 06 美元")).toBe("0.06 美元");
+  });
+  it("hasPunct 与 stripPunct 同口径：小数不算标点", () => {
+    expect(hasPunct("0.06 美元")).toBe(false);
+    expect(hasPunct("耗时 120.5 毫秒")).toBe(false);
+    expect(hasPunct("你好，世界")).toBe(true);
   });
 });
 
