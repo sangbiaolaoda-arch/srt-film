@@ -7,6 +7,7 @@ import { validateSRT, decodeSrtBytes } from "../core/srt-validate";
 import { toRenderPlan, parseRenderPlan, serializeRenderPlan } from "../core/render-plan";
 import { buildStage, type Shot, type StageHandle } from "./stage";
 import { exportMp4 } from "../export/mp4";
+import { renderFrame } from "../render/frame";
 import {
   DEFAULT_EXPORT,
   EXPORT_BITRATE_OPTIONS,
@@ -231,6 +232,10 @@ btnLoad.addEventListener("click", () => {
   stage = buildStage(stageHost, shots);
   (window as unknown as { __stage?: StageHandle; __exportMp4?: typeof exportMp4 }).__stage = stage;
   (window as unknown as { __exportMp4?: typeof exportMp4 }).__exportMp4 = exportMp4;
+  // QA 钩子：逐帧取样必须走与导出同一条 renderFrame 路径。
+  // seek() 只推时间轴并置脏，实际重画由 setAutoRender 控制的 rAF 循环负责；
+  // 自动化脚本要关掉那个循环（否则与自身抢时间轴），就失去了画面来源。
+  (window as unknown as { __renderFrame?: typeof renderFrame }).__renderFrame = renderFrame;
   stage.onComplete(() => { playing = false; btnPlay.textContent = "重播"; });
 
   scrubber.disabled = false;

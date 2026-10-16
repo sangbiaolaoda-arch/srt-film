@@ -150,6 +150,16 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
     applyMotion(plan.exit.motion, { tl, el: layer, at: plan.exit.at, dur: plan.exit.dur });
   });
 
+  // 时间轴必须覆盖到末拍的 SRT 结束点。各拍的 tween 不一定正好铺到拍尾
+  // （入场错峰、出场提前都可能让最后一帧的 tween 早于 end 收掉），
+  // tl.duration() 就会短于真实片长 —— 播放提前结束、导出按短时长编码，
+  // 片尾整段被静默丢掉。加一条「什么都不改」的占位 tween 把时间轴拉到
+  // 真实片长：seek 到那个区间时画面保持末拍静止帧，与 SRT 一致。
+  const lastShot = shots[shots.length - 1];
+  if (lastShot && lastShot.end > tl.duration()) {
+    tl.set({}, {}, lastShot.end);
+  }
+
   const duration = tl.duration();
   tl.time(0, false);
 

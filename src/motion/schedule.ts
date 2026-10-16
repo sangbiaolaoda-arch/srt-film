@@ -301,15 +301,20 @@ function pickPrimary(shot: Shot, plan: Omit<MotionPlan, "primary" | "still">): P
 export function buildMotionSchedule(shots: Shot[]): MotionSchedule {
   const plans: MotionPlan[] = [];
   const warnings: ScheduleWarning[] = [];
-  let running = 0;
 
   shots.forEach((shot, i) => {
     const layout = shot.layout;
     const profile: StyleProfile = resolveProfile(layout.style);
     const pace = profile.motionPace;
     const dur = Math.max(shot.end - shot.start, 1.2);
-    // 与上一拍的所有 tween 交叠 0.25s（原 stage 口径：tl.duration() - 0.25）
-    const at = i === 0 ? 0 : Math.max(running - OVERLAP, 0);
+    // 与上一拍的所有 tween 交叠 0.25s（原 stage 口径：tl.duration() - 0.25）。
+    //
+    // 锚点必须是**本拍在 SRT 上的绝对起点**，不是「上一拍所有 tween 的最远结束点」。
+    // 旧口径 at = running - OVERLAP，而 running 取的是上拍最远 tween 终点 —— 那个
+    // 值天然 >= 上拍的 end（入场错峰 / 出场 / 强调都会超出拍尾），于是每拍往后
+    // 拖一点、逐拍累积：11 拍实测尾部缺口 3.70s（0.25×(n-1) 的线性漂移），
+    // 3 分钟长片会直接丢掉片尾。SRT 才是时间的权威来源，见计划 §4「统一时间坐标」。
+    const at = i === 0 ? 0 : Math.max(shot.start - OVERLAP, 0);
 
     // 转场：导演指定优先 → 连续性拍走连续性转场 → transitionBias 池轮转
     // （每系内部按拍序轮换，不雷同）
@@ -380,20 +385,6 @@ export function buildMotionSchedule(shots: Shot[]): MotionSchedule {
     }
 
     plans.push(plan);
-
-    // running：精确复刻 GSAP tl.duration() 会达到的最远结束点。
-    const enterDurMax = layout.enter.reduce((m, id) => Math.max(m, clampPace(MOTION_BY_ID.get(id)?.dur ?? 0.5, pace)), 0);
-    const slotCount = layout.slots?.length ?? 0;
-    const staggerMax = STAGGER_STEP * Math.min(Math.max(slotCount - 1, 0), 4);
-    const ends: number[] = [
-      at + dur,
-      transition.at + transition.dur,
-      at + staggerMax + enterDurMax,
-      exit.at + exit.dur,
-    ];
-    if (emphasis) ends.push(emphasis.at + emphasis.dur);
-    if (ambient) ends.push(ambient.at + ambient.dur);
-    running = Math.max(...ends);
   });
 
   return { plans, warnings };

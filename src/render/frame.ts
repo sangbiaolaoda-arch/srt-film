@@ -168,7 +168,8 @@ async function drawPhotos(ctx: CanvasRenderingContext2D, shot: Shot, op: number,
 
 /** 把一帧画进 ctx。调用前需先把 GSAP 时间轴 seek 到位。
  *  输出尺寸跟随 ctx.canvas，光栅化也按该分辨率进行（放大不错、缩小不糊）。 */
-export async function renderFrame(input: FrameInput): Promise<void> {  const { ctx, svg, shots, t, frame } = input;
+export async function renderFrame(input: FrameInput): Promise<void> {
+  const { ctx, svg, shots, t, frame } = input;
   const W = ctx.canvas.width;
   const H = ctx.canvas.height;
   ctx.globalAlpha = 1;

@@ -154,6 +154,31 @@ describe("图表风三件套 · 图形语法", () => {
   });
 });
 
+describe("v2-vertical · 竖排列不越界（Phase 10 QA 实测回归）", () => {
+  // 实测：标题「你手上只有一串 www 开头的字母」的第 9 个字基线落在 673，
+  // 整字掉到画面下方（出下边 93px）。原因：只卡了 size ≤ 92，没卡列总高。
+  it("竖排列末行基线 ≤ 660（底留 60 安全区），与字长无关", () => {
+    for (const headline of [
+      "你手上只有一串 www 开头的字母",
+      "短",
+      "一二三四五六七八九十十一十二",
+      "这是一句非常非常非常长的标题用来把竖排列撑满",
+    ]) {
+      const html = render(byId("vertical"), demo({ headline }));
+      const ys = [...html.matchAll(/<text[^>]*\by="([\d.]+)"/g)].map((m) => Number(m[1]));
+      expect(ys.length, headline).toBeGreaterThan(0);
+      expect(Math.max(...ys), `${headline} 末行基线越界`).toBeLessThanOrEqual(660);
+    }
+  });
+
+  it("列末底线（竖线）也在安全区内", () => {
+    const html = render(byId("vertical"), demo({ headline: "一二三四五六七八九十十一十二" }));
+    const m = /<rect[^>]*x="978"[^>]*height="([\d.]+)"/.exec(html);
+    expect(m, "竖线矩形缺失").toBeTruthy();
+    expect(150 + Number(m![1])).toBeLessThanOrEqual(720);
+  });
+});
+
 describe("图表风三件套 · 全片一致性", () => {
   it("覆写钉死图表风：每一拍都落进三件套（无 catalog 回退）", () => {
     const ov: Record<string, { style: StyleProfileId }> = {};

@@ -58,16 +58,34 @@ describe("Phase 7 · 统一时间轴与运动关系模型", () => {
   });
 
   /* ── 时间轴口径 ── */
-  it("时间轴口径：首拍 at=0、拍间 0.25s 交叠、at 单调不降", () => {
-    const { plans } = buildMotionSchedule(threeShots());
+  it("时间轴口径：at 锚定 SRT 起点（首拍 0、其余 start-交叠），不逐拍漂移", () => {
+    const shots = threeShots();
+    const { plans } = buildMotionSchedule(shots);
     expect(plans[0]!.at).toBe(0);
     for (let i = 1; i < plans.length; i++) {
-      expect(plans[i]!.at).toBeGreaterThanOrEqual(plans[i - 1]!.at);
-      // 交叠：本拍起点落在上一拍 running - 0.25 处（running = 上拍所有 tween 最远结束点）
       const prev = plans[i - 1]!;
-      expect(plans[i]!.at).toBeLessThan(prev.at + prev.dur);
+      expect(plans[i]!.at).toBeGreaterThanOrEqual(prev.at);
+      // 交叠：本拍起点不早于上一拍起点，且不晚于上一拍区间末端 + 交叠窗口
+      // （SRT 无间隙时 at 恰好等于上一拍 start-0.25，即 prev.at + prev.dur 本身）
+      expect(plans[i]!.at).toBeLessThanOrEqual(prev.at + prev.dur);
+      // 锚点 = 本拍 SRT 绝对起点减交叠 —— 不是「上一拍 tween 最远结束点」。
+      // 旧口径拿 running 累加，每拍往后拖、逐拍线性漂移
+      // （11 拍实测尾部缺口 3.70s，3 分钟长片会直接丢掉片尾）。
+      expect(plans[i]!.at).toBeCloseTo(Math.max(shots[i]!.start - OVERLAP, 0), 6);
     }
     expect(OVERLAP).toBe(0.25);
+  });
+
+  it("时间轴不短于末拍 SRT 结束点（片尾不被静默丢掉）", () => {
+    // A3 门禁的上游保证：tl.duration() 必须覆盖最后一条 cue 的结束点。
+    // 各拍 tween 不一定铺到拍尾，stage 侧有占位 tween 兜底（见 stage.tsx）；
+    // 这里验 schedule 层的锚点口径本身不引入漂移。
+    const { shots } = plan(SRT, "");
+    const { plans } = buildMotionSchedule(shots);
+    const last = shots[shots.length - 1]!;
+    const tlEnd = Math.max(...plans.map((p) => p.at + p.dur));
+    // 只允许一拍的拍长缺口（交叠窗口），不允许逐拍累积漂移
+    expect(last.end - tlEnd).toBeLessThan(OVERLAP + 1e-6);
   });
 
   it("拍长下限 1.2s（SRT 区间再短也不塌成零长拍）", () => {

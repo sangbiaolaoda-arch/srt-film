@@ -235,22 +235,40 @@ const v2ListMarks: Board = ({ content, profile: p }) => {
    右侧竖排超大字（最多 9 字，溢出转横排左下），左上一枚朱红记号方块。 */
 const v2Vertical: Board = ({ content, profile: p }) => {
   const chars = Array.from(stripPunct(content.headline));
-  const col = chars.slice(0, 9);
-  const rest = chars.slice(9).join("");
-  const size = Math.min(92, Math.floor(560 / col.length));
-  const sub = rest || clean(content.subhead) || clean(content.caption);
+  // 列高硬约束：首行基线 170，末行基线必须 ≤ 660（720 底留 60 安全区），
+  // 行距 = size × 1.16，所以 (n-1) × size × 1.16 ≤ 490。
+  // 早先只看 size ≤ 92：9 个字 × 62px × 1.16 = 648，末行基线落到 673，
+  // 整个第 9 个字掉出画面（QA 实测出下边 93px）。
+  const colTop = 170;
+  const colBottom = 660;
+  const rowStep = (n: number): number => (colBottom - colTop) / Math.max(1, n - 1 || 1);
+  const maxChars = Math.min(12, Math.floor((colBottom - colTop) / (92 * 1.16)) + 1);
+  const col = chars.slice(0, Math.max(1, maxChars));
+  const rest = chars.slice(col.length).join("");
+  const size = Math.min(92, Math.floor(560 / Math.max(1, col.length)));
+  const step = Math.min(size * 1.16, rowStep(col.length));
+  // 副文本要按可用宽度（1020 - 130 = 890）折行，不能一行硬排：
+  // 「www 开头的字母」这类余量文本有 10+ 个字，单行 30px 会冲出右边界、
+  // 折行后第二行落到 y=720 以下（QA 实测出下边 93px）。
+  const subRaw = rest || clean(content.subhead) || clean(content.caption);
+  const subRows = subRaw ? wrap(subRaw, 3) : [];
+  const subSize = subRows.length > 0 ? Math.min(30, fitW(subRows[0] ?? "", 890, 30)) : 30;
+  const subLh = subSize * 1.42;
+  const subBaseY = 620 - (subRows.length - 1) * subLh;
   return (
     <g>
       <rect x={130} y={110} width={26} height={26} rx={p.radius} fill={p.accent} data-anim data-motion="m-scale-soft" />
       <g data-anim data-motion="m-fade-up">
         {col.map((ch, i) => (
-          <text key={i} x={1020} y={170 + i * size * 1.16} fontSize={size} fill={p.ink} fontFamily={p.fontDisplay} textAnchor="middle">
+          <text key={i} x={1020} y={colTop + i * step} fontSize={size} fill={p.ink} fontFamily={p.fontDisplay} textAnchor="middle">
             {ch}
           </text>
         ))}
       </g>
-      <rect x={978} y={150} width={2} height={col.length * size * 1.16 - size * 0.5} fill={p.ink} opacity={0.25} />
-      {sub && <VText x={130} y={620} size={30} fill={p.ink} text={sub} profile={p} anchor="start" opacity={0.7} motion="m-fade-up" />}
+      <rect x={978} y={150} width={2} height={col.length * step - size * 0.5} fill={p.ink} opacity={0.25} />
+      {subRows.map((r, i) => (
+        <VText key={i} x={130} y={subBaseY + i * subLh} size={subSize} fill={p.ink} text={r} profile={p} anchor="start" opacity={0.7} motion="m-fade-up" />
+      ))}
     </g>
   );
 };

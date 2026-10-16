@@ -10,6 +10,12 @@
 // + 留白」的艺术方向，与三系底色（#f2ede4/#fbf7f0/#ffffff）不打架。
 
 /** 语义选图用的标签。全部 ≥ 2 个汉字 —— 单字标签（「光」「纸」）会在旁白里误命中。 */
+// 素材放 public/photos/（构建时原样拷进 dist）。引用用根绝对 URL 而不是相对
+// import：import 走打包管线后在本机 dev 与 build 下的解析路径不一致（实测 dev
+// 把不存在的相对路径静默回落到 public URL —— 这种「恰好能用」最危险），根绝对
+// URL 两边行为一致。代价：双击直开的独立 HTML（three-style-sheet 等）拿不到图，
+// 那条链路本来也不渲照片，可以接受。
+
 export type PhotoId =
   | "typing" | "server" | "city" | "paper" | "hourglass" | "neural" | "seedling" | "crowd";
 
