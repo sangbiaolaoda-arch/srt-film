@@ -85,8 +85,9 @@ export const SEM_ROLES: SemRoleDef[] = [
     anchor: "—（品牌色，无业界锚点）",
     why: "品牌朱红承载全片主轴「在乎」；与 danger 同色系但更亮更饱和 —— 明度差即语义差，画面自我复述「同源」",
     editorial: "#c8401f",
-    flatVector: "#ff5a3c",
-    chartMotion: "#ff6a00",
+    // 与 style-system 的 accent / sem.warm 同值（那边不 import 本模块）：压纸白 ≥3.0。
+    flatVector: "#ff3e1b",
+    chartMotion: "#eb6200",
     terms: ["在乎", "心动", "幸福", "爱", "喜欢", "珍重"],
   },
 ];

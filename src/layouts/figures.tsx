@@ -54,8 +54,9 @@ interface Palette {
 /** 图形色板与 style-system 的三系风格保持同色，但不 import —— 避免与渲染器互相依赖。 */
 const PALETTE: Record<Style, Palette> = {
   editorial: { ink: "#1c1b18", dim: "#8a867c", accent: "#c8401f", hairline: "rgba(28,27,24,0.18)" },
-  "flat-vector": { ink: "#15233b", dim: "#7b8499", accent: "#ff5a3c", hairline: "rgba(21,35,59,0.18)" },
-  "chart-motion": { ink: "#10243a", dim: "#5b6b80", accent: "#ff6a00", hairline: "rgba(16,36,58,0.2)" },
+  // accent 与 style-system 的 accent 同值（本模块刻意不 import 它）：压纸白 ≥3.0。
+  "flat-vector": { ink: "#15233b", dim: "#7b8499", accent: "#ff3e1b", hairline: "rgba(21,35,59,0.18)" },
+  "chart-motion": { ink: "#10243a", dim: "#5b6b80", accent: "#eb6200", hairline: "rgba(16,36,58,0.2)" },
 };
 
 interface FigCtx extends Palette {

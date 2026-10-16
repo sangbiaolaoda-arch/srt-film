@@ -17,7 +17,7 @@ import { LayoutSVG } from "../src/layouts/render";
 import { pickLayout } from "../src/layouts/pick";
 import { plan } from "../src/core/plan";
 import type { Layout, RenderContent } from "../src/layouts/types";
-import type { StyleProfileId } from "../src/styles/style-system";
+import { STYLE_PROFILES, type StyleProfileId } from "../src/styles/style-system";
 import { resolveProfile } from "../src/styles/style-system";
 
 const root = resolve(import.meta.dirname, "..");
@@ -128,7 +128,8 @@ describe("图表风三件套 · 图形语法", () => {
     expect(html.match(/毫秒/g)?.length ?? 0).toBe(1);
     // 测量尺（尺寸线）仍在
     expect(html).toContain("m-bar-sweep");
-    expect(html).toContain("#ff6a00");                        // accent 尺寸线
+    // 尺寸线用图表风的 accent 色。色值从风格档取，不写死 —— 写死的话调一次色就误报一次。
+    expect(html).toContain(STYLE_PROFILES["chart-motion"].accent);
   });
 
   it("测量注记：FIG 图号 + 四角定位标记 + 母版网格", () => {

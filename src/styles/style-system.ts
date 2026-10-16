@@ -95,30 +95,36 @@ export const STYLE_PROFILES: Record<StyleProfileId, StyleProfile> = {
   "flat-vector": {
     id: "flat-vector",
     name: "扁平矢量叙事风",
-    paper: "#fbf7f0", ink: "#15233b", accent: "#ff5a3c", aux: "#2b7fff",
-    dark: "#101a2e", cream: "#ffffff", ember: "#ff5a3c", steel: "#2b7fff",
+    paper: "#fbf7f0", ink: "#15233b", accent: "#ff3e1b", aux: "#2b7fff",
+    dark: "#101a2e", cream: "#ffffff", ember: "#ff3e1b", steel: "#2b7fff",
     blush: "#ffd6cc", sand: "#ffe2a8", clay: "#ff8a3d",
     fontDisplay: SANS, fontText: SANS, fontNum: SANS,
     lineWidth: 6, radius: 18, density: 0.5, motionPace: 1.18, transitionBias: "wipe",
     // 扁平风的色粉颗粒（板式自带粒子场的仍用粒子场，其余落回浮尘 —— 见 plan.ts 的派生）。
     fxBias: "drift-motes", fxStrength: 0.7,
     grid: false, axis: false, rounded: true, flat: true, monoNum: false, paperTexture: false,
-    sem: { danger: "#d63a1f", cost: "#c77a12", safe: "#0f9d6b", warm: "#ff5a3c" },
-    tone: { ink: "#15233b", dim: "#7b8499", accent: "#ff5a3c", paper: "#fbf7f0", hairline: "rgba(21,35,59,0.14)" },
+    // 强调色（accent / sem.warm / ember）压纸白必须 ≥3.0（WCAG AA 大字）：原 #ff5a3c 只有
+    // 2.90 ——「强调」到看不清就不再是强调。同色相同饱和度、只降明度到 #ff3e1b（3.30），
+    // 观感不变。ember 只是特效色、不承载文字，仍跟着 accent 走，免得画面里出现两个橙红。
+    // 同样的值在 layouts/emphasis.ts 与 layouts/figures.tsx 各有一份（那边不 import 本模块），
+    // 三处必须同改 —— 见 style-system.test.ts 的对比度与同源断言。
+    sem: { danger: "#d63a1f", cost: "#c77a12", safe: "#0f9d6b", warm: "#ff3e1b" },
+    tone: { ink: "#15233b", dim: "#7b8499", accent: "#ff3e1b", paper: "#fbf7f0", hairline: "rgba(21,35,59,0.14)" },
   },
   "chart-motion": {
     id: "chart-motion",
     name: "图表动态图形风",
-    paper: "#ffffff", ink: "#10243a", accent: "#ff6a00", aux: "#1f6feb",
-    dark: "#0c1a2b", cream: "#ffffff", ember: "#ff6a00", steel: "#1f6feb",
+    paper: "#ffffff", ink: "#10243a", accent: "#eb6200", aux: "#1f6feb",
+    dark: "#0c1a2b", cream: "#ffffff", ember: "#eb6200", steel: "#1f6feb",
     blush: "#dfeeff", sand: "#eef3f7", clay: "#0c7b5e",
     fontDisplay: SANS, fontText: SANS, fontNum: MONO,
     lineWidth: 3, radius: 4, density: 0.7, motionPace: 0.9, transitionBias: "mask",
     // 图表风是网格在呼吸：脉冲点落在板内既有 40px 网格上，不是另加一层装饰。
     fxBias: "grid-pulse", fxStrength: 0.5,
     grid: true, axis: true, rounded: false, flat: true, monoNum: true, paperTexture: false,
-    sem: { danger: "#d6391f", cost: "#b9740f", safe: "#0c8a5e", warm: "#ff6a00" },
-    tone: { ink: "#10243a", dim: "#5b6b80", accent: "#ff6a00", paper: "#ffffff", hairline: "rgba(16,36,58,0.16)" },
+    // 同上：#ff6a00 压纯白纸底只有 2.87，降到 #eb6200（3.34）；三处同改。
+    sem: { danger: "#d6391f", cost: "#b9740f", safe: "#0c8a5e", warm: "#eb6200" },
+    tone: { ink: "#10243a", dim: "#5b6b80", accent: "#eb6200", paper: "#ffffff", hairline: "rgba(16,36,58,0.16)" },
   },
 };
 

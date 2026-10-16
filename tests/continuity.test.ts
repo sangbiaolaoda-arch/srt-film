@@ -204,8 +204,9 @@ describe("③ continuityAt：继承决策（纯函数）", () => {
 });
 
 describe("④ drawContinuity：canvas 绘制", () => {
-  const ED = STYLE_PROFILES.editorial;   // accent #c8401f
-  const CM = STYLE_PROFILES["chart-motion"]; // accent #ff6a00
+  // 色值一律从风格档取：注释里写死色号，调一次色就变成一句假话。
+  const ED = STYLE_PROFILES.editorial;
+  const CM = STYLE_PROFILES["chart-motion"];
 
   it("ghost 用上一拍风格档取色 —— 跨风格继承的字面含义", () => {
     const prevEd = shotOf({

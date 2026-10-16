@@ -10,6 +10,7 @@ import {
 } from "../src/styles/style-system";
 import { decideStyle } from "../src/layouts/pick";
 import { colorsOf } from "../src/layouts/render";
+import { SEM_COLORS } from "../src/layouts/emphasis";
 import { postForStyle, POST_EDITORIAL, POST_FLATVECTOR, POST_CHARTMOTION } from "../src/render/post";
 import type { RenderContent } from "../src/layouts/types";
 
@@ -132,6 +133,49 @@ describe("风格判定映射到三系（Phase 5）", () => {
   it("导演覆写优先于自动判定", () => {
     for (const id of PROFILE_ORDER) {
       expect(decideStyle(heavy, 0, 10, id).style).toBe(id);
+    }
+  });
+});
+
+/* ── 强调色可读性：压纸白必须过 WCAG AA 大字 3.0 ─────────────────────────
+   强调色的全部意义是「在纸面上跳出来」。压不住 3.0 的强调色看着只是一块脏橙，
+   观众分不出它是强调还是没印好 —— 这条断言钉住的是「不许再调淡回去」。 */
+
+function channel(v: number): number {
+  const c = v / 255;
+  return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+function relLuminance(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrast(a: string, b: string): number {
+  const l1 = relLuminance(a);
+  const l2 = relLuminance(b);
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+
+describe("强调色压纸白的对比度（WCAG AA 大字 ≥3.0）", () => {
+  it("三系的 sem 四色 / tone.accent / tone.dim 都过 3.0", () => {
+    for (const id of PROFILE_ORDER) {
+      const p = STYLE_PROFILES[id];
+      for (const [k, v] of Object.entries(p.sem)) {
+        expect(contrast(v, p.paper), `${id}.sem.${k}=${v}`).toBeGreaterThanOrEqual(3);
+      }
+      expect(contrast(p.tone.accent, p.paper), `${id}.tone.accent=${p.tone.accent}`).toBeGreaterThanOrEqual(3);
+      expect(contrast(p.tone.dim, p.paper), `${id}.tone.dim=${p.tone.dim}`).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("强调色只定义一次：style-system.accent = sem.warm = emphasis 的 warm", () => {
+    for (const id of PROFILE_ORDER) {
+      const p = STYLE_PROFILES[id];
+      expect(p.sem.warm, `${id}.sem.warm`).toBe(p.accent);
+      expect(SEM_COLORS[id].warm, `${id} emphasis.warm`).toBe(p.accent);
     }
   });
 });
