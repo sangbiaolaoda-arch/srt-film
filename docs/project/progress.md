@@ -581,6 +581,28 @@ CI 那格为什么本会话没法跑：workflow 挂在 `push`/`workflow_dispatch
 触发，但你没授权 push（且明令不主动推）。所以「等 CI 的 browser-qa」=「你或我 push 后自动跑」，
 不是卡住，是等闸门。
 
+### 像素级承接证据（再进一步，仍诚实）：getImageData 算质心
+`verify-morph.ts` 验的是「渲染函数的坐标数学」，截图是「给人眼看的」。中间还差一档：
+**真实浏览器里 canvas 上的橙色承接标记到底存不存在、动没动**。所以又写了
+`tools/morph-pixel-measure.mjs`：CDP 驱动真实 app，对三条承接边的转场窗口逐点 seek，
+在页面里读 `window.__stage.canvas.getImageData`，挑出高饱和橙色像素（连续性层的
+accent/ink 暖橙）算质心。实测（真实 Chrome，1280×720 画布）：
+- evidence→consequence：质心 (447,295)→(650,277)→(645,276)→(637,277)，橙色像素
+  n=1472→1939，全程存在且移动 —— 标记活着、在迁移。
+- comparison→consequence：质心 (616,518)→(634,557)→(638,556)→(639,568)，n=295→673，活着。
+- consequence→conclusion：质心停在 (117,275) 附近几乎不动。
+
+**诚实短板**：质心法太粗 —— 虚线连接线（沿左缘竖走，前面帧里见过）+ 两个标记（ghost+self）
+混在一起，consequence→conclusion 那条边 ghost 在 bl、self 在 tr，质心被左侧的连线拉住，
+看不出 ghost 那条独立轨迹。**所以：像素探针证的是「承接标记真实存在、全程不消失/不冻结」
+（liveness）；精确的 ghost 迁移轨迹仍只由 `verify-morph.ts`（录制 draw 调用的精确 moveTo
+坐标）证明。** 不拿质心当硬门禁（会脆、会误报），它定位是「存在性/活性」目检替代。
+
+一层交叉验证（代码事实）：consequence→conclusion 的承接由 capability-map 数到 1 命中、
+HANDOFF[consequence] 含 conclusion 保证 ghost 按构造存在，所以那条边的质心不漂移不是
+「没渲染」，而是「连线+双标记混合」的几何结果。
+
+
 ## 镜头连续性返修 —— HANDOFF 表漏了数据类语料（2026-10-16，commit c2b2f1a）
 
 状态：PASS
