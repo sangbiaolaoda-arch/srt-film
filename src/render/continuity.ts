@@ -214,8 +214,10 @@ export function drawContinuity(
       gcx = lerp(gcx, sxRaw * kx, e);
       gcy = lerp(gcy, syRaw * ky, e);
       ghostColor = lerpColor(ghostColor, p.tone[frame.self.tone]!, e);
-      // 迁移途中更亮（它就是此刻的视觉焦点），落位后回到静态 ghost 的暗度
-      ghostAlpha = lerp(0.55, 0.26, e);
+      // 迁移途中更亮（它就是此刻的视觉焦点），末端落位时淡出 —— 直接并回本拍实面标记，
+      // 不回弹到静态角 ghost（否则窗口尾会「啪」地跳回角落，观众看到一次硬跳变）。
+      // alpha：0.55（起点，半透承接）→ 0.85（中段，焦点）→ 0（落位，被实面标记接管）。
+      ghostAlpha = lerp(0.55, 0.85, Math.min(1, mt * 2)) * (1 - e);
     }
 
     // 连接线：上一拍标记 → 本拍标记（继承的视觉证据）。morph 时线随 ghost 起点移动。
