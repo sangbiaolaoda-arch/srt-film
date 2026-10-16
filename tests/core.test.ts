@@ -161,6 +161,18 @@ describe("trace", () => {
     expect(extractNumbers("有 3 种办法").map((n) => n.raw)).toEqual(["3"]);
     expect(extractNumbers("第3步").map((n) => n.raw)).toEqual(["3"]);
   });
+  it("年份是历法坐标不是度量值（历史叙述语料回归）", () => {
+    // 06 历史叙述语料拍1「1915 年 5 月，一个周末的下午…」实测：1915 落到兜底层
+    // 被判成 measure，于是该拍被路由到坐标柱版式，把年份画成柱高 ——
+    // 纯叙事开场配数据图，属错误隐喻。四位数 + 年一律不算度量。
+    expect(extractNumbers("1915 年 5 月，一个周末的下午").map((n) => n.raw)).not.toContain("1915");
+    expect(extractNumbers("2023 年底，船没等来").map((n) => n.raw)).not.toContain("2023");
+    expect(extractNumbers("1999年").map((n) => n.raw)).not.toContain("1999");
+    // 不误伤：带真单位的四位数仍是度量值
+    expect(extractNumbers("3000 吨").map((n) => n.raw)).toEqual(["3000"]);
+    expect(extractNumbers("耗时 1200 毫秒").map((n) => n.raw)).toEqual(["1200 毫秒"]);
+    expect(extractNumbers("产量 312 万吨").map((n) => n.raw)).toEqual(["312"]);
+  });
   it("序数与量纲不重叠计数（第七次 ≠ 七次）", () => {
     expect(extractNumbers("第七次，他自己退回去了")).toHaveLength(1);
   });

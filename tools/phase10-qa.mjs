@@ -35,6 +35,10 @@ const CORPUS = [
   { id: "03", file: "examples/03-data-comparison.srt", topic: "数据 / 趋势 / 比例" },
   { id: "04", file: "examples/04-longform-3min.srt", topic: "科普 / 流程（长片）" },
   { id: "05", file: "examples/05-kaojin-60s.srt", topic: "抽象概念 / 哲学观点" },
+  // Phase 12 §固定测试集第 2 项「历史 / 事件叙述」。此前五类里缺这一类 ——
+  // 04 是咖啡供应链「科普」，机制解释的写法；历史叙述是另一套镜头语言：
+  // 有年份、有事件因果链、有人名地点，但不是「因为…所以」的机制推导。
+  { id: "06", file: "examples/06-history-events.srt", topic: "历史 / 事件叙述" },
 ];
 
 const argv = process.argv.slice(2);
