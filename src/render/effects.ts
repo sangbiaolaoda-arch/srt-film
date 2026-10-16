@@ -368,6 +368,47 @@ export function paperSheen(ctx: CanvasRenderingContext2D, o: FxOpts, strength = 
   ctx.restore();
 }
 
+/** 文字避让矩形（画布像素）。由 frame.ts 从版式的文字槽算出。 */
+export interface TextKeepout {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * 把文字矩形从**特效层**里羽化擦掉。
+ *
+ * 为什么需要它：fx 层在内容之上（Phase 9 的定位 —— 「镜头前的空气」，画在 SVG 之下
+ * 会被满版板整个盖住）。但粒子是**深色实心点**：飘到字上就把笔画戳出一个个洞，
+ * 实测 v2-strata 的 headline 矩形内 5% 的像素被改了 8 级以上、最狠一处改了 93 级
+ * —— 底衬修的是「字压在色带上」，颗粒是另一层，底衬挡不住。
+ *
+ * 为什么用「羽化衰减」而不是 clip 或跳过：clip 出的是硬边，粒子会被切成半圆，
+ * 一眼假；跳过会让粒子在文字边缘凭空消失。羽化 = 靠近字就淡出；再留一点残留，
+ * 文字区不出现「干净的洞」。羽化半径跟着画面尺寸走（1280 宽时 16px，导出 1920 时 24px）。
+ *
+ * 衰减强度由调用方按 fx 类型给：实心粒子（戳洞元凶）重擦 0.9，雾状层
+ * （glow / paper-sheen / grid-pulse，本就无害的大面积低对比）轻擦 0.6 ——
+ * 统一用一个强度，要么雾状层被削太狠、要么粒子残留太多，两头不讨好。
+ *
+ * 调用方必须先在一块**离屏**画布上画特效 —— 在主画布上直接 destination-out
+ * 会把底下的 SVG 内容一起擦掉。
+ */
+export function maskOutText(ctx: CanvasRenderingContext2D, rects: readonly TextKeepout[], w: number, erase = 0.9): void {
+  if (rects.length === 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.filter = `blur(${Math.round(w / 80)}px)`;
+  // 擦 90% 而不是 100%：粒子场常以画面中心为家（converge 的环正好落在横贯全幅的
+  // 文字槽矩形里），全擦会把整幅氛围一起擦没（实测 beat1 全画面 fx 贡献 2.157 →
+  // 0.526，目视橙/蓝带上干干净净）。留 10% —— 粒子改动最狠 115 级亮度 × 0.1 = 12，
+  // 远低于可读性阈值 25，字保得住；氛围也在。
+  ctx.fillStyle = `rgba(0,0,0,${erase})`;
+  for (const r of rects) ctx.fillRect(r.x, r.y, r.w, r.h);
+  ctx.restore();
+}
+
 export function hexToRgba(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16);
   const g = parseInt(hex.slice(3, 5), 16);

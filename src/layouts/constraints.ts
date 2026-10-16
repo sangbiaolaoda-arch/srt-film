@@ -16,6 +16,7 @@
 // 它的职责是「不让明显的溢出静默发生」，不是替代浏览器实测。
 
 import type { Layout, RenderContent, Slot, SlotKind } from "./types";
+import { TEXT_SLOT_KINDS } from "./types";
 import { FONT_SIZE, wrapText, stripPunct, charWidth } from "../core/text";
 import { displayHeadline } from "../core/compose";
 
@@ -43,14 +44,8 @@ const SOLID_KINDS: ReadonlySet<SlotKind> = new Set<SlotKind>([
   "dotmatrix", "clock", "calendar", "photo",
 ]);
 
-/** 真正渲染文字的槽（与 render.tsx SlotNode 的 default/文本分支对齐）。
- *  rule/divider/arrow/progress/axis 等结构件不渲染文字；delta 渲染算出来的 +N%；
- *  tags/pills 逐格排版（渲染器按格宽缩字号，不切字）—— 同样在下面按地板字号查。 */
-const TEXT_KINDS: ReadonlySet<SlotKind> = new Set<SlotKind>([
-  "headline", "text", "quote", "caption", "subhead", "attribution", "source",
-  "unit", "literal", "badge", "kicker", "label", "meta", "bignum", "num2",
-  "bullets", "listnum", "checklist", "tags", "pills",
-]);
+// 文字槽的清单在 types.ts（TEXT_SLOT_KINDS）：排版门禁与 fx 避让共用同一份，
+// 这里不再抄一份（delta 渲染算出来的 +N%；tags/pills 逐格排版，同样按地板字号查）。
 
 export interface LayoutReport {
   /** 硬错误：进 plan() 的 problems 门禁（不拦截等于静默丢失画面元素） */
@@ -102,7 +97,7 @@ export function checkLayout(layout: Layout, content?: RenderContent): LayoutRepo
   // ③ 文字装载量（有 content 才查 —— 没有内容就无从估算）
   if (content) {
     layout.slots.forEach((slot, i) => {
-      if (!TEXT_KINDS.has(slot.k)) return;
+      if (!TEXT_SLOT_KINDS.has(slot.k)) return;
       const b = boxes[i]!;
       const msg = textFit(slot, b, content);
       if (!msg) return;

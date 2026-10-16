@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { driftMotes, glowPulse, gridPulse, paperSheen, particleField, type FxOpts } from "../src/render/effects";
+import { driftMotes, glowPulse, gridPulse, paperSheen, particleField, maskOutText, type FxOpts } from "../src/render/effects";
 
 /**
  * 无 canvas 环境下的指令记录器：把每次绘制调用按顺序记成字符串。
@@ -30,6 +30,7 @@ function recorder() {
     set strokeStyle(v: string) { calls.push(`strokeStyle:${v}`); },
     set lineWidth(v: number) { calls.push(`lw:${num(v)}`); },
     set globalCompositeOperation(v: string) { calls.push(`blend:${v}`); },
+    set filter(v: string) { calls.push(`filter:${v}`); },
   };
   return { ctx: ctx as unknown as CanvasRenderingContext2D, calls };
 }
@@ -228,5 +229,40 @@ describe("亮底自适应（本轮修复的核心）", () => {
     glowPulse(r.ctx, opts({ onLight: false }), 1);
     expect(r.calls).toContain("blend:lighter");
     expect(r.calls.some((c) => c.includes("255,250,235"))).toBe(true);
+  });
+});
+
+describe("文字避让 maskOutText（fx 层不许把颗粒盖在字上）", () => {
+  it("空矩形不动画布（没有文字槽的拍走直画，不该多一次合成）", () => {
+    const r = recorder();
+    maskOutText(r.ctx, [], 1280);
+    expect(r.calls).toEqual([]);
+  });
+
+  it("用 destination-out 羽化擦掉每个文字矩形", () => {
+    const r = recorder();
+    maskOutText(r.ctx, [{ x: 10, y: 20, w: 100, h: 40 }, { x: 0, y: 0, w: 5, h: 5 }], 1280);
+    expect(r.calls[0]).toBe("save");
+    expect(r.calls).toContain("blend:destination-out");
+    // 「羽化」不是硬 clip：粒子靠近文字时淡出，不会被切成半圆。
+    expect(r.calls.filter((c) => c.startsWith("filter:blur")).length).toBe(1);
+    // 默认重擦 90%：全擦会把以画面中心为家的粒子场一起擦没（氛围跟着文字一起消失）。
+    expect(r.calls).toContain("fillStyle:rgba(0,0,0,0.9)");
+    // 雾状层（glow/sheen/pulse）本就无害，调用方传轻一点的强度。
+    const soft = recorder();
+    maskOutText(soft.ctx, [{ x: 0, y: 0, w: 10, h: 10 }], 1280, 0.6);
+    expect(soft.calls).toContain("fillStyle:rgba(0,0,0,0.6)");
+    expect(r.calls.filter((c) => c.startsWith("rect:")).length).toBe(2);
+    expect(r.calls.at(-1)).toBe("restore");
+  });
+
+  it("羽化半径跟着画面尺寸走（1280→16px，导出 1920→24px）", () => {
+    const at = (w: number) => {
+      const r = recorder();
+      maskOutText(r.ctx, [{ x: 0, y: 0, w: 10, h: 10 }], w);
+      return r.calls.find((c) => c.startsWith("filter:blur"))!;
+    };
+    expect(at(1280)).toBe("filter:blur(16px)");
+    expect(at(1920)).toBe("filter:blur(24px)");
   });
 });

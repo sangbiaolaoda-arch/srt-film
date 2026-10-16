@@ -6,7 +6,8 @@ import { hashSeed } from "../core/rng";
 import { layerOpacity, rasterizeLayer } from "./rasterize";
 import { applyPost, postForStyle } from "./post";
 import { drawContinuity } from "./continuity";
-import { type FxOpts, driftMotes, glowPulse, gridPulse, nestedTunnel, paperSheen, particleField, polyhedron } from "./effects";
+import { type FxOpts, type TextKeepout, driftMotes, glowPulse, gridPulse, maskOutText, nestedTunnel, paperSheen, particleField, polyhedron } from "./effects";
+import { TEXT_SLOT_KINDS } from "../layouts/types";
 import { ensurePhoto } from "../assets/photos";
 import { resolveProfile } from "../styles/style-system";
 
@@ -19,6 +20,13 @@ export const STAGE_FPS = 30;
  *  只被 QA 工具读取，产品逻辑不依赖它；不置位时行为与从前逐字节一致。 */
 function postDisabled(): boolean {
   return (globalThis as unknown as { __noPost?: boolean }).__noPost === true;
+}
+
+/** 视觉 A/B 钩子（tools/fx-text-gate.mjs）：置位时特效层**不做文字避让**，
+ *  用来量「颗粒压字」到底有多重、以及关掉避让后门禁必须失败（反向自测）。
+ *  与 __noPost 同一性质 —— 只被 QA 工具读取，产品逻辑不依赖它。 */
+function fxMaskDisabled(): boolean {
+  return (globalThis as unknown as { __noFxMask?: boolean }).__noFxMask === true;
 }
 
 export interface FrameInput {
@@ -73,6 +81,36 @@ function isLightPaper(hex: string): boolean {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.55;
 }
 
+/**
+ * 文字槽矩形（画布像素）。fx 前景层要避开它们 —— 深色粒子把笔画戳出一个个洞，
+ * 底衬（v2-strata 那次）挡不住：它是**字下面**的一层，颗粒在**字上面**。
+ */
+export function textKeepouts(layout: Shot["layout"], w: number, h: number): TextKeepout[] {
+  const cols = layout.cols ?? 12;
+  const rows = layout.rows ?? 8;
+  const out: TextKeepout[] = [];
+  for (const slot of layout.slots) {
+    if (!TEXT_SLOT_KINDS.has(slot.k)) continue;
+    const [gx, gy, gw, gh] = slot.box;
+    out.push({ x: (gx / cols) * w, y: (gy / rows) * h, w: (gw / cols) * w, h: (gh / rows) * h });
+  }
+  return out;
+}
+
+/** 特效离屏画布（按尺寸复用一张）：避让必须发生在**合成之前**，
+ *  在主画布上 destination-out 会把底下的 SVG 内容一起擦掉。 */
+let fxBuffer: HTMLCanvasElement | null = null;
+function fxLayerOf(w: number, h: number): CanvasRenderingContext2D {
+  if (!fxBuffer) fxBuffer = document.createElement("canvas");
+  if (fxBuffer.width !== w || fxBuffer.height !== h) {
+    fxBuffer.width = w;
+    fxBuffer.height = h;
+  }
+  const g = fxBuffer.getContext("2d")!;
+  g.clearRect(0, 0, w, h);
+  return g;
+}
+
 function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number, h: number): void {
   const layout = shot.layout;
   const fx = layout.fx ?? "glow";
@@ -94,6 +132,21 @@ function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number,
   };
   const strength = layout.fxStrength ?? 0.6;
 
+  const keep = fxMaskDisabled() ? [] : textKeepouts(layout, w, h);
+  if (keep.length === 0) {
+    paintFx(ctx, fx, o, strength, p.density);
+    return;
+  }
+  const layer = fxLayerOf(w, h);
+  paintFx(layer, fx, o, strength, p.density);
+  // 实心粒子是戳洞元凶，重擦；雾状层（glow/sheen/pulse）本就是大面积低对比，
+  // 轻擦 —— 统一一个强度两头不讨好（见 effects.maskOutText 的说明）。
+  maskOutText(layer, keep, w, fx.startsWith("particles-") ? 0.9 : 0.6);
+  ctx.drawImage(layer.canvas, 0, 0);
+}
+
+/** 只管「这一种 fx 长什么样」，不管画在哪 —— 由 drawFx 决定画在主画布还是离屏。 */
+function paintFx(ctx: CanvasRenderingContext2D, fx: string, o: FxOpts, strength: number, density: number): void {
   switch (fx) {
     case "particles-converge": particleField(ctx, o, "converge", 540); break;
     case "particles-vortex": particleField(ctx, o, "vortex", 440); break;
@@ -103,7 +156,7 @@ function drawFx(ctx: CanvasRenderingContext2D, shot: Shot, t: number, w: number,
     case "glow": break;
     // 数量跟着 density token 走（编辑风 154 / 扁平风 190）：浮尘的「密度」和装饰层
     // 的网格疏密是同一个旋钮，不该各定一套。
-    case "drift-motes": driftMotes(ctx, o, Math.round(70 + p.density * 240), strength); break;
+    case "drift-motes": driftMotes(ctx, o, Math.round(70 + density * 240), strength); break;
     case "grid-pulse": gridPulse(ctx, o, 40, strength); break;
     case "paper-sheen": paperSheen(ctx, o, strength); break;
     default: break;

@@ -54,6 +54,20 @@ export type SlotKind =
 export type SizeCode = "xs" | "s" | "m" | "l" | "xl" | "xxl" | "huge" | "mega";
 export type Tone = "ink" | "dim" | "accent" | "paper" | "hairline";
 
+/**
+ * 真正渲染文字的槽（与 render.tsx SlotNode 的 default/文本分支对齐）。
+ * rule/divider/arrow/progress/axis 等结构件不渲染文字。
+ *
+ * 放在类型层而不是某个使用方内部，是因为**有两个互不相干的消费方**需要同一个事实：
+ * 排版门禁（constraints：字放不放得下）与渲染器（frame：fx 前景层要避开这些矩形）。
+ * 各写一份就会漂移 —— 上一轮「同一个色号三处字面量」是同一个教训。
+ */
+export const TEXT_SLOT_KINDS: ReadonlySet<SlotKind> = new Set<SlotKind>([
+  "headline", "text", "quote", "caption", "subhead", "attribution", "source",
+  "unit", "literal", "badge", "kicker", "label", "meta", "bignum", "num2",
+  "bullets", "listnum", "checklist", "tags", "pills",
+]);
+
 /** 内容槽位。box = 归一化网格区域 [x, y, w, h]，网格 cols×rows（默认 12×8）。 */
 export interface Slot {
   k: SlotKind;
