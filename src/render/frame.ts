@@ -14,6 +14,13 @@ export const STAGE_W = 1280;
 export const STAGE_H = 720;
 export const STAGE_FPS = 30;
 
+/** 视觉 A/B 门禁钩子（tools/visual-ab.mjs 的 post 层）：置位时跳过后期层，
+ *  用来量「后期层对画面的贡献是否为 0」。与 main.ts 的 __stage 同一性质 ——
+ *  只被 QA 工具读取，产品逻辑不依赖它；不置位时行为与从前逐字节一致。 */
+function postDisabled(): boolean {
+  return (globalThis as unknown as { __noPost?: boolean }).__noPost === true;
+}
+
 export interface FrameInput {
   ctx: CanvasRenderingContext2D;
   svg: SVGSVGElement;
@@ -249,5 +256,5 @@ export async function renderFrame(input: FrameInput): Promise<void> {
   if (shot && shot.layout.fx && shot.layout.fx !== "none") drawFx(ctx, shot, t, W, H);
 
   // 4. 后期层
-  applyPost(ctx, W, H, postForStyle(style), frame);
+  if (!postDisabled()) applyPost(ctx, W, H, postForStyle(style), frame);
 }
