@@ -340,7 +340,77 @@ try {
         fail(c.id, "B1 文字不出安全区", textOut.slice(0, 4).map((t) => `拍${t.beat}/${t.layout}「${t.txt}」出${t.edge}越${t.over}px box=(${t.x},${t.y}) ${t.w}×${t.h} @fs${t.fs}`).join("；"));
       } else pass("B1 文字不出安全区");
 
-      // ⑤ 导出 + 媒体探测
+      // ⑤ G1 数字守恒：画面上的数字必须与 SRT 原文里的数字逐个对得上。
+      //
+      // 为什么不用抽帧 OCR：OCR 对 0.06 / 0 06 的区分既不可靠也不必要 ——
+      // 项目契约是「HTML 是视频画面的权威来源」，canvas 只是 HTML 的光栅化结果。
+      // 所以直接比对**渲染后 DOM 里真实存在的文本节点**。
+      //
+      // 抓的是什么：画面文案净化层把标点全换成空格，`.` 和 `,` 也在表里 ——
+      // 「0.06 美元」上画面就成了「0 06 美元」，数字被改了值。这是数据错误，
+      // 而 A/B/C/D/E/F 六组全测几何，一个都抓不到（Phase 10 实测：全绿后
+      // 抽帧才发现）。这类「几何没毛病但内容错了」的缺陷只能靠内容比对兜住。
+      //
+      // 口径（第一版太严，此处收敛）：**不要求 SRT 的每个数字都上画面**
+      // —— 年份、序号这类旁白里的数字常常故意不画（实测 03 拍2 的「2010」
+      // 就是只做背景交代），强求会把这类正常省略判成错。真正的守恒律是：
+      // 画面上出现的**每个数字**，都必须能在该拍 SRT 原文里找到同值形态。
+      // 「0.06」上画面变成「0 06」→ 归一后画面出现「006」，SRT 里没有「006」
+      // → 报错；而「2010」没画 → 画面不出现「2010」→ 不报。
+      //
+      // 归一规则：数值形态 = 只留数字与小数点，其余（空白/标点/换行）全去掉。
+      // 「0.06」→「0.06」合法；「0 06」→「006」与 SRT 的「0.06」对不上 → 判错。
+      const numOut = await b.eval(`
+        const s = window.__stage;
+        const norm = (t) => (t.match(/[\\d.]/g) || []).join('').replace(/\\.+$/, '');
+        const layerTexts = (idx) => {
+          const layer = s.svg.querySelector('[data-layer="' + idx + '"]');
+          // 按 <text> 元素逐个取，不合并整层：坐标轴刻度是相邻的独立文本节点
+          // （0 / 20 / 30 / 40），合并成一段后正则会把「20」和「0.10」黏成
+          // 「200.10」这种现实中不存在的假数字，制造噪声。
+          return layer ? Array.from(layer.querySelectorAll('text')).map((e) => e.textContent || '') : [];
+        };
+        const bad = [];
+        for (let idx = 0; idx < s.shots.length; idx++) {
+          const sh = s.shots[idx];
+          const t = Math.min(sh.start + 2.0, sh.end - 0.1);
+          s.seek(t);
+          await window.__renderFrame({ ctx: s.canvas.getContext('2d', {alpha:false}), svg: s.svg, shots: s.shots, t, frame: Math.round(t*30) });
+          // 本拍 SRT 原文里所有数字（claim 恒为原文，不编造）
+          const claim = [sh.content.headline, sh.content.subhead, sh.content.caption,
+            sh.content.left, sh.content.right, sh.content.bignum, sh.content.bullets?.join(' ')]
+            .filter(Boolean).join(' ');
+          const srtNums = new Set([...claim.matchAll(/\\d+(?:\\.\\d+)?/g)].map((m) => norm(m[0])).filter(Boolean));
+          const texts = layerTexts(idx);
+          for (const txt of texts) {
+            // 排除两类**设计内的非 SRT 数字**（都是元信息/派生刻度，不是数据）：
+            //  1) 拍号角标：BEAT 04 / FIG.07 / NO.05 —— 纯元信息，与旁白无关。
+            //     判据是前缀，不是数字形状（02 拍5 的章节卡正文就恰好是「05」）。
+            //  2) 坐标轴刻度：v2-axis-columns 的 Y 轴四档由 max 值现算
+            //     （0 / 0.1 / 0.2 …、0 / 12 / 36 …），本来就不在旁白里。
+            //     判据：这个 <text> 整串就是一个纯数字，且没有任何其他数字节点
+            //     与之构成同拍数据 —— 实测刻度节点的父链是刻度组，刻度组里全是刻度。
+            const isMeta = /^(BEAT|FIG|NO)\\s*\\d+$/i.test(txt.trim());
+            const isTick = /^\\d+(\\.\\d+)?$/.test(txt.trim())
+              && !srtNums.has(norm(txt));
+            if (isMeta || isTick) continue;
+            for (const m of txt.matchAll(/\\d+(?:\\.\\d+)?/g)) {
+              const key = norm(m[0]);
+              if (!key || key.length < 2) continue;         // 单个数字（如拍号）不校验
+              if (!srtNums.has(key)) {
+                bad.push({ beat: sh.content.beat, layout: sh.layout.id, shown: m[0],
+                  srt: [...srtNums].join('/') || '(空)', raw: txt.slice(0, 40) });
+              }
+            }
+          }
+        }
+        return bad;
+      `);
+      if (numOut.length > 0) {
+        fail(c.id, "G1 画面数字均来自 SRT", numOut.slice(0, 4).map((t) => `拍${t.beat}/${t.layout} 画面出现「${t.shown}」不在本拍 SRT 数字集（${t.srt}）；该层文本=${t.raw}`).join("；"));
+      } else pass("G1 画面数字均来自 SRT");
+
+      // ⑥ 导出 + 媒体探测
       if (doExport) {
         const mp4 = join(OUT, `${c.id}.mp4`).replace(/\\/g, "/");
         // 超时按片长放宽：实测 208s 片子在默认 120s 上限处被掐断。
