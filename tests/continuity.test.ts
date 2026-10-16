@@ -307,3 +307,39 @@ describe("⑤ plan 集成：真实语料上字段是活的", () => {
     }
   });
 });
+
+describe("⑥ 承接覆盖：每个题材都不能是死字段（Phase 11 镜头连续性回归）", () => {
+  // 记分卡里镜头连续性拿 2 分的直接原因：03 语料 12 拍**一拍承接都没有**
+  // （visual-ab 覆盖率 = 0，按 rubric 的映射规则「覆盖 0 → 2」是门禁失败态）。
+  // 根因是 HANDOFF 表缺边：03 的角色序列是 evidence→comparison→definition→…
+  // 的数据类走法，表里一条都没覆盖 —— 表不是「漏了几条」，是压根没考虑过
+  // 数据类语料的走法。
+  //
+  // 补表后 03 从 0 拍涨到 6 拍、01 从 3 涨到 5。这条断言防的是「将来改角色分类
+  // 或改表，又把某个题材打成 0」—— 那是极其安静的一种回归：门禁不会红，
+  // 画面也不会丑，只是连续性层悄悄不画了。
+  const cases = [
+    { file: "examples/01-explanatory-tech.srt", min: 4, why: "科普/机制解释" },
+    { file: "examples/02-narrative-emotion.srt", min: 2, why: "情绪/关系叙事" },
+    { file: "examples/03-data-comparison.srt", min: 4, why: "数据/趋势/比例（修复前是 0）" },
+    { file: "examples/06-history-events.srt", min: 2, why: "历史/事件叙述" },
+  ];
+  for (const c of cases) {
+    it(`${c.file}（${c.why}）有承接拍 ≥ ${c.min}`, () => {
+      const srt = readFileSync(resolve(root, c.file), "utf-8");
+      const { shots } = plan(srt);
+      const withC = shots.filter((s) => s.continuity && s.continuity.length > 0);
+      expect(withC.length, `${c.file} 只有 ${withC.length} 拍有承接`).toBeGreaterThanOrEqual(c.min);
+    });
+  }
+
+  it("补表没有引入同角色边（几何硬约束）", () => {
+    // ROLE_CORNER 是固定表（7 角色 4 角落），同角色必同角 → ghost 与自标记重叠、
+    // 连接线零长度，「继承」退化成「一个标记换形状」。这是几何约束不是审美偏好。
+    for (const [from, tos] of Object.entries(HANDOFF)) {
+      for (const to of tos) {
+        expect(to, `${from}→${to} 是同角色边`).not.toBe(from);
+      }
+    }
+  });
+});

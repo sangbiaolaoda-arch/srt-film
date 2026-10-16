@@ -73,16 +73,21 @@ export function classifyRole(beat: Beat): NarrativeRole {
 
 /** 叙事承接（角色链）：上一拍的任务直接孕育本拍的任务。
  *  表小且可解释：问→答、概念→数据、数据→推论/结论、机制→数据、结果→总结。
- *  同角色相邻不算承接（两拍各讲各的）；结论拍是终点，不孕育下一拍。
- *  纯角色表判定、不读文本 —— 确定性；且每支片子的开场拍都必然命中
- *  （hook→explanation/definition），连续性不会永远是死字段。
+ *  同角色相邻不算承接（两拍各讲各的）—— 这不只是语义判断，也是**几何硬约束**：
+ *  continuity.ts 的 ROLE_CORNER 是固定表（7 角色 4 角落），同角色必同角，
+ *  ghost 与自标记重叠、连接线零长度，「继承」退化成「一个标记换形状」。
+ *  因此本表里**不允许出现同角色边**；补表时每个新增对都必须跨角（测试守着）。
+ *  纯角色表判定、不读文本 —— 确定性。
  *  导出供测试断言不变量：每个承接对在 continuity.ts 的角落表里都必须跨角。 */
 export const HANDOFF: Record<NarrativeRole, NarrativeRole[]> = {
   hook: ["definition", "explanation"],
-  definition: ["evidence"],
-  evidence: ["consequence", "conclusion"],
-  comparison: ["consequence"],
-  explanation: ["evidence"],
+  // comparison 新增：定义完概念直接摆对比（数据类语料常见走法）
+  definition: ["evidence", "comparison"],
+  // comparison 新增：摆完对比摆证据、拿对比反推定义
+  evidence: ["consequence", "conclusion", "comparison"],
+  comparison: ["consequence", "evidence", "definition"],
+  // consequence 新增：机制讲完直接给结果
+  explanation: ["evidence", "consequence"],
   consequence: ["conclusion"],
   conclusion: [],
 };
