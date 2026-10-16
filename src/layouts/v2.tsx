@@ -381,7 +381,9 @@ const v2Strata: Board = ({ content, profile: p }) => {
   return (
     <g>
       {rects}
-      <VText x={640} y={380} size={fit(stripPunct(content.headline), 88)} fill={p.cream}
+      {/* ink 不是 cream：色带是浅彩色块（blush/sand/clay），cream 在扁平/图表风
+          是纯白，白字压浅色带等于看不见（与 v2-balance 同源问题）。 */}
+      <VText x={640} y={380} size={fit(stripPunct(content.headline), 88)} fill={p.ink}
         text={stripPunct(content.headline)} profile={p} motion="m-char-rise" />
     </g>
   );
@@ -394,16 +396,24 @@ const v2Balance: Board = ({ content, profile: p }) => {
   const R = clean(content.right);
   const tilt = Array.from(L).length >= Array.from(R || "0").length ? 14 : -14;
   const beamY = 300;
+  // 前景一律用 ink，不用 cream。
+  //
+  // cream 是**反白专用**token：三系都是浅色（编辑风 #f3ede4、扁平/图表 #ffffff），
+  // 语义是「压在深色块上的字」。v2-balance 原先整块用 cream —— 支点、横梁、两端
+  // 文字全是浅色，而底也是纸白亮底，扁平风拍整幅接近全白、文字几乎不可见
+  // （02 语料拍1 成片抽帧实证）。
+  //
+  // ink 才是「画在纸上」的正确语义：三系都是纸白/亮底上的深色，天生可读。
   return (
     <g>
-      <path d={`M640 ${beamY - 8} L600 560 L680 560 Z`} fill={p.cream} opacity={0.9} data-anim data-motion="m-fade-up" />
-      <line x1={310} y1={beamY + tilt} x2={970} y2={beamY - tilt} stroke={p.cream} strokeWidth={p.lineWidth} data-anim data-motion="m-stroke-draw" />
-      <line x1={310} y1={beamY + tilt} x2={310} y2={beamY + tilt + 110} stroke={p.cream} strokeWidth={2} opacity={0.6} />
-      <line x1={970} y1={beamY - tilt} x2={970} y2={beamY - tilt + 110} stroke={p.cream} strokeWidth={2} opacity={0.6} />
+      <path d={`M640 ${beamY - 8} L600 560 L680 560 Z`} fill={p.ink} opacity={0.9} data-anim data-motion="m-fade-up" />
+      <line x1={310} y1={beamY + tilt} x2={970} y2={beamY - tilt} stroke={p.ink} strokeWidth={p.lineWidth} data-anim data-motion="m-stroke-draw" />
+      <line x1={310} y1={beamY + tilt} x2={310} y2={beamY + tilt + 110} stroke={p.ink} strokeWidth={2} opacity={0.6} />
+      <line x1={970} y1={beamY - tilt} x2={970} y2={beamY - tilt + 110} stroke={p.ink} strokeWidth={2} opacity={0.6} />
       <rect x={230} y={beamY + tilt + 110} width={160} height={14} rx={p.radius} fill={p.ember} data-anim data-motion="m-slide-right" />
       <rect x={890} y={beamY - tilt + 110} width={160} height={14} rx={p.radius} fill={p.steel} data-anim data-motion="m-slide-left" />
-      {L && <VText x={310} y={beamY + tilt + 190} size={fit(L, 34)} fill={p.cream} text={L} profile={p} motion="m-fade-up" />}
-      {R && <VText x={970} y={beamY - tilt + 190} size={fit(R, 34)} fill={p.cream} text={R} profile={p} motion="m-fade-up" />}
+      {L && <VText x={310} y={beamY + tilt + 190} size={fit(L, 34)} fill={p.ink} text={L} profile={p} motion="m-fade-up" />}
+      {R && <VText x={970} y={beamY - tilt + 190} size={fit(R, 34)} fill={p.ink} text={R} profile={p} motion="m-fade-up" />}
     </g>
   );
 };

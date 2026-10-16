@@ -18,6 +18,7 @@ import { pickLayout } from "../src/layouts/pick";
 import { plan } from "../src/core/plan";
 import type { Layout, RenderContent } from "../src/layouts/types";
 import type { StyleProfileId } from "../src/styles/style-system";
+import { resolveProfile } from "../src/styles/style-system";
 
 const root = resolve(import.meta.dirname, "..");
 const SRT = readFileSync(resolve(root, "examples/01-explanatory-tech.srt"), "utf-8");
@@ -244,6 +245,57 @@ describe("v2-vertical · 竖排列不越界（Phase 10 QA 实测回归）", () =
     const m = /<rect[^>]*x="978"[^>]*height="([\d.]+)"/.exec(html);
     expect(m, "竖线矩形缺失").toBeTruthy();
     expect(150 + Number(m![1])).toBeLessThanOrEqual(720);
+  });
+});
+
+describe("三系前景可读性 · cream 语义反转门禁（Phase 10 抽帧目视回归）", () => {
+  // 实测：02 语料拍1（v2-balance / flat-vector）整幅接近全白 —— 文字与横梁都用
+  // cream，而 cream 在编辑风是深墨（#161410）、在扁平/图表风是纯白（#ffffff）。
+  // 同一个 token 在三系里语义相反，被当成「墨」用就等于白字画白底。
+  //
+  // 这道门禁按实际渲染出的颜色算 WCAG 相对亮度差，任何 profile 下
+  // 「文字压在纸白底上」低于阈值即失败。不逐板点名，靠数据说话。
+  const lum = (hex: string): number => {
+    const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(hex.trim());
+    if (!m) return 1;
+    const [r, g, b] = [1, 2, 3].map((i) => {
+      const c = parseInt(m[i]!, 16) / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  };
+  const ratio = (a: string, b: string): number => {
+    const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x) as [number, number];
+    return (hi + 0.05) / (lo + 0.05);
+  };
+
+  for (const style of ["editorial", "flat-vector", "chart-motion"] as const) {
+    it(`${style}：满版板压纸白底的文字对比度 ≥ 3.0`, () => {
+      const prof = resolveProfile(style);
+      for (const id of ["balance", "strata", "steps", "chapter", "quote-card", "list-marks"]) {
+        const layout = V2_LAYOUTS.find((x) => x.id === `v2-${id}`)!;
+        const html = render({ ...layout, style }, demo({ headline: "他犹豫了一下还是说了出来", left: "左边更重", right: "右边更轻" }));
+        // 纸白底：板内最大的那个浅色 rect / 缺省底色
+        const bg = prof.paper;
+        // 前景：所有正文 <text> 的 fill（排除反白用的 paper/cream 压色块者）
+        const fills = [...html.matchAll(/<text[^>]*fill="([^"]+)"/g)].map((m) => m[1]!);
+        expect(fills.length, `${id} 无文字`).toBeGreaterThan(0);
+        for (const f of fills) {
+          // 反白只在「压在深色块上」时成立。这几块板（balance/strata/steps/…）的
+          // 文字压的是纸白底或浅色带，cream/paper 在这里是错的用法，必须判失败。
+          const r = ratio(f, bg);
+          expect(r, `${id}/${style} 文字 ${f} 压纸白 ${bg} 对比度 ${r.toFixed(2)} 不足（cream/paper 是反白专用，压浅底即不可读）`).toBeGreaterThanOrEqual(3);
+        }
+      }
+    });
+  }
+
+  it("cream 三系都是浅色（反白专用）；ink 才是画在纸上的前景", () => {
+    for (const style of ["editorial", "flat-vector", "chart-motion"] as const) {
+      const p = resolveProfile(style);
+      expect(lum(p.cream), `${style} cream 应为浅色`).toBeGreaterThan(0.6);
+      expect(lum(p.ink), `${style} ink 应为深色`).toBeLessThan(0.3);
+    }
   });
 });
 
