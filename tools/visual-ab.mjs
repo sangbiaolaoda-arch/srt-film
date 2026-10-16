@@ -344,7 +344,24 @@ const md = [
         .join("<br>"),
 ];
 writeFileSync(join(outDir, "report.md"), md.join("\n"), "utf8");
-console.log(`\n报告 ${join(outDir, "report.md")}`);
+// 机读版：quality-score.ts 记分卡消费结构化证据，不解析 markdown 表格。
+writeFileSync(
+  join(outDir, "report.json"),
+  JSON.stringify(
+    {
+      url,
+      srt: srtPath,
+      picks,
+      thresholds: { fxMean: FX_MEAN, fxMotion: FX_MOTION, photoMean: PHOTO_MEAN, contMean: CONT_MEAN, postMean: POST_MEAN },
+      rows,
+      coverage,
+    },
+    null,
+    1,
+  ),
+  "utf8",
+);
+console.log(`\n报告 ${join(outDir, "report.md")} + report.json`);
 if (bad.length > 0 || noCover.length > 0) {
   console.error(`✗ ${bad.length} 项不过、${noCover.length} 层无覆盖`);
   process.exit(1);
