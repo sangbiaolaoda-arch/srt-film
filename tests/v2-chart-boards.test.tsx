@@ -16,6 +16,7 @@ import { V2_LAYOUTS, V2_BOARDS } from "../src/layouts/v2";
 import { LayoutSVG } from "../src/layouts/render";
 import { pickLayout } from "../src/layouts/pick";
 import { plan } from "../src/core/plan";
+import { normalizeSeries } from "../src/core/units";
 import type { Layout, RenderContent } from "../src/layouts/types";
 import { STYLE_PROFILES, type StyleProfileId } from "../src/styles/style-system";
 import { resolveProfile } from "../src/styles/style-system";
@@ -342,7 +343,23 @@ describe("图表风三件套 · 全片一致性", () => {
     const { shots } = plan(srt3);
     const auto = shots.filter((s) => (s.layout.style ?? "editorial") === "chart-motion");
     expect(auto.length).toBeGreaterThanOrEqual(1);
-    for (const s of auto) expect(s.layout.id).toBe("v2-axis-columns");
+    // 落到图表风的每一拍都必须**画得出来**：度量值同族可比。
+    // 拍 5「光伏电价下降了 85% / 每度大约 0.09 美元」是比率 vs 货币，跨量纲，
+    // 老逻辑会把它塞进 ch-donut 画一张假对比图（观众以为 85% 和 0.09 可比）——
+    // 资格层的可比性闸（pick.ts eligible）现在把它挡掉，该拍改用数字板。
+    // 所以这里断言的是「凡图表风必可作图」，不是「凡数据密集必图表风」。
+    for (const s of auto) {
+      expect(s.layout.id).toBe("v2-axis-columns");
+      const series = normalizeSeries(
+        (s.content.numberTokens ?? [])
+          .filter((t) => t.kind === "measure")
+          .map((t) => ({ raw: t.raw, value: t.value, unit: t.unit })),
+      );
+      expect(series.chartable, `拍 ${s.layout.id} 不可作图：${series.reason}`).toBe(true);
+    }
+    // 不可比的那一拍不得落在图表组（含旧 catalog 的 ch-*）
+    const shot5 = shots[4]!;
+    expect(shot5.layout.group).not.toBe("chart");
     // 对照：01 语料自动规划一个图表风拍都不出
     const { shots: shots1 } = plan(SRT);
     expect(shots1.filter((s) => (s.layout.style ?? "editorial") === "chart-motion")).toHaveLength(0);

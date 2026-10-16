@@ -6,6 +6,7 @@ import { V2_LAYOUTS } from "./v2";
 import type { Group, Layout, RenderContent, Style } from "./types";
 import type { PhotoId } from "../assets/photos";
 import { displayWidth } from "../core/compose";
+import { normalizeSeries } from "../core/units";
 
 /** 度量值数量：token 分层缺失的老 content（测试 / 手工构造）按 numbers.length 老规矩。
  *  管线产出的 content 必带 numberTokens（见 core/content.ts），享受分层保护。 */
@@ -13,6 +14,18 @@ function measureCount(content: RenderContent): number {
   return content.numberTokens
     ? content.numberTokens.filter((t) => t.kind === "measure").length
     : content.numbers.length;
+}
+
+/** 只要度量值 token（图表资格/可比性判定用；span/ordinal 不进对比条）。
+ *  没有 numberTokens 的老 content（测试夹具 / 手工构造）返回空数组 ——
+ *  调用方据此跳过可比性判定：没单位信息就无从判可比，不能拿它当不合格的理由
+ *  （否则所有老夹具的图表资格会被误杀，layouts.test.ts 的 demoContent 就是这样：
+ *  只有 numbers: [120,85,3]，一个 unit 都没有）。 */
+function measureTokens(content: RenderContent): { raw: string; value: number; unit?: string }[] {
+  if (!content.numberTokens) return [];
+  return content.numberTokens
+    .filter((t) => t.kind === "measure")
+    .map((t) => ({ raw: t.raw, value: t.value, unit: t.unit }));
 }
 
 /** 资格门禁：图表版式必须有足够多可溯源数字；photo 版式必须有语义匹配的照片；
@@ -29,6 +42,26 @@ export function eligible(layout: Layout, content: RenderContent, photo?: PhotoId
     // chart 的资格按**度量值**数算：span（十年/四十秒）与 ordinal（第七次）
     // 进对比条是量纲崩坏 —— numbers 池含全部 kind，图表门禁必须只认 measure。
     if (measureCount(content) < need) return false;
+    // 第三道闸：**可比性**。度量值够 ≠ 画得出来：「4 摄氏度 vs 1.000 克」（温度 vs
+    // 质量）、「85% vs 0.09 美元」（比率 vs 货币）跨量纲画进同一张图就是错误隐喻。
+    // 以前只数个数，这类拍会被路由到图表板、渲染时画出一张**假的对比图**
+    // （实测：03 语料拍 5 落进 ch-donut，拿 85% 和 0.09 美元画同一个环 —— 观众以为
+    // 这两个数可比）。所以资格层就按 normalizeSeries 判：不可比 → 不合格，让拍去选
+    // num-band / measure-note 这类真正能表达的板。
+    //
+    // 判据用 **group === "chart"**（而不是 chart 槽的 need）：
+    //   · v2-axis-columns / v2-bars / ch-donut / ch-scatter 等都画多值对比，都要过闸；
+    //   · v2-data-giant 是 group=number（主角是**一个**巨号数字 + 测量尺，不比较多值），
+    //     不过闸 —— 拿 normalizeSeries（要求 ≥2 点）判它会把它误杀、整拍掉回旧 catalog
+    //     （实测：v2-data-giant → sp-num-giant）。
+    //   · ch-donut 的 needs 写的是 1（中心可只放一个数），但环身仍是多值对比，
+    //     所以不能按 need 判，只能按 group 判。
+    // 只在有 token 分层信息时才判：老 content（无 numberTokens）拿不到单位，
+    // 无从判可比，不能拿「没有单位」当不合格的理由。
+    if (layout.group === "chart") {
+      const toks = measureTokens(content);
+      if (toks.length > 0 && !normalizeSeries(toks).chartable) return false;
+    }
   }
   // 尾句装载：caption 是旁白第二分句，成片无音轨 —— 它是尾句唯一的画面载体。
   // 非 custom 版式没有 caption 槽 = 尾句从画面整体消失（实测 8 语料 12 拍：
@@ -107,6 +140,15 @@ export function styleScore(content: RenderContent, beatIndex: number, totalBeats
   return { score: +score.toFixed(2), notes };
 }
 
+/** 本拍的度量值是否构成一张**画得出来**的图（同族 + 量级差不过分）。
+ *  老 content（无 numberTokens）无从判单位 → 返回 true（保持老行为：
+ *  只按个数判，不拿「没有单位」当不可比）。 */
+function isChartable(content: RenderContent): boolean {
+  const toks = measureTokens(content);
+  if (toks.length === 0) return true;
+  return normalizeSeries(toks).chartable;
+}
+
 /** 单拍判定（阈值法，供测试与逐拍推导使用）。 */
 export function decideStyle(
   content: RenderContent,
@@ -118,7 +160,13 @@ export function decideStyle(
   const { score, notes } = styleScore(content, beatIndex, totalBeats);
   // 数据密集（≥2 个可溯源度量值）→ 图表动态图形风；强调信号够 → 扁平矢量叙事风；兜底编辑。
   const mc = measureCount(content);
-  if (mc >= 2) return { style: "chart-motion", reason: notes.join("／") + "／数据密集", score };
+  // 但「度量值够」≠ 「画得出来」：跨量纲（85% vs 0.09 美元、4 摄氏度 vs 1.000 克）
+  // 的拍若仍钉成图表风，资格层会把所有图表板挡掉 → 该拍被迫掉进旧 catalog 的
+  // 数字板，出现「风格是图表风、版式却是 nm-money」的撕裂。
+  // 所以钉图表风之前先过可比性闸：不可比就不钉，按下面的分数路径正常判
+  // （实测 03 语料拍 5：85% vs 0.09 美元 → 编辑风数字板，不再假图表）。
+  const comparable = isChartable(content);
+  if (mc >= 2 && comparable) return { style: "chart-motion", reason: notes.join("／") + "／数据密集", score };
   if (score >= POSTER_MIN) return { style: "flat-vector", reason: notes.join("／") || "常规", score };
   return { style: "editorial", reason: notes.join("／") || "常规", score };
 }

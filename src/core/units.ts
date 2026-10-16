@@ -17,7 +17,13 @@
 //
 // 确定性：纯函数、无随机，同 tokens 进同结果出（导出契约硬要求）。
 
-/** 单位 → (族, 相对基准单位的倍数)。基准单位取该族最小常用单位。 */
+/** 单位 → (族, 相对基准单位的倍数)。基准单位取该族最小常用单位。
+ *
+ * ⚠ 踩坑实录（2026-10-17 全语料路由审计）：初版只建了 length/time/mass/ratio 四族，
+ * 漏了 money / temperature / volume。后果是「0.38 美元 vs 0.10 美元」这种**同族可比**
+ * 的真实数据（03 语料拍 2）被判「单位不在可比表内」→ 图表板退回文字板。
+ * 03 语料整片就是电价对比，等于图表能力在自己最该发光的语料上全灭。
+ * 教训：建 FAMILY 必须拿真实语料的 token 反推，不能凭印象列。 */
 const FAMILY: Record<string, { family: UnitFamily; toBase: number }> = {
   // 长度（基准：米）
   公里: { family: "length", toBase: 1000 },
@@ -38,6 +44,20 @@ const FAMILY: Record<string, { family: UnitFamily; toBase: number }> = {
   千克: { family: "mass", toBase: 1000 },
   公斤: { family: "mass", toBase: 1000 },
   克: { family: "mass", toBase: 1 },
+  // 体积（基准：毫升）
+  升: { family: "volume", toBase: 1000 },
+  毫升: { family: "volume", toBase: 1 },
+  // 温度（基准：摄氏度）。**只有同为摄氏度才可比** —— 华氏要换算，
+  // 而旁白极少给华氏，贸然混算会出错；这里华氏也归入本族但基准是摄氏度，
+  // 需要时调用方自行保证同温标（本族存在主要为把「度」与「克」分开）。
+  度: { family: "temperature", toBase: 1 },
+  摄氏度: { family: "temperature", toBase: 1 },
+  // 货币（基准：元）。万元/万美元在 trace.ts 已把数量级乘进 value，
+  // 所以这里只做单位对齐，不再乘 10000。
+  元: { family: "money", toBase: 1 },
+  万元: { family: "money", toBase: 1 },
+  美元: { family: "money", toBase: 1 },
+  块: { family: "money", toBase: 1 },
   // 计数/比率（无量纲，自成一家，彼此间可比）
   "%": { family: "ratio", toBase: 1 },
   倍: { family: "ratio", toBase: 1 },
@@ -45,7 +65,7 @@ const FAMILY: Record<string, { family: UnitFamily; toBase: number }> = {
   折: { family: "ratio", toBase: 1 },
 };
 
-export type UnitFamily = "length" | "time" | "mass" | "ratio" | "other";
+export type UnitFamily = "length" | "time" | "mass" | "volume" | "temperature" | "money" | "ratio" | "other";
 
 /** 单位所属族；未知单位归 "other"（调用方按不可比处理）。 */
 export function familyOf(unit: string | undefined): UnitFamily {
@@ -110,7 +130,15 @@ export interface ChartSeries {
  */
 export const MAX_RATIO = 50;
 
-/** 把一批度量 token 变成可作图系列。跨族 / 单点 / 全零 一律判不可作图。 */
+/** 把一批度量 token 变成可作图系列。
+ *
+ * 策略（不是「全同族才画」的一刀切）：
+ *   ① 单位缺省的从 raw 尾部反推；
+ *   ② 按族分组，取**最大的同族子集**作图 —— 「15 克 + 250 克 + 92 度」画 15 vs 250
+ *      （质量），比整组退回文字板信息量更大；孤立的异族点只是不进图，不是错误；
+ *   ③ 该子集仍要过 MAX_RATIO 守卫；
+ *   ④ 一个族都凑不出 2 点 → 不可作图，调用方退回文字板。
+ * 跨族**同轴**永远禁止（那才是量纲崩坏）；跨族「取同族子集」不是。 */
 export function normalizeSeries(
   tokens: { raw: string; value: number; unit?: string }[],
 ): ChartSeries {
@@ -121,15 +149,32 @@ export function normalizeSeries(
   if (usable.length < 2) {
     return { chartable: false, reason: `可比点不足（${usable.length}/2）`, points: [], family: "other", max: 0 };
   }
-  const fams = new Set(usable.map((t) => familyOf(t.unit)));
-  if (fams.size > 1) {
-    return { chartable: false, reason: `跨单位族不可同轴：${[...fams].join(" vs ")}`, points: [], family: "other", max: 0 };
+  // 按族分组，取最大子集
+  const byFam = new Map<UnitFamily, typeof usable>();
+  for (const t of usable) {
+    const f = familyOf(t.unit);
+    if (f === "other") continue;
+    const arr = byFam.get(f) ?? [];
+    arr.push(t);
+    byFam.set(f, arr);
   }
-  const family = [...fams][0]!;
-  if (family === "other") {
-    return { chartable: false, reason: "单位不在可比表内", points: [], family, max: 0 };
+  let best: { fam: UnitFamily; toks: typeof usable } | undefined;
+  for (const [fam, toks] of byFam) {
+    if (toks.length < 2) continue;
+    if (!best || toks.length > best.toks.length) best = { fam, toks };
   }
-  const pts = usable.map((t) => ({ raw: t.raw, base: toBaseValue(t.unit, t.value)!, unit: t.unit ?? "" }));
+  if (!best) {
+    const fams = [...new Set(usable.map((t) => familyOf(t.unit)))];
+    return {
+      chartable: false,
+      reason: fams.length > 1 ? `跨单位族不可同轴：${fams.join(" vs ")}` : "单位不在可比表内",
+      points: [],
+      family: "other",
+      max: 0,
+    };
+  }
+  const { fam: family, toks: picked } = best;
+  const pts = picked.map((t) => ({ raw: t.raw, base: toBaseValue(t.unit, t.value)!, unit: t.unit ?? "" }));
   const max = pts.reduce((m, p) => Math.max(m, p.base), 0);
   const min = pts.reduce((m, p) => Math.min(m, p.base), max);
   if (!(max > 0)) {
