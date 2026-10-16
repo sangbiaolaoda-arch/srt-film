@@ -129,9 +129,9 @@ class Cdp {
     throw new Error(`页面 ${timeoutMs / 1000}s 内未 load: ${url}`);
   }
 
-  /** 截图（base64 PNG）。 */
-  async shot() {
-    const r = await this.send("Page.captureScreenshot", { format: "png" });
+  /** 截图（base64 PNG）。可传 clip={x,y,width,height,scale}（CSS 像素）只截一块。 */
+  async shot(clip) {
+    const r = await this.send("Page.captureScreenshot", clip ? { format: "png", clip } : { format: "png" });
     return r.data;
   }
 }
