@@ -496,6 +496,55 @@ rubric 规定「主观维度必须标待人工，不能由 Agent 给自己打分
   consequence→conclusion 这些语义有效但语料未出现的边」的语料，而不是更多同构科普稿。
 - 「修镜头连续性」：见下节（commit c2b2f1a 已做）；论证链断链补边见 commit 9b8fe22。
 
+## 方法论落地 —— 渲染契约 + 形态继承转场（2026-10-16）
+
+状态：PASS
+
+用户给了两份材料：`html-visual-engineering-methodology-for-agents.md`（通用方法论）
+和 `二十种画面 · 100 秒.html`（20 风格 showreel）。对照检查发现：本项目实践已是
+方法论的落地，但有两个可优化点照着做了。
+
+### ① 渲染契约文档（docs/architecture/render-contract.md）
+方法论 §3 / §12 要求「把不变量收成可查清单」。我们把散落在注释/对话里的约定固化成
+一份 `render-contract.md`：C1 画面是 t 的纯函数、C2 时间锚 SRT 绝对时间、C3 成片
+时长覆盖 SRT、C4 逻辑坐标 1280×720、C5 确定性随机只用 hash、C6 后期层可零贡献剥离、
+C7 跨镜头连续性的 cross-corner 硬约束。每条都挂了对应的现有门禁（E1 确定性 /
+A3 时间轴 / F 成片验收 / continuity.test 跨角断言 / G1 数字守恒），并给了「修改前
+自检」清单。不改代码，只把已有约定变成新人可查的契约——降低踩坑成本。
+
+### ② 形态继承转场（方法论 §6：遮罩只能隐藏切换，形态继承/运动承接才构成更深的连续性）
+原 continuity 层只画了角落的 ghost 标记 + 一条连接线，转场本身仍是 m-shape-match
+的整层放大（本质也是遮罩式）。观众看到的是「角落里一个静止 ghost + 一次交叉溶解」，
+**没真的看到继承发生**。
+
+改法：转场窗口（m-shape-match 的 0.55s）内，继承标记从它自己的角**迁移**到本拍
+标记的角（位置 lerp），颜色也 lerp 到本拍色（颜色承接），落位后回落到静态角 ghost。
+这样观众看到的是「上拍标记变成下拍标记」，而不是一个静止角标。纯 canvas、确定性
+（位置/颜色走 inOutCubic，无随机），预览与导出同源。
+
+具体改动：
+- `render/continuity.ts`：新增 `lerpColor` / `clamp` / `lerp` / `EASE`；`drawContinuity`
+  接收 `t`，在窗口内对 ghost 做位置+颜色 morph；morph 时长从 `MOTION_BY_ID`
+  （m-shape-match.dur=0.55）派生，不硬编码。
+- `render/frame.ts`：调用 `drawContinuity` 时传入 `t`。
+- `tests/continuity.test.ts`：新增 morph 测试——窗口中点(10.275s) ghost 落在两角正
+  中间 (640,360)，mt=0 与 mt=1 回落到静态角 (1244,684)。
+
+### 诚实留底
+- morph 只做位置+颜色迁移，**没做形状之间的形变**（circle→square 之间插值容易丑，
+  且 mark 形本身是角色语汇，不该在转场里变形）。这点和 showreel 的「形状变换」不同——
+  showreel 是单文件 demo 各风格独立，srt-film 的标记形状承载角色语义，动形状会破坏
+  角色语汇的稳定性。这是有意的取舍，不是遗漏。
+- 顺手修了一个**并行进程留下的 tsc 回归**：`7ed87cf`（缺陷 4 收口）把 `Layout.custom`
+  从 `boolean` 改成了 `string`，但 `tests/constraints.test.ts:147` 还在传 `true`。
+  只把那行测试改成 `"v2:x"` 让门禁恢复绿——不是我引入的问题，但门禁得是红的才算数。
+
+### 验收
+- 32 个连续性测试全过（含新 morph 测试）。
+- tsc 干净；19 测试文件全绿。
+- 镜头连续性那一格（记分卡原 2 分）现在应当从「有继承证据」推进到「观众真的看到
+  承接」—— 等 CI 的 browser-qa 才能确认像素级贡献，如实记。
+
 ## 镜头连续性返修 —— HANDOFF 表漏了数据类语料（2026-10-16，commit c2b2f1a）
 
 状态：PASS

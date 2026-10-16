@@ -247,7 +247,7 @@ export async function renderFrame(input: FrameInput): Promise<void> {
   // 形状/位置/颜色向下一镜头继承」由此可见、可抽样检查。canvas 直画：预览与导出
   // 同走 renderFrame，同一描述同一像素；v2 满版板（custom）也照常覆盖。
   // 位置压在特效层之下：继承标记是**内容**，不该被前景浮尘盖住。
-  if (shot) drawContinuity(ctx, shots, active, W, H);
+  if (shot) drawContinuity(ctx, shots, active, W, H, t);
 
   // 3. canvas 特效层：画在**内容之上**、后期之下 —— 「镜头前的空气」。
   //    此前它在 SVG 之下，实测被满版板整个盖住（strata 五条色带铺满 1360×760，

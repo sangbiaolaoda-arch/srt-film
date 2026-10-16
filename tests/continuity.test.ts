@@ -271,6 +271,32 @@ describe("④ drawContinuity：canvas 绘制", () => {
     const self = r.calls.find((c) => (c.m === "fill" || c.m === "stroke") && c.a[0] === CM.tone.ink)!;
     expect(ghost.a[1] as number).toBeLessThan(self.a[1] as number);
   });
+
+  it("形态继承 morph：转场窗口内 ghost 从上一拍角迁移到本拍角（方法论 §6）", () => {
+    const prev = shotOf({
+      layout: { id: "a", name: "a", group: "statement", enter: [], slots: [], style: "editorial" },
+      narrative: { role: "definition", purpose: "p", forbidden: [] }, content: demo({ bignum: "120" }),
+    });
+    const cur = shotOf({
+      layout: { id: "b", name: "b", group: "statement", enter: [], slots: [], style: "chart-motion" },
+      narrative: { role: "hook", purpose: "p", forbidden: [] }, continuity: ["x"],
+      start: 10, end: 12, tlStart: 10,
+    });
+    // 窗口中点（m-shape-match dur 0.55 → t=10.275 即 mt=0.5）：ghost 应落在两角正中间
+    const r = new CtxRec();
+    drawContinuity(asCtx(r), [prev, cur], 1, 1280, 720, 10.275);
+    const mv = r.calls.find((c) => c.m === "moveTo")!; // 连接线起点 = ghost 当前位置
+    // definition=br(1244,684) → hook=tl(36,36)，中点 (640,360)
+    expect(mv.a[0]).toBeCloseTo(640, 0);
+    expect(mv.a[1]).toBeCloseTo(360, 0);
+    // mt=0（窗口前）与 mt=1（窗口后）应回落到静态角，不再在中点
+    const before = new CtxRec(); drawContinuity(asCtx(before), [prev, cur], 1, 1280, 720, 10);
+    const bMv = before.calls.find((c) => c.m === "moveTo")!;
+    expect(bMv.a).toEqual([1244, 684]);
+    const after = new CtxRec(); drawContinuity(asCtx(after), [prev, cur], 1, 1280, 720, 11);
+    const aMv = after.calls.find((c) => c.m === "moveTo")!;
+    expect(aMv.a).toEqual([1244, 684]);
+  });
 });
 
 describe("⑤ plan 集成：真实语料上字段是活的", () => {

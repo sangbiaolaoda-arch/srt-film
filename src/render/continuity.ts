@@ -12,7 +12,23 @@
 import type { Shot } from "../core/shot";
 import type { NarrativeRole } from "../core/compose";
 import { resolveProfile } from "../styles/style-system";
+import { MOTION_BY_ID } from "../motion/catalog";
 import { STAGE_W, STAGE_H } from "./frame";
+
+/** 两色按 t 线性插值（#rrggbb → #rrggbb）。继承标记在转场窗口里从「上拍色」migrate 到
+ *  「本拍色」，让观众看到颜色承接，不只是形状到位。 */
+function lerpColor(a: string, b: string, t: number): string {
+  const pa = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(a);
+  const pb = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(b);
+  if (!pa || !pb) return a;
+  const c = (i: number) => Math.round(parseInt(pa[i]!, 16) + (parseInt(pb[i]!, 16) - parseInt(pa[i]!, 16)) * t);
+  return `#${[1, 2, 3].map((i) => c(i).toString(16).padStart(2, "0")).join("")}`;
+}
+
+const clamp = (x: number, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+/** 位置/颜色迁移用 inOutCubic：两端慢、中间快，落位感更像「滑过去」而非「淡过去」。 */
+const EASE = { inOutCubic: (x: number) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2) };
 
 export type MotifShape = "circle" | "square" | "bar" | "split" | "triangle" | "arrow" | "ring";
 export type MotifCorner = "tl" | "tr" | "bl" | "br";
@@ -152,13 +168,15 @@ function drawShape(
   ctx.restore();
 }
 
-/** 把连续性画进 ctx。调用点：renderFrame 的 SVG 层之后、后期层之前。 */
+/** 把连续性画进 ctx。调用点：renderFrame 的 SVG 层之后、后期层之前。
+ *  t 用于转场窗口内的形态继承 morph（继承标记迁移到本拍角 + 颜色承接）。 */
 export function drawContinuity(
   ctx: CanvasRenderingContext2D,
   shots: Shot[],
   active: number,
   W: number,
   H: number,
+  t = 0,
 ): void {
   const frame = continuityAt(shots, active);
   if (!frame) return;
@@ -178,14 +196,30 @@ export function drawContinuity(
     // 保持它自己的颜色，而不是被本拍风格重新染色。
     const pp = resolveProfile(prev.layout.style);
     const [gx, gy] = CORNER_POS[frame.ghost.motif.corner];
-    const gcx = gx * kx;
-    const gcy = gy * ky;
-    // 连接线：上一拍标记 → 本拍标记（继承的视觉证据）。
-    // 参数经画素探针标定：1.5px/alpha 0.3 的细虚线落在色带噪声底以下（实测
-    // x=36 列与邻列无差异），继承关系等于没画 —— 加到 2.5px/0.55 才可读。
-    // 连接线：上一拍标记 → 本拍标记（继承的视觉证据）。2.5px/0.55 虚线：
-    // 1.5px/0.3 在色带上几乎不可读（继承关系等于没画），这一档经画素探针
-    // 在正确拍上复测可辨（x=36 列系统性暗于参照列）。
+    let gcx = gx * kx;
+    let gcy = gy * ky;
+    let ghostColor = pp.tone[frame.ghost.motif.tone]!;
+    let ghostAlpha = 0.26;
+
+    // 转场窗口内的「形态继承」morph（方法论 §6：遮罩只能隐藏切换，形态继承/运动承接
+    // 才能构成更深的连续性）。m-shape-match 的 0.55s 窗口里，继承标记从它自己的角
+    // **迁移**到本拍标记的角，颜色也 lerp 到本拍色 —— 观众看到的是「上拍标记变成下拍
+    // 标记」，而不是角落里一个静止的 ghost 配一次交叉溶解。窗口结束后回落到静态角 ghost。
+    const morphDur = MOTION_BY_ID.get("m-shape-match")?.dur ?? 0.55;
+    const winStart = shot.tlStart ?? shot.start;
+    const mt = clamp((t - winStart) / morphDur, 0, 1);
+    if (mt > 0 && mt < 1) {
+      const e = EASE.inOutCubic(mt);
+      const [sxRaw, syRaw] = CORNER_POS[frame.self.corner];
+      gcx = lerp(gcx, sxRaw * kx, e);
+      gcy = lerp(gcy, syRaw * ky, e);
+      ghostColor = lerpColor(ghostColor, p.tone[frame.self.tone]!, e);
+      // 迁移途中更亮（它就是此刻的视觉焦点），落位后回到静态 ghost 的暗度
+      ghostAlpha = lerp(0.55, 0.26, e);
+    }
+
+    // 连接线：上一拍标记 → 本拍标记（继承的视觉证据）。morph 时线随 ghost 起点移动。
+    // 参数经画素探针标定：2.5px/0.55 虚线在色带上方可辨（1.5px/0.3 几乎不可读）。
     ctx.save();
     ctx.globalAlpha = 0.55;
     ctx.strokeStyle = p.tone.dim;
@@ -196,7 +230,7 @@ export function drawContinuity(
     ctx.lineTo(scx, scy);
     ctx.stroke();
     ctx.restore();
-    drawShape(ctx, frame.ghost.motif.shape, gcx, gcy, R * k, pp.tone[frame.ghost.motif.tone], 0.26, true);
+    drawShape(ctx, frame.ghost.motif.shape, gcx, gcy, R * k, ghostColor, ghostAlpha, true);
   }
 
   drawShape(ctx, frame.self.shape, scx, scy, R * k, p.tone[frame.self.tone], 0.62, false);

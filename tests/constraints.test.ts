@@ -144,7 +144,7 @@ describe("尾句装载门禁（无音轨成片：caption 是尾句唯一的画�
   });
 
   it("custom 满版场景豁免 —— 它自己渲染全文（v2 19 套实测全部显示尾句）", () => {
-    const custom: Layout = { ...layoutOf([slot("headline", [1, 1, 10, 6])]), custom: true };
+    const custom: Layout = { ...layoutOf([slot("headline", [1, 1, 10, 6])]), custom: "v2:x" };
     expect(checkLayout(custom, tail).errors.some((e) => e.includes("尾句"))).toBe(false);
   });
 });
