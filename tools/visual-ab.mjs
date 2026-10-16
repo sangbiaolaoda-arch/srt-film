@@ -23,9 +23,9 @@
 // 前置：dev server（或 dist 静态服务）在跑，页面同源能 GET 到 examples/*.srt。
 // 退出码：任一层没测出差异、或某一层在语料里无可测拍 → 1。
 
-import { spawn } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { makeAb } from "./lib/ab.mjs";
 
 const argv = process.argv.slice(2);
 const argOf = (k, d) => {
@@ -33,6 +33,7 @@ const argOf = (k, d) => {
   return i >= 0 ? argv[i + 1] : d;
 };
 const ROOT = process.cwd();
+const { ab, ev, sleep } = makeAb({ root: ROOT, log: ".tmp/visual-ab.log" });
 const url = argOf("--url", "http://127.0.0.1:5211/index.html");
 const srtPath = argOf("--srt", "examples/09-photo-demo.srt");
 const layerArg = argOf("--layers", "fx,photo,continuity,post");
@@ -59,53 +60,6 @@ const CONT_MEAN = 0.015;
 const POST_MEAN = 0.15;
 const THRESHOLD = { fx: { mean: FX_MEAN, motion: FX_MOTION }, photo: { mean: PHOTO_MEAN }, continuity: { mean: CONT_MEAN }, post: { mean: POST_MEAN } };
 const LAYER_ZH = { fx: "特效层", photo: "照片层", continuity: "连续性层", post: "后期层" };
-
-/* ── agent-browser 调用（与 qa-frames / e2e-export / fx-ab 同一套发现逻辑）────── */
-function resolveAB() {
-  if (process.env.AGENT_BROWSER_BIN) return { cmd: process.env.AGENT_BROWSER_BIN, pre: [] };
-  for (const d of (process.env.PATH || "").split(";").filter(Boolean)) {
-    for (const ext of ["", ".cmd", ".exe"]) {
-      const shim = join(d, `agent-browser${ext}`);
-      if (!existsSync(shim)) continue;
-      const js = join(d, "node_modules", "agent-browser", "bin", "agent-browser.js");
-      if (existsSync(js)) return { cmd: process.execPath, pre: [js] };
-      if (ext === ".cmd") return { cmd: process.env.ComSpec || "cmd.exe", pre: ["/c", shim] };
-      return { cmd: shim, pre: [] };
-    }
-  }
-  return { cmd: "agent-browser", pre: [] };
-}
-const LOG = join(ROOT, ".tmp/visual-ab.log");
-function run(cmd, args, { input } = {}) {
-  return new Promise((res) => {
-    mkdirSync(join(ROOT, ".tmp"), { recursive: true });
-    const fd = openSync(LOG, "a");
-    const from = statSync(LOG).size;
-    const finish = (code, extra = {}) => {
-      try { closeSync(fd); } catch {}
-      let out = "";
-      try { out = readFileSync(LOG).subarray(from).toString("utf8"); } catch {}
-      res({ code, out, ...extra });
-    };
-    const p = spawn(cmd, args, { stdio: ["pipe", fd, fd] });
-    p.on("error", (e) => finish(-1, { err: String(e?.message || e) }));
-    p.on("close", (c) => finish(c));
-    if (input !== undefined) p.stdin.write(input);
-    p.stdin.end();
-  });
-}
-const AB = resolveAB();
-const ab = (args, opts = {}) => run(AB.cmd, [...AB.pre, ...args], opts);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const unwrap = (s) => {
-  let v = s;
-  for (let i = 0; i < 8 && typeof v === "string"; i++) {
-    const t = v.trim();
-    try { v = JSON.parse(t); } catch { break; }
-  }
-  return v;
-};
-const ev = async (js) => unwrap((await ab(["eval", "--stdin"], { input: js })).out);
 
 /* ── 页面内：取像素指纹 / 逐层开关 / seek ──────────────────────────────────── */
 const PAGE_HELPERS = `
