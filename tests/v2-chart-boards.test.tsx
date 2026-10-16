@@ -154,6 +154,74 @@ describe("图表风三件套 · 图形语法", () => {
   });
 });
 
+describe("v2-steps · 左下大字折行不越界（Phase 10 QA 实测回归）", () => {
+  // 实测：05 语料拍17/22 的两行标题在 y=648 基线、60px 字号下
+  // 出下边 5~33px。SVG <text> 不自动折行，必须显式分行并按行数反推字号。
+  //
+  // 包围盒高是量出来的：浏览器里 CJK 46px 字号的 getBoundingClientRect 高 82px
+  // （≈1.78em，含下伸部），不是常以为的 1.0~1.3em。
+  const DESC = 1.78;
+  it("长标题折行后底缘 ≤ 720、右缘 ≤ 1170", () => {
+    for (const headline of [
+      "你把一辈子活成了一场不下注的赌局",
+      "结果她守住了纯粹也守住了孤独",
+      "价格可以付亏损必须停",
+      "短",
+    ]) {
+      const html = render(byId("steps"), demo({ headline }));
+      const ts = [...html.matchAll(/<text([^>]*)>([\s\S]*?)<\/text>/g)]
+        .map((m) => ({
+          x: Number(/x="([\d.-]+)"/.exec(m[1]!)?.[1]),
+          y: Number(/y="([\d.-]+)"/.exec(m[1]!)?.[1]),
+          fs: Number(/font-size="([\d.]+)"/.exec(m[1]!)?.[1]),
+          t: m[2]!.replace(/<[^>]+>/g, ""),
+        }))
+        .filter((t) => t.t && t.y > 400);
+      expect(ts.length, headline).toBeGreaterThan(0);
+      // CJK ≈ 1em，拉丁/数字 ≈ 0.55em
+      const w = (t: string, fs: number) =>
+        Array.from(t).reduce((n, ch) => n + (ch.codePointAt(0)! > 0xff ? 1 : 0.55), 0) * fs;
+      for (const t of ts) {
+        expect(t.y + t.fs * DESC, `${headline} 底缘越界`).toBeLessThanOrEqual(720);
+        expect(t.x + w(t.t, t.fs), `${headline} 右缘越界`).toBeLessThanOrEqual(1170);
+      }
+    }
+  });
+});
+
+describe("巨号数字 · 数字带单位整体不出版心（Phase 10 QA 实测回归）", () => {
+  // 实测：03 语料拍4「0.06 美元」—— 字号只按 shown 算（1000px 满宽），
+  // 单位被放到 shown 右缘再 +40，落在 x=1180、宽 94 → 出右 72px。
+  // 单位 x 还要和 shown 的右缘对齐，别重复计一遍 shown 的半宽。
+  /** 取板式里所有 <text>，返回 {x, fs, anchor, text}。用结构而不是颜色定位，
+   *  accent 是 profile token，三系各不相同，写死颜色会漏判。 */
+  function textsOf(html: string): { x: number; fs: number; anchor: string; t: string }[] {
+    return [...html.matchAll(/<text([^>]*)>([\s\S]*?)<\/text>/g)].map((m) => ({
+      x: Number(/x="([\d.-]+)"/.exec(m[1]!)?.[1]),
+      fs: Number(/font-size="([\d.]+)"/.exec(m[1]!)?.[1]),
+      anchor: /text-anchor="(\w+)"/.exec(m[1]!)?.[1] ?? "start",
+      t: m[2]!.replace(/<[^>]+>/g, ""),
+    }));
+  }
+
+  for (const id of ["num-giant", "data-giant"]) {
+    it(`${id}：数字 + 单位右缘 ≤ 1170（版心）`, () => {
+      for (const [bignum, unit] of [
+        ["0.06 美元", "美元"],
+        ["120毫秒", "毫秒"],
+        ["1200万", "万"],
+      ] as [string, string][]) {
+        const ts = textsOf(render(byId(id), demo({ bignum, unit, numbers: [120], numberTokens: [] })));
+        // 单位是最后一条 anchor=start 的短文本（主数字居中，图号带 NO. 前缀）
+        const unitEl = ts.filter((t) => t.anchor === "start" && t.t && !t.t.startsWith("NO.")).pop();
+        expect(unitEl, `${id}「${bignum}」未拆出单位`).toBeTruthy();
+        const right = unitEl!.x + unitEl!.fs * 0.62 * Array.from(unitEl!.t).length;
+        expect(right, `${id}「${bignum}」单位右缘 ${Math.round(right)} 越出版心 1170`).toBeLessThanOrEqual(1170);
+      }
+    });
+  }
+});
+
 describe("v2-vertical · 竖排列不越界（Phase 10 QA 实测回归）", () => {
   // 实测：标题「你手上只有一串 www 开头的字母」的第 9 个字基线落在 673，
   // 整字掉到画面下方（出下边 93px）。原因：只卡了 size ≤ 92，没卡列总高。

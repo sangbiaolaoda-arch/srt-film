@@ -147,15 +147,26 @@ const v2NumGiant: Board = ({ content, profile: p }) => {
   const splittable = unit !== "" && main.endsWith(unit)
     && Array.from(main).length - Array.from(unit).length >= 1 && Array.from(unit).length <= 2;
   const shown = splittable ? main.slice(0, main.length - unit.length) : main;
-  const size = Math.min(300, Math.floor(1000 / Math.max(1, Array.from(shown).length)));
+  // 字号要**连单位一起**算：shown 以 x=640 居中，宽度 = len × size；
+  // 单位贴在它右侧再往右 40px。整组（含单位）必须落在 110..1170 的版心内。
+  // 早先只按 shown 算字号（1000px 满宽），单位被挤到画外
+  // （03 语料拍4「0.06 美元」：size=200、单位落 x=1180、宽 94 → 出右 72px）。
+  const UNIT_SIZE = 44;
+  const GAP = 40;
+  const unitW = splittable ? GAP + Array.from(unit).length * UNIT_SIZE * 0.62 : 0;
+  const avail = 1060 - unitW;                                  // 版心 110..1170
+  const size = Math.min(300, Math.floor((avail / 2) / Math.max(1, Array.from(shown).length)));
+  // shown 居中于「版心左半」：让出单位那一半，组合才整体居中。
+  const groupW = Array.from(shown).length * size + unitW;
+  const shownCx = 110 + (avail - Array.from(shown).length * size) / 2;
   return (
     <g>
       <rect x={110} y={112} width={1060} height={2} fill={p.ink} opacity={0.7} data-anim data-motion="m-bar-sweep" />
       {kick && <VText x={110} y={88} size={24} fill={p.ink} text={kick} profile={p} anchor="start" spacing={6} opacity={0.75} motion="m-fade-up" />}
-      <VText x={640} y={470} size={size} fill={p.ink} text={shown} profile={p} motion="m-scale-soft" />
+      <VText x={shownCx} y={470} size={size} fill={p.ink} text={shown} profile={p} motion="m-scale-soft" />
       {splittable && (
-        <VText x={640 + (Array.from(shown).length * size) / 2 + 40}
-          y={470} size={44} fill={p.accent} text={unit} profile={p} anchor="start" motion="m-fade-up" />
+        <VText x={110 + groupW}
+          y={470} size={UNIT_SIZE} fill={p.accent} text={unit} profile={p} anchor="start" motion="m-fade-up" />
       )}
       <circle cx={1170} cy={640} r={5} fill={p.accent} data-anim data-motion="m-tick-pulse" />
     </g>
@@ -291,13 +302,29 @@ const v2Chapter: Board = ({ content, profile: p }) => {
    左下大字 + 阶梯折线向右上生长，末端朱红到点。 */
 const v2Steps: Board = ({ content, profile: p }) => {
   const h = stripPunct(content.headline);
+  // 左下角版心底是 720。SVG <text> 不自动折行，长标题必须显式分行。
+  //
+  // 尺寸是量出来的，不是估的：浏览器里 CJK 在 46px 字号下 getBoundingClientRect
+  // 高 82px（≈1.78em，含下伸部），不是常以为的 1.0~1.3em。早先按「基线 648 +
+  // 安全区 60」估，05 语料拍22 仍出下边 27px —— 实测底缘 = 基线 + 1.78em。
+  // 这里直接反解：最后一行基线 = 720 - DESC - margin。
+  const DESC = 1.78;      // 实测 CJK 包围盒高 / 字号
+  const rows = h ? wrap(h, 2) : [];
+  const size = rows.length === 0 ? fit(h, 60)
+    : rows.length === 1 ? Math.min(60, fit(rows[0]!, 60))
+      : Math.min(46, fitW(rows[0]!, 1060, 44));
+  const lh = size * 1.34;
+  const lastBaseline = 720 - 34 - size * DESC;   // 底部留 34
+  const baseY = lastBaseline - (rows.length - 1) * lh;
   return (
     <g>
       <path data-anim data-motion="m-stroke-draw"
         d="M120 520 L120 452 L420 452 L420 344 L760 344 L760 236 L1150 236"
         stroke={p.ink} strokeWidth={p.lineWidth} fill="none" />
       <circle cx={1150} cy={236} r={9} fill={p.accent} data-anim data-motion="m-tick-pulse" />
-      <VText x={110} y={648} size={fit(h, 60)} fill={p.ink} text={h} profile={p} anchor="start" motion="m-fade-up" />
+      {rows.map((r, i) => (
+        <VText key={i} x={110} y={baseY + i * lh} size={size} fill={p.ink} text={r} profile={p} anchor="start" motion="m-fade-up" />
+      ))}
     </g>
   );
 };
@@ -550,7 +577,14 @@ const v2DataGiant: Board = ({ content, beat, profile: p }) => {
     && Array.from(main).length - Array.from(unit).length >= 1 && Array.from(unit).length <= 2;
   const shown = splittable ? main.slice(0, main.length - unit.length) : main;
   const isNum = n !== "";
-  const size = Math.min(280, Math.floor(940 / Math.max(1, Array.from(shown).length)));
+  // 字号要**连单位一起**算：单位跟在数字右侧（x0 + numW + 28），
+  // 数字占满 940px 时单位就被挤出右边界（03 语料拍4「0.06 美元」：
+  // 0.06 拿 200px、单位落在 x=1180、宽 94 → 出右 72px）。
+  // 给单位预留 width = 28 + len(unit) × 46 × 0.62 + 右边距。
+  const UNIT_SIZE = 46;
+  const unitW = splittable ? 28 + Array.from(unit).length * UNIT_SIZE * (p.monoNum ? 0.6 : 0.62) : 0;
+  const numAvail = 940 - unitW;
+  const size = Math.min(280, Math.floor(numAvail / Math.max(1, Array.from(shown).length)));
   const x0 = 120;
   const baseY = 470;
   // 等宽数字近似宽：JetBrains Mono  advance ≈ 0.6em；非等宽回退按 0.62 估，只用于定位。
@@ -566,7 +600,7 @@ const v2DataGiant: Board = ({ content, beat, profile: p }) => {
         <VText x={x0} y={baseY} size={size} fill={p.ink} text={shown} profile={p} anchor="start" motion="m-scale-soft" />
       )}
       {splittable && (
-        <VNum x={x0 + numW + 28} y={baseY} size={46} fill={p.accent} text={unit} p={p} motion="m-fade-up" />
+        <VNum x={x0 + numW + 28} y={baseY} size={UNIT_SIZE} fill={p.accent} text={unit} p={p} motion="m-fade-up" />
       )}
       {/* 测量尺：数字宽度即测量对象，尺寸线语汇。单位已跟在数字旁时不再重复标注 */}
       <g data-anim data-motion="m-bar-sweep">
