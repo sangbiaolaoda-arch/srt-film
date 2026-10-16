@@ -224,11 +224,11 @@ describe("④ drawContinuity：canvas 绘制", () => {
     expect(r.calls.some((c) => c.m === "stroke" && c.a[0] === ED.tone.accent)).toBe(true);
     // 本拍标记用图表风的取色（括号显式：fill/stroke 且颜色对上，不靠优先级蒙混）
     expect(r.calls.some((c) => (c.m === "fill" || c.m === "stroke") && c.a[0] === CM.tone.ink)).toBe(true);
-    // 连接线：虚线 + 从 tr 角到 tl 角
+    // 连接线：虚线 + 从 definition(br→1244,684) 角到 hook(tl→36,36) 角
     expect(r.has("setLineDash")).toBe(true);
     const mv = r.calls.find((c) => c.m === "moveTo")!;
     const ln = r.calls.find((c) => c.m === "lineTo")!;
-    expect(mv.a).toEqual([1244, 36]);
+    expect(mv.a).toEqual([1244, 684]);
     expect(ln.a).toEqual([36, 36]);
   });
 
@@ -249,7 +249,7 @@ describe("④ drawContinuity：canvas 绘制", () => {
     const r = new CtxRec();
     drawContinuity(asCtx(r), [prevEd, curCm], 1, 2560, 1440);
     const mv = r.calls.find((c) => c.m === "moveTo")!;
-    expect(mv.a).toEqual([2488, 72]);
+    expect(mv.a).toEqual([2488, 1368]);
     const ln = r.calls.find((c) => c.m === "lineTo")!;
     expect(ln.a).toEqual([72, 72]);
   });

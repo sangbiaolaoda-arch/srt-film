@@ -38,16 +38,22 @@ const ROLE_SHAPE: Record<NarrativeRole, MotifShape> = {
 /** 角色 → 角落：固定表，不轮转 —— 同一角色在全片里始终占同一个角落，继承才有锚点。
  *  约束（qa-frames 实测后加的）：HANDOFF 的每一个承接对都必须跨角 —— 否则 ghost
  *  与自标记同角重叠、连接线零长度，「继承」退化成「一个标记换形状」。
- *  现表下 8 个承接对全部跨角；开场（hook）与定版（conclusion）同占左上，
- *  首尾呼应是附带的语汇红利。 */
+ *  角落是 4 个、角色是 7 个，必有角色共享角落；能共享的只能是**没有 HANDOFF 边**
+ *  的配对（否则继承退化）。现表下 14 个承接对全部跨角；共享角落的配对
+ *  （hook/evidence 同 tl、definition/explanation 同 br、comparison/conclusion 同 tr）
+ *  之间都无承接边。
+ *  历史：曾为解锁 definition→consequence 把 definition 从 tr 改到 br —— 原先
+ *  definition 与 consequence 同占 tr，那条边永远跨不了角，推论拍在论证段接不上前拍。
+ *  开场（hook）与定版（conclusion）分占 tl/tr，首尾不再同角（附带的语汇红利让位给
+ *  论证链连续性，更值得）。 */
 const ROLE_CORNER: Record<NarrativeRole, MotifCorner> = {
   hook: "tl",
-  definition: "tr",
-  evidence: "br",
-  comparison: "bl",
-  explanation: "bl",
-  consequence: "tr",
-  conclusion: "tl",
+  definition: "br",
+  evidence: "tl",
+  comparison: "tr",
+  explanation: "br",
+  consequence: "bl",
+  conclusion: "tr",
 };
 
 /** 母版标记：纯函数。同 shot 进同 motif 出 —— seek 确定性的第一来源。 */

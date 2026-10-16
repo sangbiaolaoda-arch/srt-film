@@ -78,13 +78,20 @@ export function classifyRole(beat: Beat): NarrativeRole {
  *  ghost 与自标记重叠、连接线零长度，「继承」退化成「一个标记换形状」。
  *  因此本表里**不允许出现同角色边**；补表时每个新增对都必须跨角（测试守着）。
  *  纯角色表判定、不读文本 —— 确定性。
- *  导出供测试断言不变量：每个承接对在 continuity.ts 的角落表里都必须跨角。 */
+ *  导出供测试断言不变量：每个承接对在 continuity.ts 的角落表里都必须跨角。
+ *
+ * definition→consequence 是关键补边：03「便宜也不是没代价(定义)→靠天吃饭(推论)」、
+ * 04「太热长不好(定义)→太冷会冻伤(推论)」都是「下定义/讲机制 → 推出结果」的
+ * 自然论证链，原表没它，推论拍接不上前拍，连续性在论证段断链。解锁它需要把
+ * definition 从 tr 改到 br（见 continuity.ts 的 ROLE_CORNER）。 */
 export const HANDOFF: Record<NarrativeRole, NarrativeRole[]> = {
   hook: ["definition", "explanation"],
   // comparison 新增：定义完概念直接摆对比（数据类语料常见走法）
-  definition: ["evidence", "comparison"],
-  // comparison 新增：摆完对比摆证据、拿对比反推定义
+  // consequence 新增：下定义/讲机制 → 推出结果（自然论证链，原表缺失）
+  definition: ["evidence", "comparison", "consequence"],
   evidence: ["consequence", "conclusion", "comparison"],
+  // comparison→conclusion 跨不了角（comparison/conclusion 同占 tr），且语料未见直接边；
+  // 对比到结论走 comparison→evidence→conclusion 即可，不强加同角边。
   comparison: ["consequence", "evidence", "definition"],
   // consequence 新增：机制讲完直接给结果
   explanation: ["evidence", "consequence"],
