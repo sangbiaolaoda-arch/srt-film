@@ -34,11 +34,28 @@ export function fit(t: string, max: number): number {
   return Math.min(max, Math.floor(1040 / Math.max(1, Array.from(t).length)));
 }
 
-/** 每 n 字一行（中文台词的确定性断行）。 */
+/** 属于同一个「不可切开的词」：数字、字母、点（小数点属于数字的一部分）。 */
+function isWordChar(c: string): boolean {
+  return /[0-9A-Za-z.]/.test(c);
+}
+
+/** 每 n 字一行（中文台词的确定性断行）。断点退到最近的词边界上，
+ *  绝不切开数字或拉丁词 —— 切开会在画面上凭空造出两个假数字：
+ *  06 历史语料拍9 实测「1922 年」被切成「19」/「22」两行，G1 门禁当场报出
+ *  「画面出现 19 / 22 不在本拍 SRT 数字集」。这不只是难看，是画面在说错话。 */
 export function lines(t: string, n: number): string[] {
   const chars = Array.from(t);
   const out: string[] = [];
-  for (let i = 0; i < chars.length; i += n) out.push(chars.slice(i, i + n).join(""));
+  let i = 0;
+  while (i < chars.length) {
+    let end = Math.min(chars.length, i + n);
+    // 断点若落在「数字/拉丁词」内部，把断点推到该词末尾（行会略长于 n，可接受）。
+    if (end < chars.length && isWordChar(chars[end - 1]!) && isWordChar(chars[end]!)) {
+      while (end < chars.length && isWordChar(chars[end]!)) end++;
+    }
+    out.push(chars.slice(i, end).join(""));
+    i = end;
+  }
   return out;
 }
 

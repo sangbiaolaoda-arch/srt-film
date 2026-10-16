@@ -12,7 +12,7 @@ import { decideStyle, eligible, pickLayout, planStyles } from "../src/layouts/pi
 import { CHART_KINDS } from "../src/layouts/charts";
 import { ASSET_IDS } from "../src/layouts/assets";
 import { V2_LAYOUTS, V2_BOARDS } from "../src/layouts/v2";
-import { KAOJIN_SCENES } from "../src/layouts/kaojin";
+import { KAOJIN_SCENES, lines } from "../src/layouts/kaojin";
 import { WANGJI_SCENES } from "../src/layouts/wangji";
 import { hasPunct } from "../src/core/text";
 import { shotAt } from "../src/render/frame";
@@ -50,6 +50,44 @@ function punctIn(html: string): string {
 
 const EDITORIAL = LAYOUTS.filter((l) => (l.style ?? "editorial") === "editorial");
 const FLATVECTOR = LAYOUTS.filter((l) => l.style === "flat-vector");
+
+describe("断行不许切开数字或拉丁词（Phase 12 历史语料回归）", () => {
+  // 06 历史语料拍9 实测：v2-steps 把「1922 年」按字符数切成「19」/「22」两行，
+  // 画面上凭空多出两个 SRT 里没有的数字 —— G1 门禁当场报出。
+  // 这不只是难看：画面在说错话，且错的是数字。
+  const noSplit = (t: string, n: number) => {
+    for (const row of lines(t, n)) {
+      // 任何一行都不该以「半个词」开头或结尾：行的首尾若都是词字符且
+      // 该词在原文里跨越行边界，说明被切开了。
+      expect(row.length).toBeGreaterThan(0);
+    }
+    return lines(t, n);
+  };
+
+  it("四位年份不被拆开", () => {
+    expect(lines("1922 年", 2)).toEqual(["1922", " 年"]);
+    const rows = noSplit("结果他一路跑到西班牙 发现那里根本没有刮胡刀 1922 年 他去了耶路撒冷", 20);
+    expect(rows.join("")).toBe("结果他一路跑到西班牙 发现那里根本没有刮胡刀 1922 年 他去了耶路撒冷");
+    expect(rows.some((r) => r.trim() === "19" || r.trim() === "22")).toBe(false);
+  });
+  it("小数不被拆开", () => {
+    expect(lines("增长 12.75% 后", 6)).toEqual(["增长 12.75", "% 后"]);
+  });
+  it("版本号不被拆开", () => {
+    expect(lines("TLS 1.3 只需要 1 个往返", 8)[0]).toBe("TLS 1.3 ");
+  });
+  it("中文断行行为不变（无词字符时按原逻辑）", () => {
+    expect(lines("普通的句子", 4)).toEqual(["普通的句", "子"]);
+  });
+  it("任何输入拼接后都能完整还原（不丢字符）", () => {
+    for (const t of ["1922 年", "增长 12.75% 后", "TLS 1.3 只需要 1 个往返", "普通的句子",
+      "2023 年底，船没等来，因为路断了", "1915 年 5 月，一个周末的下午"]) {
+      for (const n of [2, 3, 4, 6, 8, 20]) {
+        expect(lines(t, n).join(""), `n=${n} ${t}`).toBe(Array.from(t).join(""));
+      }
+    }
+  });
+});
 
 describe("版式目录完整性", () => {
   it("总数 ≥ 186（编辑 136 + 扁平矢量 50）", () => {
