@@ -16,7 +16,7 @@
 // 它的职责是「不让明显的溢出静默发生」，不是替代浏览器实测。
 
 import type { Layout, RenderContent, Slot, SlotKind } from "./types";
-import { FONT_SIZE, wrapText, stripPunct } from "../core/text";
+import { FONT_SIZE, wrapText, stripPunct, charWidth } from "../core/text";
 import { displayHeadline } from "../core/compose";
 
 export const STAGE_W = 1280;
@@ -45,11 +45,11 @@ const SOLID_KINDS: ReadonlySet<SlotKind> = new Set<SlotKind>([
 
 /** 真正渲染文字的槽（与 render.tsx SlotNode 的 default/文本分支对齐）。
  *  rule/divider/arrow/progress/axis 等结构件不渲染文字；delta 渲染算出来的 +N%；
- *  tags/pills 是逐格切片文字（另有一套自适应）—— 都不在此查。 */
+ *  tags/pills 逐格排版（渲染器按格宽缩字号，不切字）—— 同样在下面按地板字号查。 */
 const TEXT_KINDS: ReadonlySet<SlotKind> = new Set<SlotKind>([
   "headline", "text", "quote", "caption", "subhead", "attribution", "source",
   "unit", "literal", "badge", "kicker", "label", "meta", "bignum", "num2",
-  "bullets", "listnum", "checklist",
+  "bullets", "listnum", "checklist", "tags", "pills",
 ]);
 
 export interface LayoutReport {
@@ -161,10 +161,12 @@ function slotTextOf(slot: Slot, c: RenderContent): string {
 }
 
 /** 与 render.tsx items() 同映射。 */
-function itemsOf(content: RenderContent, n: number): string[] {
+/** 与 render.tsx 的 items() 同数学：同一份分句、同一个跳过逻辑。
+ *  两处不同步 = 门禁量的东西和渲染画的东西不是一回事（已踩过）。 */
+function itemsOf(content: RenderContent, n: number, skipFirst = 0): string[] {
   const src = content.bullets.filter(Boolean);
-  if (src.length >= 1) return src.slice(0, n);
-  return [content.headline];
+  if (src.length >= 1) return src.slice(skipFirst, skipFirst + n);
+  return skipFirst > 0 ? [] : [content.headline];
 }
 
 /**
@@ -182,11 +184,42 @@ function textFit(slot: Slot, b: Box, content: RenderContent): string | null {
 
   // 列表：自然行高总和 vs 槽高（渲染器会把行高压进槽内，压过头就是行距消失）
   if (slot.k === "bullets" || slot.k === "listnum" || slot.k === "checklist") {
-    const list = itemsOf(content, slot.k === "bullets" ? 3 : 4).map(stripPunct);
+    const list = itemsOf(content, slot.k === "bullets" ? 3 : 4, slot.skipFirst ?? 0).map(stripPunct);
+    if (list.length === 0) return null;
     const size = FONT_SIZE[slot.size ?? "m"];
     const need = list.length * size * 1.32;
     if (need > b.h * 1.25) return `!列表溢出：${list.length} 行需 ${need.toFixed(0)}px > 槽高 ${b.h.toFixed(0)}px`;
     if (need > b.h) return `列表贴边：${list.length} 行需 ${need.toFixed(0)}px ≈ 槽高 ${b.h.toFixed(0)}px`;
+    // 单条横向：渲染器已改成缩字号放得下（不再 slice），这里查**地板字号**那条线 ——
+    // 缩到 10px 仍放不下 = 观众看到的字小到读不出，与丢字同级，必须大声失败。
+    // 06 语料第 7 条实测：23 字 bullet 在旧实现被 slice 静默切掉末字。
+    const inset = slot.k === "bullets" ? 18 : slot.k === "checklist" ? 26 : 34;
+    let units = 0;
+    for (const it of list) {
+      let u = 0;
+      for (const ch of it) u += charWidth(ch);
+      units = Math.max(units, u);
+    }
+    const fitFs = ((b.w - inset) / Math.max(1, units)) * 0.96;
+    if (fitFs < 10) {
+      return `!列表截断：最长一条 ${units.toFixed(1)} 字宽需 ${size.toFixed(0)}px 但槽只 ${b.w.toFixed(0)}px，缩到 10px 地板仍放不下`;
+    }
+    return null;
+  }
+
+  // 标签逐格排版：按格宽算字号下沿，触底即读不出（与列表同判据）。
+  if (slot.k === "tags" || slot.k === "pills") {
+    const list = itemsOf(content, 4, slot.skipFirst ?? 0).map(stripPunct);
+    if (list.length === 0) return null;
+    const cw = b.w / Math.max(list.length, 1);
+    let units = 0;
+    for (const it of list) {
+      let u = 0;
+      for (const ch of it) u += charWidth(ch);
+      units = Math.max(units, u);
+    }
+    const fitTs = ((cw - 14) / Math.max(1, units)) * 0.96;
+    if (fitTs < 10) return `!标签截断：最长一条 ${units.toFixed(1)} 字宽，格宽 ${cw.toFixed(0)}px 缩到 10px 地板仍放不下`;
     return null;
   }
 

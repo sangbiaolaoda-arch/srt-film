@@ -15,7 +15,7 @@ import { BgLayer } from "./bg";
 import { DecorLayer } from "./decor";
 import { WashLayer } from "./wash";
 import { photoCutouts } from "./cutout";
-import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
+import type { Layout, RenderContent, Slot, SlotKind, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
 import { stripPunct, charWidth, wrapText, FONT_SIZE } from "../core/text";
 import { resolveProfile } from "../styles/style-system";
@@ -131,10 +131,30 @@ function numericValue(slot: Slot, ctx: Ctx): string {
   return nums[1]?.toString() ?? ctx.content.bignum ?? "";
 }
 
-function items(content: RenderContent, n: number): string[] {
+function items(content: RenderContent, n: number, skipFirst = 0): string[] {
   const src = content.bullets.filter(Boolean);
-  if (src.length >= 1) return src.slice(0, n);
-  return [content.headline];
+  if (src.length >= 1) return src.slice(skipFirst, skipFirst + n);
+  // 全部跳过且无内容 → 别画空的（headline 兜底只在没跳过时给）
+  return skipFirst > 0 ? [] : [content.headline];
+}
+
+/** 一组文案里最长的那条有多宽（以 em 计，全角 1 / 半角 0.5）。 */
+function maxUnits(list: string[]): number {
+  let m = 0;
+  for (const t of list) {
+    let u = 0;
+    for (const ch of t) u += charWidth(ch);
+    if (u > m) m = u;
+  }
+  return m;
+}
+
+/** 列表字号：缩到最长的一条在可用宽度内放得下，绝不切字。
+ *  地板 10px —— 触底仍放不下时由 constraints.textFit 报硬错误（大声失败替代静默丢失）。 */
+function fitListSize(list: string[], size: number, avail: number, kind: SlotKind): number {
+  const inset = kind === "bullets" ? 18 : kind === "checklist" ? 26 : 34;
+  const units = Math.max(1, maxUnits(list));
+  return Math.max(10, Math.min(size, ((avail - inset) / units) * 0.96));
 }
 
 function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number }): JSX.Element {
@@ -220,25 +240,30 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       );
     }
     case "bullets": case "listnum": case "checklist": {
-      const list = items(ctx.content, slot.k === "bullets" ? 3 : 4).map(stripPunct);
+      const list = items(ctx.content, slot.k === "bullets" ? 3 : 4, slot.skipFirst ?? 0).map(stripPunct);
+      if (list.length === 0) return g(<g />);
       const lineH = Math.min(size * 2.1, h / list.length);
+      // 单条不静默截断（与 headline 同哲学：排不下就缩字号，触底才交给门禁喊）。
+      // 旧实现 `t.slice(0, 22)` 在 06 语料第 7 条实测触发：23 字的
+      // 「写了整整十一个月的相对论论文」被切掉末字，无音轨成片里那句话直接少一字。
+      const fs = fitListSize(list, size, w, slot.k);
       return g(
         <g>
           {list.map((t, i) => (
             <Fragment key={i}>
-              {slot.k === "listnum" && <text x={x} y={y + lineH * (i + 0.85)} fontSize={size * 0.7} fill={C.dim} fontFamily={prof.fontText}>{`${i + 1}.`}</text>}
+              {slot.k === "listnum" && <text x={x} y={y + lineH * (i + 0.85)} fontSize={fs * 0.7} fill={C.dim} fontFamily={prof.fontText}>{`${i + 1}.`}</text>}
               {slot.k === "checklist" && <circle cx={x + 9} cy={y + lineH * (i + 0.72)} r={7} fill="none" stroke={C.accent} strokeWidth={2} />}
               {/* 项目符号用图形画，不用「—」字符 —— 画面文字零标点（见 core/text.ts） */}
               {slot.k === "bullets" && <rect x={x + 3} y={y + lineH * (i + 0.72) - 4} width={8} height={8} fill={fill} />}
               <text
                 x={slot.k === "bullets" ? x + 18 : x + (slot.k === "checklist" ? 26 : 34)}
                 y={y + lineH * (i + 0.85)}
-                fontSize={size}
+                fontSize={fs}
                 fill={fill}
                 fontFamily={prof.fontText}
                 data-part=""
               >
-                {t.slice(0, 22)}
+                {t}
               </text>
             </Fragment>
           ))}
@@ -246,15 +271,17 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       );
     }
     case "tags": case "pills": {
-      const list = items(ctx.content, 4).map(stripPunct);
+      const list = items(ctx.content, 4, slot.skipFirst ?? 0).map(stripPunct);
       const cw = w / Math.max(list.length, 1);
+      // 标签同理：缩到格宽放得下，不切字（+12% 内边距对齐原 rect 的 x+4 / w-12）。
+      const ts = Math.min(size, h * 0.5, Math.max(10, ((cw - 14) / Math.max(1, maxUnits(list))) * 0.96));
       return g(
         <g>
           {list.map((t, i) => (
             <Fragment key={i}>
               <rect x={x + cw * i + 4} y={y} width={cw - 12} height={h} rx={h / 2} fill={slot.k === "pills" ? fill : "none"} stroke={fill} strokeWidth={2} opacity={0.95} />
-              <text x={x + cw * (i + 0.5)} y={y + h * 0.68} fontSize={Math.min(size, h * 0.5)} fill={slot.k === "pills" && tone === "accent" ? C.paper : fill} fontFamily={prof.fontText} textAnchor="middle" data-part="">
-                {t.slice(0, 6)}
+              <text x={x + cw * (i + 0.5)} y={y + h * 0.68} fontSize={ts} fill={slot.k === "pills" && tone === "accent" ? C.paper : fill} fontFamily={prof.fontText} textAnchor="middle" data-part="">
+                {t}
               </text>
             </Fragment>
           ))}

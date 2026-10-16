@@ -554,10 +554,15 @@ export const LAYOUTS: Layout[] = [
      s("kicker", 1, 4.1, 6, 0.8, { size: "xs", tone: "accent", src: "none", literal: "影像" }),
      s("headline", 1, 5, 10, 2.3, { size: "xxl" })],
     { note: "照片是底、大字浮在其上；纸色罩把照片压回印刷调", decor: false }),
-  L("im-photo-split", "左图右文", "image", ["m-slide-right", "m-fade-up"],
+  L("im-photo-split", "左图右文", "image", ["m-slide-right", "m-fade-up", "m-fade-up"],
     [s("photo", 0, 0, 6.4, 8, { tint: 0.12 }),
      s("headline", 7.1, 2.3, 4.2, 2.6, { size: "xl" }),
-     s("caption", 7.1, 5.2, 4.2, 1.6, { size: "s", tone: "dim" })],
+     s("caption", 7.1, 5.2, 4.2, 1.6, { size: "s", tone: "dim" }),
+     // 右侧下方补一条 bullets：headline 只画首个句读、caption 只画第二个，
+     // 第 3/4 分句原本无人承载 —— 06 语料拍 4「时间的光｜居然是可以被追上的｜
+     // 而且只差一点点｜他找了一张纸｜写了整整十一个月的 relativity 论文」
+     // 实测后三句在画面上完全消失（无音轨成片 = 那几句话观众永远听不到）。
+     s("bullets", 7.1, 6.9, 4.2, 0.9, { size: "xs", tone: "dim", skipFirst: 2 })],
     { note: "图占半幅，文字呼吸在素底上" }),
   L("im-photo-duo", "同图双框", "image", ["m-fade-up", "m-fade-up", "m-fade-up"],
     [s("photo", 0, 0, 6, 8, { tint: 0.15, crop: [0.18, 0.5] }),

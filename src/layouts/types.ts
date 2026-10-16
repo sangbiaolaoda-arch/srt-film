@@ -63,6 +63,10 @@ export interface Slot {
   align?: "start" | "center" | "end";
   /** 内容来源；缺省按 kind 推断 */
   src?: "headline" | "subhead" | "bignum" | "caption" | "left" | "right" | "bullet" | "number" | "none";
+  /** bullets/pills 专用：跳过前 N 条（前面几条已由同版式的其它槽承载）。
+   *  存在原因：headline 只画首个句读、caption 只画第二个分句，第 3/4 分句
+   *  本来无人承载 —— 无音轨成片里那些句子观众永远听不到。 */
+  skipFirst?: number;
   /** 常量文案（如 kicker 的固定小标） */
   literal?: string;
   /** 图表种类 */

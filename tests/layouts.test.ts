@@ -9,6 +9,7 @@ import { DecorLayer } from "../src/layouts/decor";
 import { MOTIONS, MOTION_BY_ID, conflictsOf, validateMotionSet } from "../src/motion/catalog";
 import { APPLIED_MOTION_IDS } from "../src/motion/apply";
 import { decideStyle, eligible, pickLayout, planStyles } from "../src/layouts/pick";
+import { checkLayout } from "../src/layouts/constraints";
 import { CHART_KINDS } from "../src/layouts/charts";
 import { ASSET_IDS } from "../src/layouts/assets";
 import { V2_LAYOUTS, V2_BOARDS } from "../src/layouts/v2";
@@ -626,7 +627,7 @@ describe("v2-strata 文字底衬（横跨多色带时文字必须可读）", () 
     const h = html();
     // 满幅纸底与 5 条色带之外，还有一个宽度 < 画布的 rect —— 那就是文字底衬
     const plates = [...h.matchAll(/<rect([^>]*)>/g)]
-      .map((m) => m[1])
+      .map((m) => m[1] ?? "")
       .filter((a) => !a.includes("data-motion") && Number(/width="([\d.]+)"/.exec(a)?.[1]) < 1280);
     expect(plates.length, "v2-strata 应有且仅有一块贴合文字的底衬").toBe(1);
     const attrs = plates[0]!;
@@ -643,5 +644,35 @@ describe("v2-strata 文字底衬（横跨多色带时文字必须可读）", () 
     const textAt = h.indexOf("<text");
     expect(plateAt).toBeGreaterThan(-1);
     expect(textAt, "底衬必须排在文字之前").toBeGreaterThan(plateAt);
+  });
+});
+
+describe("列表与标签不静默截断（缺陷 4 同族）", () => {
+  // 旧实现 `t.slice(0, 22)`：06 语料第 7 条实测触发，23 字的
+  // 「写了整整十一个月的 relativity 论文」被切掉末字 —— 无音轨成片里那句话少一字。
+  const demo = { ...demoContent(), bullets: ["这是一条二十三字以上的长条目用来验证列表不切字"] };
+
+  it("bullets 槽渲染出全部文字（无 slice）", () => {
+    const l: Layout = { id: "t-list", name: "列表测试", group: "list", enter: ["m-fade-up"],
+      slots: [{ k: "bullets", box: [1, 2, 10, 3], size: "m" }] };
+    const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demo }));
+    const drawn = [...html.matchAll(/<text[^>]*data-part=""[^>]*>([^<]*)<\/text>/g)].map((m) => m[1] ?? "").join("");
+    expect(drawn).toContain("这是一条二十三字以上的长条目用来验证列表不切字");
+  });
+
+  it("缩到 10px 地板仍放不下 → checkLayout 报硬错误（大声失败）", () => {
+    const l: Layout = { id: "t-list2", name: "窄列表", group: "list", enter: ["m-fade-up"],
+      slots: [{ k: "bullets", box: [1, 2, 1.2, 3], size: "m" }] };
+    const r = checkLayout(l, { ...demo, bullets: ["这是一条长到无论怎么缩都放不下的条目内容测试"] });
+    expect([...r.errors, ...r.warnings].join("；")).toContain("列表截断");
+  });
+
+  it("skipFirst 让同版式的其它槽承载前几条（im-photo-split 的第 3/4 分句）", () => {
+    // 06 语料拍 4 的五句：headline 只画第 1、caption 只画第 2，第 3/4 分句
+    // 原本无人承载 —— 内容在画面上完全消失。修法是补一条 skipFirst:2 的 bullets。
+    const l = LAYOUT_BY_ID.get("im-photo-split")!;
+    const b = l.slots.find((s) => s.k === "bullets");
+    expect(b, "im-photo-split 应有 bullets 槽承载第 3/4 分句").toBeTruthy();
+    expect(b!.skipFirst, "应跳过前两条（已由 headline / caption 承载）").toBe(2);
   });
 });
