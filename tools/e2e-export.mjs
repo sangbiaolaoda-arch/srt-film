@@ -195,7 +195,10 @@ try {
   const startJs = `
     window.__exportDone = false;
     window.__exportErr = null;
-    window.__exportMp4(window.__stage, window.__stage.duration, ${expSettings}).then((blob) => {
+    window.__exportProgress = null;
+    window.__exportMp4(window.__stage, window.__stage.duration, Object.assign(${expSettings}, {
+      onProgress: (p) => { window.__exportProgress = p; },
+    })).then((blob) => {
       window.__lastMp4 = blob;
       window.__exportDone = true;
     }).catch((e) => {
@@ -207,13 +210,22 @@ try {
   const sr = await ab(["eval", "--stdin"], { input: startJs });
   check("导出已发起", sr.code === 0);
 
+  // 导出期的内存/进度观测：长片导出会跑好几分钟，崩在哪一帧、内存曲线长什么样，
+  // 只有边跑边记才拿得到（进程一崩页面状态全丢）。
+  const memLog = join(OUTDIR, `export-mem-${Date.now()}.csv`);
+  writeFileSync(memLog, "ms,frame,total,heapMB\n");
+  const t0 = Date.now();
   let exp = null;
   const deadline = Date.now() + 600_000; // 长片导出上限 10 分钟
   while (Date.now() < deadline) {
     await sleep(5000);
     const st = parseJson((await ab(["eval", "--stdin"], {
-      input: `JSON.stringify({ done: !!window.__exportDone, err: window.__exportErr, size: window.__lastMp4 ? window.__lastMp4.size : 0 })`,
+      input: `JSON.stringify({ done: !!window.__exportDone, err: window.__exportErr, size: window.__lastMp4 ? window.__lastMp4.size : 0, f: window.__exportProgress ? window.__exportProgress.frame : -1, total: window.__exportProgress ? window.__exportProgress.total : -1, heap: performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : -1 })`,
     })).out);
+    if (st) {
+      appendFileSync(memLog, `${Date.now() - t0},${st.f},${st.total},${st.heap}\n`);
+      console.log(`  · 导出中 f=${st.f}/${st.total} heap=${st.heap}MB`);
+    }
     if (st?.done) {
       exp = st.err ? { err: st.err } : { size: st.size };
       break;
@@ -223,24 +235,40 @@ try {
     exp ? (exp.err ? exp.err : `${(exp.size / 1e6).toFixed(2)}MB`) : "轮询超时（10 分钟）");
   if (!exp || exp.err) process.exit(1);
 
-  const b64r = await ab(["eval", "--stdin"], {
-    input: `
-      (async () => {
-        const buf = new Uint8Array(await window.__lastMp4.arrayBuffer());
-        let bin = '';
-        for (let i = 0; i < buf.length; i += 0x8000) {
-          bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-        }
-        return JSON.stringify({ size: window.__lastMp4.size, b64: btoa(bin) });
-      })()
-    `,
-  });
-  const b64j = parseJson(b64r.out);
-  const b64 = typeof b64j?.b64 === "string" ? b64j.b64 : null;
-  check("MP4 数据取回", !!b64 && b64j.size > 1000, b64 ? `${(b64j.size / 1e6).toFixed(2)}MB` : (b64r.err || b64r.out || "").slice(-300));
-  if (!b64) process.exit(1);
+  // 分片取回：一次性 base64 会把上百 MB 的字符串塞进 agent-browser 的 node 堆
+  // （06 语料 103s 片曾在这一步前后 OOM），改成每片 4MB、边收边写盘。
+  const CHUNK = 4 << 20;
+  const sizeJ = parseJson((await ab(["eval", "--stdin"], {
+    input: `JSON.stringify({ size: window.__lastMp4 ? window.__lastMp4.size : 0 })`,
+  })).out);
+  const totalBytes = Number(sizeJ?.size || 0);
+  writeFileSync(outMp4, "");
+  let got = 0;
+  let allOk = totalBytes > 1000;
+  for (let off = 0; allOk && off < totalBytes; off += CHUNK) {
+    const r = await ab(["eval", "--stdin"], {
+      input: `
+        (async () => {
+          const b = window.__lastMp4;
+          const end = Math.min(b.size, ${off} + ${CHUNK});
+          const buf = new Uint8Array(await b.slice(${off}, end).arrayBuffer());
+          let bin = '';
+          for (let i = 0; i < buf.length; i += 0x8000) {
+            bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+          }
+          return JSON.stringify({ n: buf.length, b64: btoa(bin) });
+        })()
+      `,
+    });
+    const j = parseJson(r.out);
+    if (typeof j?.b64 !== "string") { allOk = false; break; }
+    const piece = Buffer.from(j.b64, "base64");
+    appendFileSync(outMp4, piece);
+    got += piece.length;
+  }
+  check("MP4 数据取回（分片）", allOk && got > 1000, `${(got / 1e6).toFixed(2)}/${(totalBytes / 1e6).toFixed(2)}MB，共 ${Math.ceil(totalBytes / CHUNK)} 片`);
+  if (!allOk || got < 1000) process.exit(1);
 
-  writeFileSync(outMp4, Buffer.from(b64, "base64"));
   const stat = statSync(outMp4);
   check("MP4 落盘", stat.size > 1000, `${outMp4}（${(stat.size / 1e6).toFixed(2)}MB）`);
 

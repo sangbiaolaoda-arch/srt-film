@@ -11,6 +11,11 @@ import {
 
 export type { ExportSettings };
 
+/** 编码器队列上限：WebCodecs 的 encode 是异步的，队列本身没有上限 —— 不等它就等于
+ *  把整段片子的帧堆在系统内存里（JS 堆看不出来，崩的是渲染进程）。实测 103s 长片
+ *  导出到 ~2160/3096 帧时页面被撑崩：彼时 `performance.memory` 只有 21MB。 */
+const ENCODE_QUEUE_LIMIT = 8;
+
 /** 导出进度快照。逐帧渲染 + WebCodecs 编码都在主线程，长片导出期间界面完全静止，
  *  没有进度用户只能盯着一个「导出中…」猜是否卡住。 */
 export interface ExportProgress {
@@ -84,6 +89,11 @@ export async function exportMp4(
       });
       encoder.encode(frame, { keyFrame: f % (fps * 2) === 0 });
       frame.close();
+      // 背压：队列超上限就让出主线程等编码器取走。放在进度上报之前 —— 上报本身就是
+      // 一次让出，先等队列再上报才不会把「等」的时间算进下一帧。
+      while (encoder.encodeQueueSize > ENCODE_QUEUE_LIMIT && !encodeError) {
+        await new Promise((r) => setTimeout(r));
+      }
       // 让出主线程 + 上报进度。回调放在让出点之后：这里已经是唯一能安全写 DOM 的时机
       // （循环体其余部分是同步的），也保证节流到每 8 帧一次，不会被进度上报本身拖慢。
       if (f % 8 === 0) {
