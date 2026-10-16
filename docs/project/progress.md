@@ -488,9 +488,13 @@ rubric 规定「主观维度必须标待人工，不能由 Agent 给自己打分
 
 ### 尚未做（Phase 11 剩余）
 
-- 案例库：从 6 个语料 × 各自版式池里抽「独立、有明确用途」的可运行案例。计划的计数标准是「仅变颜色、改文案、改时长的重复模板不算」，所以**现在还不能声称有案例库**。
-- 「修镜头连续性」：见下节（commit c2b2f1a 已做）。
-- 案例库：从 6 个语料 × 各自版式池里抽「独立、有明确用途」的可运行案例。计划的计数标准是「仅变颜色、改文案、改时长的重复模板不算」，所以**现在还不能声称有案例库**。
+- 案例库：计划的计数标准是「仅变颜色、改文案、改时长的重复模板不算独立案例」。
+  **本轮没再塞同构 SRT** —— 而是先建了 `tools/capability-map.ts`（能力覆盖地图，
+  不只看版式）来定位真缺口。结论：v2 池 15 个版式全命中，回退只剩 `image` 组
+  （按设计走旧库）；真缺口是**论证链连续性在 consequence 拍断链**（见下节，已修）。
+  案例库若要继续扩张，应该补的是「触发 evidence→consequence / comparison→consequence /
+  consequence→conclusion 这些语义有效但语料未出现的边」的语料，而不是更多同构科普稿。
+- 「修镜头连续性」：见下节（commit c2b2f1a 已做）；论证链断链补边见 commit 9b8fe22。
 
 ## 镜头连续性返修 —— HANDOFF 表漏了数据类语料（2026-10-16，commit c2b2f1a）
 
@@ -538,6 +542,51 @@ hook→evidence→comparison→evidence→evidence→evidence→comparison
 ### 未验证项（如实记）
 
 `visual-ab.mjs` 依赖 `agent-browser`（本机没装，且本项目走的是自研 CDP 路线），**连续性层的像素级贡献没重测**。等 CI 的 `browser-qa` job 覆盖 —— 记分卡那一格要等 CI 跑完才能确认从 2 分变几分。
+
+## 论证链连续性断链 + 案例库前置（2026-10-16，commit 9b8fe22）
+
+状态：PASS
+
+Phase 11 的案例库要求很严：「仅变颜色、改文案、改时长的重复模板不算独立案例」。
+所以这一刀**没再塞同构 SRT**，而是先建 `tools/capability-map.ts` 画能力覆盖地图，
+定位真缺口 —— 否则扩案例库只是在重复已覆盖的路径上堆量。
+
+### 地图揭示的真缺口
+
+不是「版式没覆盖」：`coverage-scan.ts` 显示 v2 池 15 个版式全命中，回退只剩
+`image` 组（照片板，按设计走旧库）。真缺口在**叙事承接**：
+
+`consequence`（推论/结论）拍的三条承接边 `evidence→consequence`、`comparison→consequence`、
+`consequence→conclusion` **全 0 命中**。最致命的是 `definition→consequence` ——
+03 拍10「便宜也不是没代价(定义)」→ 拍11「靠天吃饭(推论)」、04 类似，都是
+「下定义/讲机制 → 推出结果」的天然论证链，原 HANDOFF 表没它，推论拍接不上前拍，
+**连续性在论证段断链**。
+
+### 为什么之前加不进去（同一个硬约束陷阱）
+
+`continuity.ts` 的 `ROLE_CORNER` 是固定表（7 角色 4 角落），同角色必同角 → ghost
+与自标记重叠、连接线零长度。原表里 `definition` 与 `consequence` 都占 `tr`，
+`definition→consequence` 永远跨不了角。
+
+### 改法
+
+把 `definition` 从 `tr` 改到 `br`（`consequence` 在 `bl`，`evidence` 在 `tl`），
+解锁 `definition→consequence`，同时保持 14 条边全部跨角（用 `tools/verify-color*.ts`
+数学验证过：冲突 0）。共享角落的配对（hook/evidence 同 tl、definition/explanation
+同 br、comparison/conclusion 同 tr）之间都无承接边，不会退化。
+
+顺带把同样自然的 `evidence→consequence`、`explanation→consequence` 也补进表
+（`comparison→conclusion` 因同占 tr 跨不了角，且语料未见，未强加）。
+
+### 验收
+
+- 能力地图：`definition→consequence` 从 0 → 3 命中。
+- 31 个连续性测试全过（其中 2 个断言 ghost `moveTo` 像素坐标，随 corner 表更新）。
+- 19 个测试文件全绿；tsc 干净。
+
+剩余 0 命中的三条（`evidence→consequence`、`comparison→consequence`、
+`consequence→conclusion`）是语义有效但语料未出现的边，不是断链 —— 案例库若要
+继续扩，该补的就是触发这些边的语料，而不是更多同构科普稿。
 
 ## 照片层返修 —— 「代码全对、画面全错」的两个缺陷（2026-10-16，commit 8229203）
 
