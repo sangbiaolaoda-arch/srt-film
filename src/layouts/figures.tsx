@@ -13,6 +13,7 @@
 
 import { useId } from "react";
 import type { Style } from "./types";
+import { STYLE_PROFILES } from "../styles/style-system";
 
 export type FigureKind =
   | "fig-halftone-fade" // 网点渐隐：从左到右逐点消失
@@ -51,12 +52,30 @@ interface Palette {
   hairline: string;
 }
 
-/** 图形色板与 style-system 的三系风格保持同色，但不 import —— 避免与渲染器互相依赖。 */
+/** 图形色板。ink / dim / accent 直接从风格档取 —— 色号只该有一个地方写着（漏改一处画面
+ *  纹丝不动、也不报错）。style-system 只 type-import 本层的类型，没有运行时互相依赖。
+ *  hairline 是刻意的例外：图形由细线构成，正文的发丝线（0.14~0.16）放上来淡到看不出
+ *  结构，这里重一档。编辑风 ink 原本写死 #1c1b18，与风格档 #1d1a16 差 1~2/255，
+ *  肉眼不可辨，统一过来。assets/kaojin/wangji/css 里那份老墨色不在本次范围。 */
 const PALETTE: Record<Style, Palette> = {
-  editorial: { ink: "#1c1b18", dim: "#8a867c", accent: "#c8401f", hairline: "rgba(28,27,24,0.18)" },
-  // accent 与 style-system 的 accent 同值（本模块刻意不 import 它）：压纸白 ≥3.0。
-  "flat-vector": { ink: "#15233b", dim: "#7b8499", accent: "#ff3e1b", hairline: "rgba(21,35,59,0.18)" },
-  "chart-motion": { ink: "#10243a", dim: "#5b6b80", accent: "#eb6200", hairline: "rgba(16,36,58,0.2)" },
+  editorial: {
+    ink: STYLE_PROFILES.editorial.ink,
+    dim: STYLE_PROFILES.editorial.tone.dim,
+    accent: STYLE_PROFILES.editorial.accent,
+    hairline: "rgba(28,27,24,0.18)",
+  },
+  "flat-vector": {
+    ink: STYLE_PROFILES["flat-vector"].ink,
+    dim: STYLE_PROFILES["flat-vector"].tone.dim,
+    accent: STYLE_PROFILES["flat-vector"].accent,
+    hairline: "rgba(21,35,59,0.18)",
+  },
+  "chart-motion": {
+    ink: STYLE_PROFILES["chart-motion"].ink,
+    dim: STYLE_PROFILES["chart-motion"].tone.dim,
+    accent: STYLE_PROFILES["chart-motion"].accent,
+    hairline: "rgba(16,36,58,0.2)",
+  },
 };
 
 interface FigCtx extends Palette {

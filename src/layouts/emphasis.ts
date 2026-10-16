@@ -26,6 +26,7 @@
 // 放进同一色系、只靠明度拉开（暗红 vs 亮朱红），画面本身就复述了这句话。
 
 import type { Style } from "./types";
+import { STYLE_PROFILES } from "../styles/style-system";
 
 /** 语义角色。cost 在国内产品语境里比 warning 更贴（价格 / 代价 / 保费）。 */
 export type SemTone = "danger" | "cost" | "safe" | "warm";
@@ -48,15 +49,18 @@ export interface SemRoleDef {
   terms: string[];
 }
 
+// 三系的**取值**一律从风格档取 —— 色号只该有一个地方写着（改过一次漏两处，画面纹丝
+// 不动且不报错，见 progress 补记五）。本模块真正的事实是 anchor 与 why：这个角色为什么
+// 是这个颜色、业界锚在哪，值本身归 style-system 管。
 export const SEM_ROLES: SemRoleDef[] = [
   {
     tone: "danger",
     means: "威胁、疼痛、已经发生的失去",
     anchor: "#dc2626",
     why: "红 = 血与火，跨文化最强的「停下 / 注意」信号；明度压暗一档，表达「已经发生的负向」而不是紧急警报",
-    editorial: "#a5170a",
-    flatVector: "#d63a1f",
-    chartMotion: "#d6391f",
+    editorial: STYLE_PROFILES.editorial.sem.danger,
+    flatVector: STYLE_PROFILES["flat-vector"].sem.danger,
+    chartMotion: STYLE_PROFILES["chart-motion"].sem.danger,
     terms: ["痛苦", "危险", "伤害", "失恋", "亏损", "可怕", "风险", "疼", "痛", "损失", "失去", "孤独", "失败"],
   },
   {
@@ -64,9 +68,9 @@ export const SEM_ROLES: SemRoleDef[] = [
     means: "需要支付的代价（中性偏负：不是威胁，是账单）",
     anchor: "#d97706",
     why: "琥珀 = 警示而非灾祸，暖而不刺，保留「交易 / 代价」的意味，不与危险的红抢",
-    editorial: "#9a6b1c",
-    flatVector: "#c77a12",
-    chartMotion: "#b9740f",
+    editorial: STYLE_PROFILES.editorial.sem.cost,
+    flatVector: STYLE_PROFILES["flat-vector"].sem.cost,
+    chartMotion: STYLE_PROFILES["chart-motion"].sem.cost,
     terms: ["价格", "代价", "付出", "保费", "成本", "止损"],
   },
   {
@@ -74,9 +78,9 @@ export const SEM_ROLES: SemRoleDef[] = [
     means: "边界、保障、不被伤害的状态",
     anchor: "#16a34a",
     why: "绿 = 植被与安全，生理唤起最低；用来标注「不让它发生」的底线，与 danger 构成对冲",
-    editorial: "#1a6b52",
-    flatVector: "#0f9d6b",
-    chartMotion: "#0c8a5e",
+    editorial: STYLE_PROFILES.editorial.sem.safe,
+    flatVector: STYLE_PROFILES["flat-vector"].sem.safe,
+    chartMotion: STYLE_PROFILES["chart-motion"].sem.safe,
     terms: ["底线", "安全", "通透", "不怕", "保险", "止损线"],
   },
   {
@@ -84,10 +88,9 @@ export const SEM_ROLES: SemRoleDef[] = [
     means: "正向情感投入本身",
     anchor: "—（品牌色，无业界锚点）",
     why: "品牌朱红承载全片主轴「在乎」；与 danger 同色系但更亮更饱和 —— 明度差即语义差，画面自我复述「同源」",
-    editorial: "#c8401f",
-    // 与 style-system 的 accent / sem.warm 同值（那边不 import 本模块）：压纸白 ≥3.0。
-    flatVector: "#ff3e1b",
-    chartMotion: "#eb6200",
+    editorial: STYLE_PROFILES.editorial.sem.warm,
+    flatVector: STYLE_PROFILES["flat-vector"].sem.warm,
+    chartMotion: STYLE_PROFILES["chart-motion"].sem.warm,
     terms: ["在乎", "心动", "幸福", "爱", "喜欢", "珍重"],
   },
 ];
