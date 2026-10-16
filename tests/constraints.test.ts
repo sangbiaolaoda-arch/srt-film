@@ -129,3 +129,22 @@ describe("全 catalog 门禁扫描（Phase 6 通过标准）", () => {
     expect(slotLayouts.length).toBeGreaterThan(100); // 防过滤条件写空导致假绿灯
   });
 });
+
+describe("尾句装载门禁（无音轨成片：caption 是尾句唯一的画面载体）", () => {
+  const tail = { ...demo, caption: "就去问运营商的递归服务器" };
+
+  it("有尾句但版式无 caption 槽 → 硬错误", () => {
+    const r = checkLayout(layoutOf([slot("headline", [1, 1, 10, 6])]), tail);
+    expect(r.errors.some((e) => e.includes("尾句"))).toBe(true);
+  });
+
+  it("无尾句 → 不查（caption 为空时版式没有可丢的东西）", () => {
+    const r = checkLayout(layoutOf([slot("headline", [1, 1, 10, 6])]), demo);
+    expect(r.errors.some((e) => e.includes("尾句"))).toBe(false);
+  });
+
+  it("custom 满版场景豁免 —— 它自己渲染全文（v2 19 套实测全部显示尾句）", () => {
+    const custom: Layout = { ...layoutOf([slot("headline", [1, 1, 10, 6])]), custom: true };
+    expect(checkLayout(custom, tail).errors.some((e) => e.includes("尾句"))).toBe(false);
+  });
+});

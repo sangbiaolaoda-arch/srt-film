@@ -112,6 +112,15 @@ export function checkLayout(layout: Layout, content?: RenderContent): LayoutRepo
     });
   }
 
+  // ④ 尾句装载（与 pick.ts eligible 同判据）：选版器已按资格避开无 caption 槽的
+  // 版式，能选到这儿说明全池都躲不开（pickFrom 的 usable 为空会回落未过滤池）——
+  // 大声失败，不静默丢尾句。custom 满版场景自己渲染全文，不按槽查。
+  if (content?.caption && !layout.custom && !layout.slots.some((sl) => sl.k === "caption")) {
+    errors.push(
+      `本拍有尾句「${content.caption}」但版式无 caption 槽 —— 无音轨成片里尾句将从此画面消失（选版器已避开此类版式，落到这里说明全池均无合格版式）`,
+    );
+  }
+
   return { errors, warnings };
 }
 

@@ -386,7 +386,10 @@ describe("选择与资格门禁", () => {
   it("数字不足时图表版式不合格", () => {
     const chartLayout = LAYOUT_BY_ID.get("ch-line-up")!;
     expect(eligible(chartLayout, { ...demoContent(), numbers: [1] })).toBe(false);
-    expect(eligible(chartLayout, demoContent())).toBe(true);
+    expect(eligible(chartLayout, { ...demoContent(), caption: "" })).toBe(true);
+    // 尾句装载规则（见 photos.test.ts）：ch-line-up 没有 caption 槽，装了尾句
+    // 也没地方放 —— 数字够也一样不合格，两个维度各自独立。
+    expect(eligible(chartLayout, demoContent())).toBe(false);
   });
   it("选版式避开上一拍用过的版式", () => {
     const content = demoContent(3);

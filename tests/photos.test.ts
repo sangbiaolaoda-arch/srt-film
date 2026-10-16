@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { PHOTOS, PHOTO_BY_ID, pickPhoto } from "../src/assets/photos";
 import { LAYOUTS } from "../src/layouts/catalog";
 import { eligible, pickLayout } from "../src/layouts/pick";
+import { V2_LAYOUTS } from "../src/layouts/v2";
 import { plan } from "../src/core/plan";
 import type { RenderContent } from "../src/layouts/types";
 
@@ -132,5 +133,42 @@ describe("全语料：photo 版式被选中时必定挂了照片；没被选中�
 
   it("PHOTO_BY_ID 全表可查", () => {
     for (const p of PHOTOS) expect(PHOTO_BY_ID.get(p.id)?.file).toBe(p.file);
+  });
+});
+
+describe("尾句装载：无 caption 槽的照片版式装不下逗号句尾句", () => {
+  // 无音轨成片里 caption（旁白第二分句）是尾句唯一的画面载体。实测 8 语料
+  // 12 拍丢尾句，全在 im-photo-note/duo/bleed（截图取证：01 拍4「本机缓存里
+  // 没有，就去问运营商的递归服务器」只画前半）。修法：eligible 避开 +
+  // checkLayout 兜底大声失败。
+  const withTail = (headline: string) => ({ ...content(headline), caption: "就去问运营商的递归服务器" });
+
+  it("有尾句 → 只有 split 合格；无尾句 → 四套全合格", () => {
+    for (const l of PHOTO_LAYOUTS) {
+      const ok = eligible(l, withTail("本机缓存里没有"), "server") === (l.id === "im-photo-split");
+      expect(ok, `${l.id} 有尾句时的合格性应等于「是 split」`).toBe(true);
+      expect(eligible(l, content("本机缓存里没有"), "server"), `${l.id} 无尾句应合格`).toBe(true);
+    }
+  });
+
+  it("custom 满版场景不按 caption 槽查 —— 它自己渲染全文", () => {
+    // v2 19 套实测全部显示尾句（搭 headline 或 bullets 的车），槽位只是资格声明。
+    const v2 = V2_LAYOUTS[0]!;
+    expect(eligible(v2, withTail("本机缓存里没有"))).toBe(true);
+  });
+
+  it("选版器把逗号句照片拍导向 split（真实语料不变量）", () => {
+    // 01 拍4/拍7 修复前落 im-photo-note/duo；修复后必须落在带 caption 槽的版式。
+    for (const f of ["01-explanatory-tech.srt", "05-kaojin-60s.srt"]) {
+      const { shots } = plan(readFileSync(resolve(root, "examples", f), "utf-8"), "");
+      for (const s of shots) {
+        if (!s.content.caption) continue;
+        // custom 是字符串标记（"v2:strata"）不是布尔 —— 转成布尔再断言。
+        expect(
+          !!s.layout.custom || s.layout.slots.some((sl) => sl.k === "caption"),
+          `${f} 拍${s.content.beat}（${s.layout.id}）装了尾句却没地方放`,
+        ).toBe(true);
+      }
+    }
   });
 });

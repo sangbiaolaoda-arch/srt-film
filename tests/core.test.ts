@@ -260,4 +260,13 @@ describe("plan 宽度门禁的版式分流", () => {
     const { problems } = plan(srt, ov);
     expect(problems.some((p) => p.includes("拍 1"))).toBe(false);
   });
+
+  it("覆写强钉无 caption 槽版式接逗号句 → 尾句丢失必须大声失败", () => {
+    // 选版器已按 eligible 避开这类版式；覆写是人工强钉，pickFrom 的 usable 回落
+    // 未过滤池会绕开 eligible —— 必须由 checkLayout 兜底喊出来，不静默丢尾句。
+    // 01 拍4 原句「本机缓存里没有，就去问运营商的递归服务器」。
+    const ov = JSON.stringify({ "4": { "layoutId": "im-photo-duo" } });
+    const { problems } = plan(srt01, ov);
+    expect(problems.some((p) => p.includes("拍 4") && p.includes("尾句"))).toBe(true);
+  });
 });

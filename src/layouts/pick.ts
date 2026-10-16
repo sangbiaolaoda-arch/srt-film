@@ -30,6 +30,11 @@ export function eligible(layout: Layout, content: RenderContent, photo?: PhotoId
     // 进对比条是量纲崩坏 —— numbers 池含全部 kind，图表门禁必须只认 measure。
     if (measureCount(content) < need) return false;
   }
+  // 尾句装载：caption 是旁白第二分句，成片无音轨 —— 它是尾句唯一的画面载体。
+  // 非 custom 版式没有 caption 槽 = 尾句从画面整体消失（实测 8 语料 12 拍：
+  // im-photo-note/duo/bleed，截图取证；custom 满版场景自己渲染全文，v2 19 套
+  // 实测全部显示尾句，槽位只是资格声明，不按槽查）。
+  if (content.caption && !layout.custom && !layout.slots.some((sl) => sl.k === "caption")) return false;
   // 极短句（≤4 字宽，如「说」「他问」）只允许进「有大主槽」的版式：
   // 渲染器会把极短句放大到贴满主槽（见 render.tsx 短句放大），主槽太小的话
   // 放大上限被盒子高度卡死，结果是一个两字词缩在页角、四边大片留白 ——
