@@ -18,6 +18,7 @@
 // 一棵 DOM，重复 id 会全部解析到第一层）；全部确定性 —— 无随机、无时间依赖。
 
 import { colorsOf } from "./render";
+import { CutoutMask, type Rect } from "./cutout";
 import type { Style } from "./types";
 import { resolveProfile, type StyleProfileId } from "../styles/style-system";
 
@@ -27,6 +28,9 @@ interface WashProps {
   style?: Style;
   /** 版式显式指定的底色；给了就用它当基调，不再走色彩脚本 */
   paper?: string;
+  /** 要让出透明度的矩形（photo 槽）。给了就在这三层 rect 上加挖洞遮罩 ——
+   *  wash 是三层**不透明**满幅 rect，不挖洞的话画在 SVG 之下的照片永远看不见。 */
+  cutouts?: Rect[];
 }
 
 /** 色彩脚本 · 编辑风：四档暖/冷纸，相邻拍只差几度色相 —— 看得见变化，读得出一体。 */
@@ -100,7 +104,7 @@ function shade(hex: string, amt: number): string {
  * 满版底色：线性渐变（一侧受光）+ 大半径柔光斑 + 边缘衰减。
  * 三样都刻意做轻 —— 它的作用是让画面「有空间」，不是自己抢戏。
  */
-export function WashLayer({ beat, style, paper }: WashProps): JSX.Element {
+export function WashLayer({ beat, style, paper, cutouts = [] }: WashProps): JSX.Element {
   const p = resolveProfile(style);
   const C = colorsOf(style);
   const cfg = washCfg(p.id);
@@ -123,6 +127,9 @@ export function WashLayer({ beat, style, paper }: WashProps): JSX.Element {
   const gid = `wash-g-${beat}`;
   const lid = `wash-l-${beat}`;
   const vid = `wash-v-${beat}`;
+  // 挖洞遮罩（只在有 photo 槽时存在）：没有它这三层不透明 rect 会把照片盖死。
+  const mid = `wash-cut-${beat}`;
+  const mask = cutouts.length > 0 ? `url(#${mid})` : undefined;
   // 柔光颜色：沿风格档取（图表风近白、扁平风暖白、编辑风暖白），不能用强调色，否则每拍都在发光
   const lightColor = cfg.lightColor;
   const lightOpacity = cfg.lightOpacity;
@@ -143,11 +150,12 @@ export function WashLayer({ beat, style, paper }: WashProps): JSX.Element {
           <stop offset="0.55" stopColor={C.paper} stopOpacity={0} />
           <stop offset="1" stopColor={C.paper} stopOpacity={cfg.vigOpacity} />
         </radialGradient>
+        {mask && <CutoutMask id={mid} rects={cutouts} />}
       </defs>
-      <rect x={0} y={0} width={1280} height={720} fill={`url(#${gid})`} />
-      <rect x={0} y={0} width={1280} height={720} fill={`url(#${lid})`} />
+      <rect x={0} y={0} width={1280} height={720} fill={`url(#${gid})`} mask={mask} />
+      <rect x={0} y={0} width={1280} height={720} fill={`url(#${lid})`} mask={mask} />
       {/* 边缘衰减：压住四角，把视线收回中心 —— 底色自带的「暗角」，比后期层更早生效 */}
-      <rect x={0} y={0} width={1280} height={720} fill={`url(#${vid})`} />
+      <rect x={0} y={0} width={1280} height={720} fill={`url(#${vid})`} mask={mask} />
     </g>
   );
 }

@@ -14,6 +14,7 @@ import { emphasize, SEM_COLORS, SEM_SCALE, SEM_WEIGHT, type Seg, type SemTone } 
 import { BgLayer } from "./bg";
 import { DecorLayer } from "./decor";
 import { WashLayer } from "./wash";
+import { photoCutouts } from "./cutout";
 import type { Layout, RenderContent, Slot, Style, Tone } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
 import { stripPunct, charWidth, wrapText, FONT_SIZE } from "../core/text";
@@ -441,13 +442,14 @@ export function LayoutLayer({ layout, content }: { layout: Layout; content: Rend
   }
   const ctx: Ctx = { content, layout, numericIndex: 0 };
   const C = colorsOf(layout.style);
+  const cutouts = photoCutouts(layout);
   return (
     <g data-layout={layout.id}>
       {layout.wash !== false && (
-        <WashLayer beat={content.beat} style={layout.style} paper={layout.paper} />
+        <WashLayer beat={content.beat} style={layout.style} paper={layout.paper} cutouts={cutouts} />
       )}
       {layout.bg && (
-        <BgLayer kind={layout.bg} seed={content.beat} colorDim={C.dim} colorHairline={C.hairline} accent={C.accent} />
+        <BgLayer kind={layout.bg} seed={content.beat} colorDim={C.dim} colorHairline={C.hairline} accent={C.accent} cutouts={cutouts} />
       )}
       {layout.slots.map((slot, i) => (
         <SlotNode key={i} slot={slot} ctx={ctx} index={i} />

@@ -180,9 +180,13 @@ export function planStyles(
   return scored;
 }
 
-/** 内容信号 → 优先版式组（按序尝试）。有语义匹配的照片时把 image 组提到内容组之后：
- * 照片是稀缺资源（标签命中的拍不多），命中了就该优先用掉。 */
-function preferredGroups(content: RenderContent, style: Style, photo?: PhotoId): Group[] {
+/** 内容信号 → 优先版式组（按序尝试）。有语义匹配的照片时把 image 组提到内容组之前：
+ * 照片是稀缺资源（标签命中的拍不多），命中了就该优先用掉 —— 但受组级帽约束，
+ * 达帽后沉回原序（见 pickFrom 的 photoFirst）。
+ *
+ * 只有编辑风会因照片改首选顺序：图表风是白底数据系、扁平矢量风是平涂色块构图，
+ * 照片进这两系会破坏系内一致性（v2-chart-boards 的三件套测试钉的就是第一条）。 */
+function preferredGroups(content: RenderContent, style: Style, photo?: PhotoId, photoFirst = false): Group[] {
   const text = content.headline;
   const out: Group[] = [];
   if (style === "flat-vector") {
@@ -200,8 +204,6 @@ function preferredGroups(content: RenderContent, style: Style, photo?: PhotoId):
     // sp-num-giant，把「十年」渲成光秃秃的「10」）。
     if (measureCount(content) >= 2) out.push("chart");
     if (measureCount(content) >= 1) out.push("number");
-    // 注意：图表风不推 image —— 白底数据系的画面语言是「测量与刻度」，
-    // 突然插一张照片会破坏系内一致性（v2-chart-boards 的三件套测试钉的就是这条）。
     out.push("timeline", "image", "bookend", "statement");
     return out;
   }
@@ -214,7 +216,12 @@ function preferredGroups(content: RenderContent, style: Style, photo?: PhotoId):
   if (measureCount(content) >= 2) out.push("chart");
   else if (content.numbers.length >= 1) out.push("number");
   if (content.bullets.length >= 3) out.push("list");
-  if (photo) out.push("image"); // 同上：命中照片才提前，没命中维持原尾序
+  // 照片拍：photoFirst 时提到**首位**（数据拍也让位 —— 「建立 TCP 连接」这拍照片
+  // 比数字卡更贴切）；不提首位时排在内容组之后、尾序之前。
+  if (photo) {
+    if (photoFirst) out.unshift("image");
+    else out.push("image");
+  }
   out.push("statement", "timeline", "image", "bookend");
   return out;
 }
@@ -265,15 +272,21 @@ function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?:
   const pool0 = (ofStyle.length > 0 ? ofStyle : pool).filter(hasPhoto);
   const usable = pool0.filter((l) => eligible(l, content, photo));
   const base = usable.length > 0 ? usable : pool0;
-  const wanted = preferredGroups(content, style, photo);
+  const cap = ctx ? groupCap(ctx.total) : Infinity;
+  const usedOf = (g: Group) => ctx?.used.get(g) ?? 0;
+  const capped = (g: Group) => usedOf(g) >= cap;
+  // 照片是否提到首选首位：命中语义选图、image 组未达帽、且本池真有 image 组。
+  // 「本池真有」是硬条件 —— v2 满版库没有 image 组，若不查就 photoFirst=true，
+  // requireFirst 会永远判负、**每一拍都掉回旧 catalog**，等于把 v2 全废（实测
+  // 01 语料 11 拍全掉进 sp-* 槽位库，版式多样性从 11 塌到 8）。
+  const poolHasImage = base.some((l) => l.group === "image");
+  const photoFirst = photo !== undefined && poolHasImage && !capped("image");
+  const wanted = preferredGroups(content, style, photo, photoFirst);
   if (requireFirst && wanted.length > 0 && !base.some((l) => l.group === wanted[0]!)) return undefined;
   // 去重：preferredGroups 会重复推同一组（如 poster-focus 先因数字、后因兜底），
   // 排名表被后写覆盖会让优先级颠倒（geo 被推到 focus 后面）。
   const groups = [...new Set(wanted.filter((g) => base.some((l) => l.group === g)))];
   if (groups.length === 0) return undefined;
-  const cap = ctx ? groupCap(ctx.total) : Infinity;
-  const usedOf = (g: Group) => ctx?.used.get(g) ?? 0;
-  const capped = (g: Group) => usedOf(g) >= cap;
   // 排名轮换，不按组硬分区取模：单组单板式时（list→list-marks、bookend→chapter），
   // 组内取模会让该组一被轮中就原样复现 —— 02 语料 16 拍因此只看到 5 套板式。
   // 改为全池按组优先级排序后整池轮转：优先级变成次序而不是闸门，
@@ -322,7 +335,29 @@ function pickFrom(pool: Layout[], content: RenderContent, style: Style, prevId?:
  * 默认选版入口：v2 满版构图池优先，挑不出合格优先组（如图表拍 v2 首批无 chart 组）
  * 才落回旧 catalog 槽位库。旧的 162 套保留为回退，不再是被修补的主场。
  * ctx 带本片已用组直方图（plan.ts 维护），组级帽靠它生效；不传则无帽（单拍挑选/测试）。
+ *
+ * 照片拍例外：**先**在 catalog 里挑 photo 版式。原因是 v2 满版库没有 image 组，
+ * 而 v2 池几乎从不会挑不出合格首选组（实测 01 语料 11 拍全在 v2 里挑到）—— 于是
+ * 4 套照片板永远轮不到，全库 97 拍只出2 拍图。照片是语义选图明确命中的稀缺资源，
+ * 命中就该用掉，所以它绕过 v2 优先级直取 catalog。
+ * 三重闸：只在编辑风（另两系画面语言不容照片）、image 组未达组级帽、且版式确有 photo 槽。
  */
 export function pickLayout(content: RenderContent, style: Style, prevId?: string, ctx?: PickCtx, photo?: PhotoId): Layout {
+  if (photo && style === "editorial") {
+    const cap = ctx ? groupCap(ctx.total) : Infinity;
+    if ((ctx?.used.get("image") ?? 0) < cap) {
+      const withPhoto = LAYOUTS.filter(
+        (l) => l.group === "image" && (l.style ?? "editorial") === "editorial" && l.slots.some((sl) => sl.k === "photo"),
+      );
+      const usables = withPhoto.filter((l) => eligible(l, content, photo));
+      const base = usables.length > 0 ? usables : withPhoto;
+      if (base.length > 0) {
+        // 避重用index 位移不缩池 —— 缩池会让 (beat-1)%len 整体漂移，轮转变成抓阄。
+        let idx = (content.beat - 1) % base.length;
+        if (base[idx]!.id === prevId && base.length > 1) idx = (idx + 1) % base.length;
+        return base[idx]!;
+      }
+    }
+  }
   return pickFrom(V2_LAYOUTS, content, style, prevId, true, ctx, photo) ?? pickFrom(LAYOUTS, content, style, prevId, false, ctx, photo) ?? LAYOUTS[0]!;
 }

@@ -2,6 +2,7 @@
 // 确定性：无随机、无 filter，同一版式+beat 每次渲染像素一致 —— 导出契约硬要求。
 // 位置：底色之上、decor 与槽位之下；用 hairline/dim 低透明度着色，只做构图主体不抢正文。
 
+import { CutoutMask, type Rect } from "./cutout";
 import type { BgKind } from "./types";
 
 interface BgProps {
@@ -11,6 +12,9 @@ interface BgProps {
   colorDim: string;
   colorHairline: string;
   accent: string;
+  /** 要让出透明度的矩形（photo 槽）。bg 的五种画法全是满幅图案，
+   *  不挖洞会盖住画在 SVG 之下的照片（同 wash 的道理）。 */
+  cutouts?: Rect[];
 }
 
 /** 线性同余伪随机：确定性且分布够用于装饰相位。 */
@@ -22,7 +26,21 @@ function lcg(seed: number): () => number {
   };
 }
 
-export function BgLayer({ kind, seed, colorDim, colorHairline, accent }: BgProps): JSX.Element {
+export function BgLayer({ kind, seed, colorDim, colorHairline, accent, cutouts = [] }: BgProps): JSX.Element {
+  // 有 photo 槽时把整层套进挖洞遮罩：图案在照片位置让出，照片透上来。
+  if (cutouts.length > 0) {
+    const mid = `bg-cut-${seed}`;
+    return (
+      <>
+        <defs>
+          <CutoutMask id={mid} rects={cutouts} />
+        </defs>
+        <g mask={`url(#${mid})`} data-bg-masked="">
+          <BgLayer kind={kind} seed={seed} colorDim={colorDim} colorHairline={colorHairline} accent={accent} />
+        </g>
+      </>
+    );
+  }
   switch (kind) {
     // A01 圆点网格渐隐：从右上密到左下疏，印刷网点退晕
     case "dots-fade": {
