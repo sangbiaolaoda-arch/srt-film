@@ -4,10 +4,9 @@
 
 import { parseSRT } from "./srt";
 import { planBeats } from "./beats";
-import { composeScenes, enrichNarrative, validateScene, displayHeadline, displayWidth, HEADLINE_MAX, type BeatScene } from "./compose";
+import { composeScenes, enrichNarrative, validateScene, type BeatScene } from "./compose";
 import { buildContent } from "./content";
 import { applyOverride, type OverrideMap } from "./overrides";
-import { stripPunct } from "./text";
 import type { Shot } from "./shot";
 import { LAYOUT_BY_ID } from "../layouts/catalog";
 import { eligible, pickLayout, planStyles } from "../layouts/pick";
@@ -37,9 +36,9 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
   const warnings: string[] = [];
   const styles: string[] = [];
 
-  // 第一遍：把每拍旁白变成内容（并做溯源校验）。
-  // 宽度安全区不在这里查：版式还没选，无从判断该拍最终是槽位版式还是 custom 满版画面 ——
-  // 挪到第三遍版式确定后按 layout.custom 分流查（见下）。
+// 第一遍：把每拍旁白变成内容（并做溯源校验）。
+// 宽度安全区不在这里查：版式还没选，无从判断该拍最终是槽位版式还是 custom 满版画面 ——
+// 版式确定后由 checkLayout（Phase 6 约束引擎）按真实槽位几何裁定（见第三遍）。
   // 叙事层（role/purpose/forbidden/continuity）在全部拍就绪后统一跑 enrichNarrative，
   // 因为它要向前/后看邻居（共享数字 → 镜头承接）。
   const baseScenes = enrichNarrative(composeScenes(beats));
@@ -164,14 +163,13 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
     if (!eligible(layout, content, photo?.id)) {
       problems.push(`拍 ${beat.index}：版式「${layout.name}」需要更多可溯源数字，旁白里不够`);
     }
-    // 宽度安全区只约束槽位版式：custom 满版画面（v2 / 专属场景）自己断行与自适应字号
-    // （compose.validateScene 的 skipHeadlineWidth 即此意），槽位版式的宽句仍须拦。
-    if (!layout.custom) {
-      const h = stripPunct(displayHeadline(content.headline));
-      if (displayWidth(h) > HEADLINE_MAX) {
-        problems.push(`拍 ${beat.index}：headline「${h}」显示宽度 ${displayWidth(h)} 超出安全区（${HEADLINE_MAX}），需缩短或分拍`);
-      }
-    }
+    // 宽度安全区由上面的 checkLayout（Phase 6 约束引擎）按**真实槽位几何**裁定：
+    // textFit 镜像渲染器的缩字号钳制，放得下就不拦。旧的 blanket「显示宽度 > 16 即失败」
+    // 是 Phase 6 落地前的钝器 —— 它对放得下的拍误报（实测 21 字 headline 在
+    // im-photo-split 的窄槽里 3 行放得下），逼着人工覆写缩句（baseline-audit 缺陷 4
+    // 「01/05 语料长句 headline 需人工覆写缩句」的由来）。删掉后槽位版式的宽度裁决
+    // 只剩一个权威；竖排槽的截断也已进 textFit（见 constraints.ts），
+    // 真实渲染包围盒另有 phase10-qa 的 B1 把关。
     // 动效门禁：版式自带的动效必须存在且可组合。
     // enter 池第 i 项分给第 i 个槽（不同元素），逐项单独成组；emphasis 无元素落点，单独成组。
     const groups = layout.enter.map((id) => [id]);

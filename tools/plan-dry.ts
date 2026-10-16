@@ -49,13 +49,15 @@ const rows = shots.map((shot, i) => {
 for (const { i, at, dur, shot } of rows) {
   const h = stripPunct(displayHeadline(shot.content.headline));
   const w = displayWidth(h);
-  const over = !shot.layout.custom && w > 16 ? " ⚠超宽" : "";
+  // 宽度只展示不评判：「放不放得下」由 checkLayout 按真实槽位几何裁定（见 plan.ts），
+  // 这里曾复制过一份 w > 16 的 ⚠超宽标记 —— blanket 门禁删除后它开始和门禁结论
+  // 互相矛盾（门禁放行、这里打 ⚠），属于两处逻辑各写一遍的漂移，删。
   console.log(
     `${String(i + 1).padStart(2, "0")}  ` +
       `${at.toFixed(2).padStart(6)}–${(at + dur).toFixed(2).padStart(6)}s  ` +
       `${dur.toFixed(2).padStart(5)}s  ` +
       `${styleTag(shot.layout.style)}  ` +
-      `${shot.layout.id.padEnd(20)} w=${w.toFixed(1).padStart(4)}${over}  ${h}`,
+      `${shot.layout.id.padEnd(20)} w=${w.toFixed(1).padStart(4)}  ${h}`,
   );
 }
 

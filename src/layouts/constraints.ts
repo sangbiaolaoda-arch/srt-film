@@ -160,10 +160,9 @@ function itemsOf(content: RenderContent, n: number): string[] {
 
 /**
  * 文字装载量估算。返回 null = 没问题；"!..." = 硬错误；"..." = 告警。
- * 竖排槽按构造不可能竖向溢出（maxChars 钳制），不查。
+ * 竖排槽查「缩字号后仍放不下的字数」—— 钳制的兜底是丢字，丢字必须大声失败。
  */
 function textFit(slot: Slot, b: Box, content: RenderContent): string | null {
-  if (slot.vertical) return null;
   // bignum/num2 渲染的是数字（render.tsx numericValue），不是文案 —— 按数字估算
   const numeric = slot.k === "bignum" || slot.k === "num2";
   const raw = numeric ? content.bignum ?? String(content.numbers[0] ?? "") : slotTextOf(slot, content);
@@ -190,6 +189,24 @@ function textFit(slot: Slot, b: Box, content: RenderContent): string | null {
     if (units > 0 && units <= 8) {
       fs = Math.max(fs, Math.min((b.w / units) * 0.86, b.h / 1.45, 340));
     }
+  }
+
+  // 竖排（画法 E01）：与渲染同数学 —— 缩字号到放得下或触底，量残余字数。
+  // 旧实现这里直接 return null（「竖排不可能竖向溢出」），于是渲染器
+  // slice(0, maxChars) 的静默丢字从来没被门禁看见：09 语料拍 11
+  // 「手写的笔记留在桌上」9 字只画出 6 字，plan-dry 却全绿。
+  if (slot.vertical) {
+    const fsFloorV = Math.max(24, base * 0.5);
+    const charsN = Array.from(t).length;
+    let fsV: number = base;
+    while (fsV > fsFloorV && charsN * fsV * 1.16 > b.h) {
+      fsV = Math.max(fsFloorV, fsV * 0.9);
+    }
+    const fitN = Math.max(2, Math.floor(b.h / (fsV * 1.16)));
+    if (charsN > fitN) {
+      return `!竖排截断：${charsN} 字只放得下 ${fitN} 字（字号已缩到 ${fsV.toFixed(0)}px 仍触底）`;
+    }
+    return null;
   }
 
   // 单行类（数字/小标）：不换行，只查横向宽度

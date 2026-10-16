@@ -228,11 +228,36 @@ describe("plan 宽度门禁的版式分流", () => {
     expect(problems.filter((p) => p.includes("安全区"))).toHaveLength(0);
   });
 
-  it("槽位版式仍查安全区 —— 豁免不放松槽位", () => {
+  it("槽位版式的宽句由布局引擎按真实槽位几何裁定 —— 放得下就不拦", () => {
+    // 缺陷 4 修法：blanket「显示宽度 > 16 即失败」删除后，唯一权威是 checkLayout 的
+    // textFit（镜像渲染器的缩字号钳制）。拍 5 覆写成 st-h1-left（headline 槽
+    // 10×3 格 = 1067×270px）：17.75 宽在 72px 下 2 行放得下 → 无问题。
+    // 旧行为： blanket 门禁判「超出安全区」，逼着人工覆写缩句。
     const ov = JSON.stringify({
       "5": { "layoutId": "st-h1-left", "headline": "这一步通常在 20 到 120 毫秒之间结束" },
     });
     const { problems } = plan(srt01, ov);
-    expect(problems.some((p) => p.includes("拍 5") && p.includes("安全区"))).toBe(true);
+    expect(problems.some((p) => p.includes("拍 5"))).toBe(false);
+  });
+
+  it("竖排槽放不下的宽句仍被拦 —— 钳制的兜底是丢字，丢字必须大声失败", () => {
+    // sp-vertical-tension 的竖排 headline 槽 576px 高：字号缩到地板 36px 也只放得下
+    // 13 字，25 字台词必丢 12 字。textFit 的竖排检查把它拦成硬错误 ——
+    // 渲染器触底才 slice（render.tsx），门禁必须先开口。
+    const ov = JSON.stringify({
+      "5": { "layoutId": "sp-vertical-tension", "headline": "我们记录下这些数字不是为了记住结果而是为了看清过程究竟如何发生" },
+    });
+    const { problems } = plan(srt01, ov);
+    expect(problems.some((p) => p.includes("拍 5") && p.includes("竖排截断"))).toBe(true);
+  });
+
+  it("照片拍长句过门禁 —— 窄槽靠缩字号放得下（缺陷 4 的照片延伸）", () => {
+    // 21 字 headline 覆写成 im-photo-split 的 4.2 格窄槽（448×234px）： clamp 到
+    // 3 行放得下。旧 blanket 门禁判「超出安全区」失败 —— 触发语料实测这两拍正是
+    // 它逼出的人工缩句覆写（baseline-audit 缺陷 4「需人工覆写缩句」）。
+    const srt = "1\n00:00:00,000 --> 00:00:03,200\n城市街道的灯光在夜晚一盏盏亮起照亮回家的人\n";
+    const ov = JSON.stringify({ "1": { layoutId: "im-photo-split" } });
+    const { problems } = plan(srt, ov);
+    expect(problems.some((p) => p.includes("拍 1"))).toBe(false);
   });
 });

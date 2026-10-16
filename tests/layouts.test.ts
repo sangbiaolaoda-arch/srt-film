@@ -252,6 +252,18 @@ describe("渲染与 canvas 安全", () => {
     const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent() }));
     expect(html.includes("data-char")).toBe(false);
   });
+  it("竖排槽长句缩字号而不是丢字（缺陷 4：静默截断）", () => {
+    // sp-vertical-tension 的竖排 headline 槽 72px 只放得下 6 字。旧实现直接
+    // slice(0, maxChars)：「手写的笔记留在桌上」9 字只画出「手写的笔记留」，
+    // 观众看到半句话还以为话没说完（09 语料拍 11 实测）。修法：与横排同哲学
+    // 缩字号重排 —— 9 字缩到约 52px 全部画出。
+    const l = LAYOUT_BY_ID.get("sp-vertical-tension")!;
+    const content = { ...demoContent(), headline: "手写的笔记留在桌上" };
+    const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content }));
+    const gm = /data-kind="headline">(.*?)<\/g>/.exec(html);
+    const drawn = gm ? (gm[1]!.match(/[一-鿿]/g) ?? []).join("") : "";
+    expect(drawn, l.id).toBe("手写的笔记留在桌上");
+  });
   it("版式渲染的文案不含标点（画面文字零标点规则）", () => {
     for (const l of LAYOUTS) {
       const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent(LAYOUTS.indexOf(l) + 1) }));

@@ -299,7 +299,7 @@ push({
   const s = problemsTotal > 0 ? 2 : warningsTotal > 0 ? 4 : 5;
   push({
     id: "typography", name: "排版可读性", type: "hybrid", score: s,
-    basis: `规划门禁 problems ${problemsTotal} / warnings ${warningsTotal}（超宽/分句/安全区类）`,
+    basis: `规划门禁 problems ${problemsTotal} / warnings ${warningsTotal}（文字溢出/竖排截断/越界/资格类）`,
     evidence: corpusRows.flatMap((r) => r.problems.slice(0, 3).map((p) => `${r.file}: ${p}`)),
     pending: "字号/行距/对比/密度人工抽查",
   });

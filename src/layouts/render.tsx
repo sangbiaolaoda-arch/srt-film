@@ -296,11 +296,22 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       if (!t) return g(<g />);
 
       // 竖排分支（画法 E01）：逐字从槽顶向下排。中文竖排大字构图。
+      // 高度钳制与横排同哲学：排不下就缩字号重排，直到放得下或触底 ——
+      // 旧实现直接 slice(0, maxChars)，超长台词被静默丢字：09 语料拍 11
+      // 「手写的笔记留在桌上」9 字只画出「手写的笔记留」，观众看到半句话
+      // 还以为话没说完。字号小可以救，丢字是画面在说错话，救不回来。
       if (slot.vertical) {
-        const sizeV = size;
+        const charsAll = Array.from(t);
+        const fsFloorV = Math.max(24, size * 0.5);
+        let sizeV = size;
+        while (sizeV > fsFloorV && charsAll.length * sizeV * 1.16 > h) {
+          sizeV = Math.max(fsFloorV, sizeV * 0.9);
+        }
         const step = sizeV * 1.16;
         const maxChars = Math.max(2, Math.floor(h / step));
-        const chars = Array.from(t).slice(0, maxChars);
+        // 触底仍放不下才丢 —— 且 textFit 的竖排检查会把它拦成硬错误（见 constraints.ts），
+        // 大声失败替代静默丢失。
+        const chars = charsAll.slice(0, maxChars);
         const anchorV = textAnchor(slot.align);
         const txV = anchorV === "middle" ? x + w / 2 : anchorV === "end" ? x + w : x + sizeV / 2 + 2;
         const startYV = y + sizeV * 0.92;
