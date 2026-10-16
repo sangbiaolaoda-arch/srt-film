@@ -18,11 +18,35 @@ export interface NumToken {
 // 漏数字会让本该选图表版式的拍被误判成「无数据」）。
 // 百分数层先跑，所以 nums[0] 天然是冲击力最强的那个，主视觉取它。
 // 阿拉伯数字 + 单位 = 数据语料的写法，一律算度量值。
+//
+// 中国数量级层（MAG）为什么要单独一条、还必须排在 PLAIN_UNITS 之前：
+// 「30 万公里」「88 万倍」「312 万吨」是中文数据 narration 最常见的写法，
+// 而「万」同时是**数量级**（×10000）和**单位前缀**（万元）。旧表把「万元」当单位、
+// 没有万/亿层：`88 万倍` 匹配不到单位 → BARE 兜底只捞到 88，而「万倍」被 CN_QTY
+// 当成中文数字独吞（raw="万倍" value=10000），88 这个量整个消失；
+// `30 万公里` 同理只剩 30。后果是这类拍 measureCount 恒 < 2，
+// **图表版式（bars / axis-columns 门槛就是 2 个度量值）永远选不上** ——
+// 观众看不到任何图表，根因在这里。所以：先按「数字 + 万/亿 + 单位」整段吃下，
+// value 乘上数量级，raw 保留原文全串（isTraceable 要求 raw 是拍文本的子串）。
+//
+// 单位表按**长名优先**排（公里每小时 必须在 公里 前、平方公里 在 米 前），
+// 否则正则的交替会短先命中、把「公里每小时」截成「公里」。
+const MAG_UNITS =
+  "毫秒|秒钟|分钟|个小时|小时|公里每小时|米每秒|平方公里|立方米|厘米|毫米|千米|公里|万元|美元|港元|人民币|毫安|安培|伏特|赫兹|帕斯卡|焦耳|卡路里|摄氏度|℃|千瓦|千瓦时|万吨|吨|升|毫升|美元|元|块|度|克|千克|米|人|次|届|轮|成|折|倍|%";
+const MAG = new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(万|亿)?\\s*(${MAG_UNITS})`, "g");
+// 纯单位层（无数量级）：与 MAG 同表，但 MAG 已先扫过一遍，这里只兜
+// 「没有数量级」的普通写法（「340 米」「120 毫秒」）。两层的单位表共享同一份常量。
+const PLAIN_UNITS =
+  "毫秒|秒钟|分钟|个小时|小时|公里每小时|米每秒|平方公里|立方米|厘米|毫米|千米|公里|万元|美元|港元|人民币|毫安|安培|伏特|赫兹|帕斯卡|焦耳|卡路里|摄氏度|℃|千瓦|千瓦时|万吨|吨|升|毫升|元|块|度|克|千克|米|人|次|届|轮|成|折|倍";
 const PATTERNS: RegExp[] = [
   /(\d+(?:\.\d+)?)\s*%/g,
+  // 数量级层必须在前：见 MAG 注释里的量纲崩坏说明。
+  MAG,
   // \s*：旁白排版会在数字与单位间插空格（「每度大约 0.09 美元」），不放行就漏抽
-  /(\d+(?:\.\d+)?)\s*(毫秒|秒|分钟|倍|美元|万元|元|块|度|克|℃|千瓦|公里|米|人|次|届|轮|成|折)/g,
+  new RegExp(`(\\d+(?:\\.\\d+)?)\\s*(${PLAIN_UNITS})`, "g"),
 ];
+/** PATTERNS 里哪些条目带「万/亿」第三分组（用于 scan 决定 value 怎么算）。 */
+const MAG_PATTERNS = new Set<RegExp>([MAG]);
 // 兜底层：两层都空时才用，避免把「2024年」「第3步」里的数字当成数据。
 // 否定后视挡标识符上下文：「TLS 1.3」「iOS 17」「HTML5」是版本/型号，不是度量值
 // （01 语料拍 08 实测：版本号 1.3 进图表，坐标柱画出 1.3 vs 1 的量纲崩坏）。
@@ -88,9 +112,14 @@ function overlaps(spans: Array<[number, number]>, s: number, e: number): boolean
   return spans.some(([a, b]) => s < b && e > a);
 }
 
+/** 中国数量级 → 乘数。「88 万倍」的 88 必须乘 10000 才是旁白说的那个量。 */
+const MAGNITUDE: Record<string, number> = { 万: 1e4, 亿: 1e8 };
+
 function scan(text: string, pat: RegExp, kind: NumToken["kind"], seen: Set<string>, out: NumToken[], spans: Array<[number, number]>): void {
   pat.lastIndex = 0;
   let m: RegExpExecArray | null;
+  // MAG 层是三分组（数字 / 数量级 / 单位），PLAIN 与 BARE 是二分组（数字 / 单位）。
+  const hasMag = MAG_PATTERNS.has(pat);
   while ((m = pat.exec(text))) {
     if (seen.has(m[0])) continue;
     const s = m.index;
@@ -98,7 +127,9 @@ function scan(text: string, pat: RegExp, kind: NumToken["kind"], seen: Set<strin
     if (overlaps(spans, s, e)) continue;
     seen.add(m[0]);
     spans.push([s, e]);
-    out.push({ raw: m[0].trim(), value: Number(m[1]), unit: m[2], kind });
+    const mag = hasMag ? (MAGNITUDE[m[2] ?? ""] ?? 1) : 1;
+    const unit = hasMag ? m[3] : m[2];
+    out.push({ raw: m[0].trim(), value: Number(m[1]) * mag, unit, kind });
   }
 }
 

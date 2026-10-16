@@ -169,9 +169,24 @@ describe("trace", () => {
     expect(extractNumbers("2023 年底，船没等来").map((n) => n.raw)).not.toContain("2023");
     expect(extractNumbers("1999年").map((n) => n.raw)).not.toContain("1999");
     // 不误伤：带真单位的四位数仍是度量值
-    expect(extractNumbers("3000 吨").map((n) => n.raw)).toEqual(["3000"]);
+    expect(extractNumbers("3000 吨").map((n) => n.raw)).toEqual(["3000 吨"]);
     expect(extractNumbers("耗时 1200 毫秒").map((n) => n.raw)).toEqual(["1200 毫秒"]);
-    expect(extractNumbers("产量 312 万吨").map((n) => n.raw)).toEqual(["312"]);
+    expect(extractNumbers("产量 312 万吨").map((n) => n.raw)).toEqual(["312 万吨"]);
+    expect(extractNumbers("产量 312 万吨")[0]!.value).toBe(312 * 1e4);
+  });
+  it("中国数量级层：万/亿 必须乘进 value（图表版式的度量值门槛）", () => {
+    // 根因回归：「88 万倍」旧行为只剩 raw="万倍" value=10000 —— 88 这个量整个消失，
+    // 「30 万公里」只剩 30。后果是中文数据 narration 的 measureCount 恒 < 2，
+    // bars / axis-columns（门槛 2 个度量值）永远选不上，观众看不到图表。
+    const light = extractNumbers("光速每秒 30 万公里，声速每秒 340 米");
+    expect(light.map((n) => `${n.raw}=${n.value}`)).toEqual(["30 万公里=300000", "340 米=340"]);
+    expect(light.filter((n) => n.kind === "measure")).toHaveLength(2);
+    const times = extractNumbers("慢了 88 万倍")[0]!;
+    expect(times.raw).toBe("88 万倍");
+    expect(times.value).toBe(880000);
+    expect(extractNumbers("1.5 亿人")[0]).toMatchObject({ raw: "1.5 亿人", value: 1.5e8 });
+    // raw 必须是拍文本子串，否则溯源门禁会判「画面数字不是旁白里的」
+    expect("光速每秒 30 万公里".includes(extractNumbers("光速每秒 30 万公里")[0]!.raw)).toBe(true);
   });
   it("序数与量纲不重叠计数（第七次 ≠ 七次）", () => {
     expect(extractNumbers("第七次，他自己退回去了")).toHaveLength(1);
