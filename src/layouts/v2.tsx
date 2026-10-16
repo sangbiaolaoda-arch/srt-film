@@ -378,13 +378,22 @@ const v2Strata: Board = ({ content, profile: p }) => {
     y += h;
     return r;
   });
+  // 文字横跨整幅 → 必然同时压到浅色带（blush/sand）与深色带（aux/dark）。
+  // 换字色救不了：一行字无论什么颜色，总有一段落在相近色上（01 语料拍 1 实测
+  // 深蓝带上那截深灰字 + 橙红强调字几乎读不出来，联系表目视 + 2 倍放大取证）。
+  // v2-balance / v2-strata 此前修的是「整幅同底换字色」，那条路在**逐行横跨多带**
+  // 的构图上不成立。底衬才是一行多色底该用的解：文字压在自己的纸上。
+  const text = stripPunct(content.headline);
+  const size = fit(text, 88);
+  const pad = size * 0.34;
+  const textW = displayWidth(text) * size;
+  const plateX = 640 - textW / 2 - pad;
   return (
     <g>
       {rects}
-      {/* ink 不是 cream：色带是浅彩色块（blush/sand/clay），cream 在扁平/图表风
-          是纯白，白字压浅色带等于看不见（与 v2-balance 同源问题）。 */}
-      <VText x={640} y={380} size={fit(stripPunct(content.headline), 88)} fill={p.ink}
-        text={stripPunct(content.headline)} profile={p} motion="m-char-rise" />
+      <rect x={plateX} y={380 - size * 0.86} width={textW + pad * 2} height={size * 1.28}
+        rx={size * 0.16} fill={p.paper} />
+      <VText x={640} y={380} size={size} fill={p.ink} text={text} profile={p} motion="m-char-rise" />
     </g>
   );
 };

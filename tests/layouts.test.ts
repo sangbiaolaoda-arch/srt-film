@@ -613,3 +613,35 @@ describe("舞台层 · 拍号角标门控（Phase 8，修 baseline-audit 缺陷 
     expect(renderStage(LAYOUTS[0]!)).toContain("BEAT 03");
   });
 });
+
+describe("v2-strata 文字底衬（横跨多色带时文字必须可读）", () => {
+  // 01 语料拍 1：整句 headline 横跨 blush/sand/clay/aux/dark 五条色带。底衬前深灰字
+  // 有一截压在深蓝带上、橙红强调字压橙带，2 倍放大目视几乎读不出（联系表
+  // .tmp/vr-01/frames/01.jpg 取证）。换字色救不了——一行字无论什么颜色，总有一段
+  // 落在相近色上；底衬是「一行横跨多带」唯一正确的解。
+  const strata = V2_LAYOUTS.find((l) => l.id === "v2-strata")!;
+  const html = () => renderToStaticMarkup(createElement(LayoutSVG, { layout: strata, content: demoContent() }));
+
+  it("文字行后面有一块不透明底衬，宽度贴合文字", () => {
+    const h = html();
+    // 满幅纸底与 5 条色带之外，还有一个宽度 < 画布的 rect —— 那就是文字底衬
+    const plates = [...h.matchAll(/<rect([^>]*)>/g)]
+      .map((m) => m[1])
+      .filter((a) => !a.includes("data-motion") && Number(/width="([\d.]+)"/.exec(a)?.[1]) < 1280);
+    expect(plates.length, "v2-strata 应有且仅有一块贴合文字的底衬").toBe(1);
+    const attrs = plates[0]!;
+    expect(attrs, "底衬必须不透明（半透会让底带透上来，实测 0.94 仍不可读）").not.toContain("opacity");
+    const w = Number(/width="([\d.]+)"/.exec(attrs)?.[1]);
+    const hgt = Number(/height="([\d.]+)"/.exec(attrs)?.[1]);
+    expect(w, "底衬应真的盖住一行字的宽度").toBeGreaterThan(300);
+    expect(hgt, "底衬高度应是一行字的量级").toBeGreaterThan(40);
+  });
+
+  it("底衬在文字之前绘制（DOM 顺序即遮挡顺序）", () => {
+    const h = html();
+    const plateAt = h.search(/<rect(?![^>]*data-motion)[^>]*>/);
+    const textAt = h.indexOf("<text");
+    expect(plateAt).toBeGreaterThan(-1);
+    expect(textAt, "底衬必须排在文字之前").toBeGreaterThan(plateAt);
+  });
+});
