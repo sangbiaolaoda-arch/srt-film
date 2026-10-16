@@ -55,7 +55,11 @@ rubric 规定主观维度必须是 `待人工` 而不是拍出来的数字——
 
 ```bash
 node tools/run-ts.mjs tools/quality-score.ts \
-  --mp4 .tmp/phase10/01.mp4,.tmp/phase10/02.mp4,.tmp/phase10/03.mp4,.tmp/phase10/04.mp4,.tmp/phase10/05.mp4
+  --mp4 .tmp/phase10/01.mp4,.tmp/phase10/02.mp4,.tmp/phase10/03.mp4,.tmp/phase10/04.mp4,.tmp/phase10/05.mp4 \
+  --tests .tmp/quality-check.log
 ```
+
+（`--mp4` 支持逗号分隔多文件；缺 `--tests` 时工程稳定性按规则判「待人工」而不是默认绿，
+所以复现本表必须带测试日志。）
 
 规则全文见 `docs/project/visual-quality-rubric.md`；记分卡原始产物在 `.tmp/quality/scorecard.md` + `.json`。

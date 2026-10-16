@@ -5,7 +5,7 @@
 // 机器判不了的标「待人工」，绝不拍脑袋编分。混合维度只出机器层分数，主观锚点由盲评补齐。
 //
 // 用法:
-//   node tools/run-ts.mjs tools/quality-score.ts [--corpus 01,03] [--mp4 f.mp4] \
+//   node tools/run-ts.mjs tools/quality-score.ts [--corpus 01,03] [--mp4 f.mp4,...] \
 //       [--phase10 .tmp/phase10/report.json] [--vab .tmp/vab-09/report.json,...] \
 //       [--tests .tmp/quality-check.log] [--out .tmp/quality]
 //   --corpus 缺省 = examples/ 下全部 .srt（按文件名前缀过滤，如 01,03,09）
@@ -192,12 +192,19 @@ for (const p of vabPaths) {
   }
 }
 
-/* ⑥ MP4 探测（ffprobe，与 phase10-qa 同一可执行） ---------------------------- */
+/* ⑥ MP4 探测（ffprobe，与 phase10-qa 同一可执行；--mp4 可传逗号分隔的多个文件） */
 const FFPROBE = "E:\\WorkBuddy\\tools\\ffprobe.exe";
 const PRESETS = new Set(["1280x720", "1920x1080", "2560x1440"]);
-const mp4Path = argOf("--mp4", "");
+const mp4Args = argOf("--mp4", "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
 const mp4Checks: { name: string; ok: boolean; detail: string }[] = [];
-if (mp4Path && existsSync(resolve(root, mp4Path))) {
+for (const mp4Path of mp4Args) {
+  if (!existsSync(resolve(root, mp4Path))) {
+    mp4Checks.push({ name: "文件存在", ok: false, detail: mp4Path });
+    continue;
+  }
   try {
     const out = execFileSync(
       FFPROBE,
@@ -209,16 +216,16 @@ if (mp4Path && existsSync(resolve(root, mp4Path))) {
     const dur = Number(j.format?.duration ?? 0);
     const fps = vs[0] ? Number(vs[0].r_frame_rate.split("/")[0]) / Number(vs[0].r_frame_rate.split("/")[1] || 1) : 0;
     const dimsOk = vs[0] ? PRESETS.has(`${vs[0].width}x${vs[0].height}`) : false;
+    const tag = `[${mp4Path.split("/").pop()}]`;
     mp4Checks.push(
-      { name: "可探测（封装/索引完好）", ok: true, detail: `${mp4Path}` },
-      { name: "单一视频流、无音轨", ok: vs.length === 1 && (j.streams ?? []).length === 1, detail: `流数 ${(j.streams ?? []).length}（视频 ${vs.length}）` },
-      { name: "编码 h264", ok: vs[0]?.codec_name === "h264", detail: String(vs[0]?.codec_name) },
-      { name: "分辨率属导出档位", ok: dimsOk, detail: `${vs[0]?.width}×${vs[0]?.height}` },
-      { name: "帧率属标准档", ok: [24, 30, 60].includes(Math.round(fps)), detail: `${fps.toFixed(2)}fps` },
-      { name: "时长 > 0", ok: dur > 0, detail: `${dur.toFixed(2)}s` },
+      { name: `${tag} 可探测（封装/索引完好）`, ok: true, detail: `${dur.toFixed(2)}s` },
+      { name: `${tag} 单一视频流、无音轨`, ok: vs.length === 1 && (j.streams ?? []).length === 1, detail: `流数 ${(j.streams ?? []).length}（视频 ${vs.length}）` },
+      { name: `${tag} 编码 h264`, ok: vs[0]?.codec_name === "h264", detail: String(vs[0]?.codec_name) },
+      { name: `${tag} 分辨率属导出档位`, ok: dimsOk, detail: `${vs[0]?.width}×${vs[0]?.height}` },
+      { name: `${tag} 帧率属标准档`, ok: [24, 30, 60].includes(Math.round(fps)), detail: `${fps.toFixed(2)}fps` },
     );
   } catch (e) {
-    mp4Checks.push({ name: "可探测（封装/索引完好）", ok: false, detail: `ffprobe 失败：${(e as Error).message.slice(0, 120)}` });
+    mp4Checks.push({ name: `[${mp4Path.split("/").pop()}] 可探测（封装/索引完好）`, ok: false, detail: `ffprobe 失败：${(e as Error).message.slice(0, 120)}` });
   }
 }
 

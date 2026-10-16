@@ -160,6 +160,7 @@ node tools/run-ts.mjs tools/quality-score.ts \
   --mp4 .tmp/phase10/03.mp4 \
   --tests .tmp/quality-check.log
 # 可选：--corpus 01,03 限定语料；--phase10/--vab 指证据文件；--out 指定输出目录
+# --mp4 支持逗号分隔多个文件（如五语料成片一起测）；缺 --tests 时工程稳定性判「待人工」而非默认绿
 ```
 
 输出 `.tmp/quality/scorecard.json`（机读）+ `scorecard.md`（人读）。
