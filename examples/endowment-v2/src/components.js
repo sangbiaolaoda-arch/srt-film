@@ -303,7 +303,8 @@ export function chartDown(x, y, { enter = 'up' } = {}) {
     <rect x="${x0}" y="${y0}" width="${w}" height="${h}" rx="12" fill="${PALETTE.panel}" opacity="0.5"/>
     <line x1="${x0 + 26}" y1="${y0 + h - 24}" x2="${x0 + w - 20}" y2="${y0 + h - 24}" stroke="${PALETTE.steelDim}" stroke-width="2"/>
     <line x1="${x0 + 26}" y1="${y0 + 20}" x2="${x0 + 26}" y2="${y0 + h - 24}" stroke="${PALETTE.steelDim}" stroke-width="2"/>
-    <path id="refLine" d="M${x0 + 36} ${y0 + 52} L${x0 + 130} ${y0 + 74} L${x0 + 210} ${y0 + 46} L${x0 + 290} ${y0 + 128} L${x0 + 370} ${y0 + 172} L${x0 + 440} ${y0 + 208}" fill="none" stroke="${PALETTE.warn}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path id="refLine" d="M${x0 + 36} ${y0 + 52} L${x0 + 130} ${y0 + 74} L${x0 + 210} ${y0 + 46} L${x0 + 290} ${y0 + 128} L${x0 + 370} ${y0 + 172} L${x0 + 440} ${y0 + 208}" fill="none" stroke="${PALETTE.warn}" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" pathLength="1" stroke-dasharray="1" stroke-dashoffset="1"/>
+    <circle id="refEnd" cx="${x0 + 440}" cy="${y0 + 208}" r="9" fill="${PALETTE.warn}" opacity="0"/>
   </g>`;
 }
 

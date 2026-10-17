@@ -9,6 +9,7 @@
 //       data-at="秒" 表示该元素在场景开始 N 秒后才入场（第二拍新人）。
 
 import { PALETTE } from './palette.js';
+import { barSeries, donut, growBars, sweepDonut, drawLine } from './charts.js';
 import {
   person, questionBig, cardItem, swapArrows, pill, mug, sparkles, upPrice,
   groupChips, axisDots, choiceFork, twinPanels, scaleTilt, gainLossPair, theoryPanel,
@@ -165,8 +166,9 @@ export const SCENE_SVG = {
     + `<g data-key="B" data-at="1.4">${mug(R, Y, { s: 0.9 })}</g>`
     + `<g data-key="T" data-at="2.0">${stamp(470, 278, '一样不换', { r: 64 })}</g>`,
 
-  // 27 单纯二选一：五五开
-  s27: () => halfSplit(C, Y) + pill(C, G + 26, '什么都没拿到 · 单纯二选一', { bg: PALETTE.panelSoft, fg: PALETTE.ink, size: 22 }),
+  // 27 单纯二选一：五五开（比例 → 环形图，自 12 点钟顺时针扫掠；决策树：part-to-whole → donut）
+  s27: () => `<g data-key="A" data-at="0.3">${donut(C, Y, 118, [[0.5, PALETTE.cool], [0.5, PALETTE.warn]], { centerLabel: '五五开', sideLabels: [[C - 218, Y - 96, '换 ≈50%', PALETTE.cool], [C + 218, Y - 96, '不换 ≈50%', PALETTE.warn]] })}</g>`
+    + pill(C, G + 26, '什么都没拿到 · 单纯二选一', { bg: PALETTE.panelSoft, fg: PALETTE.ink, size: 22 }),
 
   // 28 谁开局拿什么守什么：两把锁箱
   s28: () => `<g data-key="A" data-at="0.4">${lockBoxes(C, Y + 6)}</g>`
@@ -194,9 +196,8 @@ export const SCENE_SVG = {
     + `<g data-key="B" data-at="1.3">${ticketOne(R - 60, Y + 6, '$2000+', '买家愿意付的价')}</g>`
     + `<g data-key="C" data-at="2.3">${pill(C, G + 26, '杜克大学 · 篮球票', { bg: PALETTE.panelSoft, fg: PALETTE.ink, size: 22 })}</g>`,
 
-  // 34 大量练习（章节）：感情柱被磨平（柱体实时变矮 + 数值交叉改写）
-  s34: () => `<g data-key="A">${barsPair(C, Y, 110, 150, '练习前', '反复练习后', { va: '2×', vb: '2×' })}
-    <text x="740" y="429" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="24" font-weight="800" fill="${PALETTE.accent}" text-anchor="middle" opacity="0">≈1×</text></g>`
+  // 34 大量练习（章节）：溢价随练习次数递减（比较/进步 → 柱状系列，零基线错峰生长）
+  s34: () => `<g data-key="A" data-at="0.3">${barSeries(C, Y - 8, [2.0, 1.7, 1.4, 1.2, 1.0], ['第1次', '第2次', '第3次', '第4次', '第5次'], { fmt: (v) => '×' + v, highlight: 4, maxH: 168 })}</g>`
     + pill(C, G + 30, '大量练习 · 反复交易', { bg: PALETTE.panelSoft, fg: PALETTE.ink }),
 
   // 35 老手价差小：老手 + 斜便签
@@ -343,6 +344,11 @@ export const CHOREO = {
     const inner = wallG ? wallG.querySelector('g') : null;
     if (inner) tl.from(inner, { scaleY: 0.05, transformOrigin: '50% 100%', duration: 0.9, ease: 'power3.out' }, T(1.0));
   },
+  // s27 五五开环形：两片自 12 点钟顺时针依次扫掠（大片先），中心与侧标签随后
+  s27(tl, layer, T) {
+    const g = layer.querySelector('[data-key="A"]');
+    if (g) sweepDonut(tl, g, T(1.3), { each: 0.9 });
+  },
   // s29 斜杠劈下
   s29(tl, layer, T) {
     const line = layer.querySelector('[data-key="A"] line');
@@ -371,26 +377,14 @@ export const CHOREO = {
     mv(tl, layer.querySelector('[data-key="A"]'), T(1.5), { x: -320, scale: 0.88 }, 1.0);
     mv(tl, layer.querySelector('[data-key="B"]'), T(3.2), { scale: 1.14 }, 0.8);
   },
-  // s34 感情柱被磨平：柱体实时变矮 + 数值 2× → ≈1× 交叉改写（seek 安全）
+  // s34 溢价柱状系列：零基线左→右错峰生长（back.out 过冲），标签随后落定（chart-method 规范）
   s34(tl, layer, T) {
     const g = layer.querySelector('[data-key="A"]');
-    if (!g) return;
-    const rects = g.querySelectorAll('rect');
-    const texts = g.querySelectorAll('text');
-    const r = rects[1];
-    if (r) {
-      const h0 = +r.getAttribute('height'), y0 = +r.getAttribute('y');
-      tl.to(r, { attr: { height: 44, y: y0 + h0 - 44 }, duration: 1.8, ease: 'power2.inOut' }, T(1.6));
-      // 数值标签跟随柱顶
-      const val = texts[2];
-      if (val) tl.to(val, { attr: { y: y0 + h0 - 44 - 12 }, duration: 1.8, ease: 'power2.inOut' }, T(1.6));
-      // 改写：原数值淡出、≈1× 淡入（最后一个 text 是叠加的 ≈1×）
-      const v2 = texts[texts.length - 1];
-      if (val && v2 && v2 !== val) {
-        tl.to(val, { opacity: 0, duration: 0.3, ease: 'power1.inOut' }, T(2.6));
-        tl.to(v2, { opacity: 1, duration: 0.3, ease: 'power1.inOut' }, T(2.65));
-      }
-    }
+    if (g) growBars(tl, g, T(1.2), { stagger: 0.18, dur: 0.9 });
+  },
+  // s37 走势图：坐标轴已在（框架先于数据），折线左→右描线 + 终点圆点压轴
+  s37(tl, layer, T) {
+    drawLine(tl, layer.querySelector('#refLine'), T(1.4), { dur: 2.4, endDot: layer.querySelector('#refEnd') });
   },
   // s36 舍不得放大、值得缩小（错误等式）
   s36(tl, layer, T) {
