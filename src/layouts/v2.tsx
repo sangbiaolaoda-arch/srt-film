@@ -230,11 +230,19 @@ const v2ListMarks: Board = ({ content, profile: p }) => {
   const step = items.length > 0 ? Math.min(96, 500 / items.length) : 96;
   return (
     <g>
+      {/* 左侧顶部分类标签语汇 */}
+      <text x={112} y={230} fontSize={12} fill={p.accent} fontFamily={p.fontText} letterSpacing={2} fontWeight={600} opacity={0.85}>
+        INDEX / CHECKLIST
+      </text>
       <VText x={110} y={320} size={fitW(h, 540, 88)} fill={p.ink} text={h} profile={p} anchor="start" motion="m-char-rise" />
       <rect x={112} y={366} width={64} height={5} fill={p.accent} />
       {items.map((it, i) => (
         <g key={i} data-anim data-motion="m-fade-up">
           <rect x={700} y={172 + i * step - 13} width={12} height={12} rx={p.radius} fill={p.accent} />
+          {/* 序号微标：01, 02... */}
+          <text x={676} y={172 + i * step} fontSize={12} fill={p.ink} opacity={0.35} fontFamily={p.fontText} textAnchor="end">
+            {String(i + 1).padStart(2, "0")}
+          </text>
           <VText x={736} y={172 + i * step} size={30} fill={p.ink} text={it} profile={p} anchor="start" />
           {i < items.length - 1 && <rect x={700} y={172 + i * step + 22} width={470} height={1} fill={p.ink} opacity={0.18} />}
         </g>
@@ -269,6 +277,19 @@ const v2Vertical: Board = ({ content, profile: p }) => {
   const subBaseY = 620 - (subRows.length - 1) * subLh;
   return (
     <g>
+      {/* 次级视觉锚点：左侧大字号背景结构水印（提升纵深层次感，消除左侧留白苍白感） */}
+      <text
+        x={130}
+        y={460}
+        fontSize={240}
+        fill={p.ink}
+        opacity={0.035}
+        fontFamily={p.fontDisplay}
+        fontWeight={800}
+        pointerEvents="none"
+      >
+        {String(content.beat).padStart(2, "0")}
+      </text>
       <rect x={130} y={110} width={26} height={26} rx={p.radius} fill={p.accent} data-anim data-motion="m-scale-soft" />
       <g data-anim data-motion="m-fade-up">
         {col.map((ch, i) => (
@@ -278,6 +299,8 @@ const v2Vertical: Board = ({ content, profile: p }) => {
         ))}
       </g>
       <rect x={978} y={150} width={2} height={col.length * step - size * 0.5} fill={p.ink} opacity={0.25} />
+      {/* 辅助水平对位基线：连接左侧信息与右侧立轴 */}
+      <line x1={130} y1={520} x2={940} y2={520} stroke={p.ink} strokeWidth={1} strokeDasharray="4 6" opacity={0.12} />
       {subRows.map((r, i) => (
         <VText key={i} x={130} y={subBaseY + i * subLh} size={subSize} fill={p.ink} text={r} profile={p} anchor="start" opacity={0.7} motion="m-fade-up" />
       ))}
@@ -319,6 +342,14 @@ const v2Steps: Board = ({ content, profile: p }) => {
   const baseY = lastBaseline - (rows.length - 1) * lh;
   return (
     <g>
+      {/* 阶梯投影线与阶段落点（建筑结构语汇） */}
+      <line x1={420} y1={452} x2={420} y2={540} stroke={p.ink} strokeWidth={1} strokeDasharray="3 4" opacity={0.15} />
+      <line x1={760} y1={344} x2={760} y2={540} stroke={p.ink} strokeWidth={1} strokeDasharray="3 4" opacity={0.15} />
+      <line x1={1150} y1={236} x2={1150} y2={540} stroke={p.ink} strokeWidth={1} strokeDasharray="3 4" opacity={0.15} />
+      {/* 阶梯阶段微标 */}
+      <text x={260} y={442} fontSize={12} fill={p.ink} opacity={0.3} fontFamily={p.fontText} letterSpacing={1}>STAGE 01</text>
+      <text x={580} y={334} fontSize={12} fill={p.ink} opacity={0.3} fontFamily={p.fontText} letterSpacing={1}>STAGE 02</text>
+      <text x={940} y={226} fontSize={12} fill={p.ink} opacity={0.3} fontFamily={p.fontText} letterSpacing={1}>STAGE 03</text>
       <path data-anim data-motion="m-stroke-draw"
         d="M120 520 L120 452 L420 452 L420 344 L760 344 L760 236 L1150 236"
         stroke={p.ink} strokeWidth={p.lineWidth} fill="none" />

@@ -258,7 +258,13 @@ describe("v2-vertical · 竖排列不越界（Phase 10 QA 实测回归）", () =
       "这是一句非常非常非常长的标题用来把竖排列撑满",
     ]) {
       const html = render(byId("vertical"), demo({ headline }));
-      const ys = [...html.matchAll(/<text[^>]*\by="([\d.]+)"/g)].map((m) => Number(m[1]));
+      // 只量内容文字的基线；HUD 角标（data-beat，always-on 母版信息，落在 660 安全区之下）
+      // 不算内容，排除它，否则「末行基线」会被固定底角的 HUD 污染。
+      const texts = [...html.matchAll(/<text([^>]*)>/g)];
+      const ys = texts
+        .filter((m) => !/data-beat/.test(m[1] ?? ""))
+        .map((m) => { const ym = /\by="([\d.]+)"/.exec(m[1] ?? ""); return ym ? Number(ym[1]) : null; })
+        .filter((y): y is number => y !== null);
       expect(ys.length, headline).toBeGreaterThan(0);
       expect(Math.max(...ys), `${headline} 末行基线越界`).toBeLessThanOrEqual(660);
     }

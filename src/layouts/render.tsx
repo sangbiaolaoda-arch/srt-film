@@ -466,7 +466,18 @@ export interface LayoutSVGProps {
 }
 
 /** 版式图层：只有槽位，不带 <svg> 外壳与背景 —— 供播放器把多拍叠在同一张 SVG 里。 */
-export function LayoutLayer({ layout, content, mood }: { layout: Layout; content: RenderContent; mood?: BgMood }): JSX.Element {
+export function LayoutLayer({
+  layout,
+  content,
+  mood,
+  total,
+}: {
+  layout: Layout;
+  content: RenderContent;
+  mood?: BgMood;
+  /** 总拍数：v2 满版板的 HUD 进度条需要（decor:false 绕过了 DecorLayer 的进度条） */
+  total?: number;
+}): JSX.Element {
   // 专属场景（kaojin.tsx / wangji.tsx）：整拍由手绘画面渲染，槽位机制被绕过。
   const scene = layout.custom ? (KAOJIN_SCENES[layout.custom] ?? WANGJI_SCENES[layout.custom]) : undefined;
   if (scene) {
@@ -528,12 +539,25 @@ export function LayoutSVG({ layout, content, paper }: LayoutSVGProps): JSX.Eleme
   );
 }
 
-/** 拍号角标 */
-export function BeatMark({ beat, style }: { beat: number; style?: Style }): JSX.Element {
+/** 拍号 HUD 角标：BEAT 02/10 · LIST —— 仪表感的母版元素（版式组名让观众
+ *  感知到「每拍画面结构都不同」，这是十二张全异的显性证据）。 */export function BeatMark({
+  beat,
+  style,
+  total,
+  group,
+}: {
+  beat: number;
+  style?: Style;
+  total?: number;
+  group?: string;
+}): JSX.Element {
   const prof = resolveProfile(style);
+  const n = String(beat).padStart(2, "0");
+  const tot = total ? `/${String(total).padStart(2, "0")}` : "";
+  const grp = group ? `  ·  ${group.toUpperCase()}` : "";
   return (
-    <text x={1280 * 0.08} y={720 - 24} fontSize={13} fill={colorsOf(style).dim} fontFamily={prof.fontText} data-beat="">
-      {`BEAT ${String(beat).padStart(2, "0")}`}
+    <text x={1280 * 0.08} y={720 - 24} fontSize={13} fill={colorsOf(style).dim} fontFamily={prof.fontText} letterSpacing={1} data-beat="">
+      {`BEAT ${n}${tot}${grp}`}
     </text>
   );
 }
