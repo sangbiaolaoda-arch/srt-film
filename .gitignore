@@ -10,3 +10,7 @@ vitest.config.ts.timestamp-*.mjs
 # 历史上误提交过的补丁副本与 sed 残留
 src/layouts/render.patched.tsx
 src/layouts/sedIofnPI
+# endowment-v2 出片产物与中间帧（成片数十 M，帧序列数百 M，不入库）
+examples/endowment-v2/out/
+examples/endowment-v2/frames/
+examples/endowment-v2/render.log

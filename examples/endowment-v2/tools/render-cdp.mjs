@@ -35,6 +35,9 @@ const OUT = resolve(argOf("--out", OUT_MP4));
 const SHEET_OUT = resolve(argOf("--sheet", SHEET));
 const FROM = Number(argOf("--from", "0"));
 const TO = Number(argOf("--to", "0")); // 0 = 全片
+const SCALE = Math.max(1, Math.min(2, Number(argOf("--scale", "1"))));
+const OUT_W = Math.round(1280 * SCALE), OUT_H = Math.round(720 * SCALE);
+const PORT = Number(argOf("--port", "9362"));
 
 const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".json": "application/json" };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -107,6 +110,8 @@ function startReceiver() {
 let staticS = null, recvS = null;
 try {
   mkdirSync(join(ROOT, "out"), { recursive: true });
+  mkdirSync(dirname(OUT), { recursive: true });
+  mkdirSync(dirname(SHEET_OUT), { recursive: true });
 
   const st = await startStatic(); staticS = st.s;
   const rc = await startReceiver(); recvS = rc.s;
@@ -140,6 +145,7 @@ try {
         window.__exportDone = false; window.__exportErr = null; window.__exportProgress = null;
         window.__exportMp4Post({
           fps: ${FPS},
+          scale: ${SCALE},
           fromMs: ${Math.round(seg.start * 1000)},
           toMs: ${Math.round((seg.start + seg.dur) * 1000)},
           quality: 0.93,
@@ -180,7 +186,7 @@ try {
       if (er.code !== 0 || sz < 1000) throw new Error("段编码失败");
       segPaths.push(segPath);
     }
-  }, { port: 9362 });
+  }, { port: PORT });
 
   // 拼接
   if (segPaths.length === 1) writeFileSync(OUT, readFileSync(segPaths[0]));
@@ -202,7 +208,7 @@ try {
   const black = yavgs.filter((y) => y <= 16.5).length;
   const expect = (TO > 0 ? Math.min(TO, fullDur) : fullDur) - FROM;
   check("ffprobe 容器可读", pr.code === 0 && !!dur, dur ? `${dur[1]}h${dur[2]}m${dur[3]}s ${res?.[1] ?? "?"}` : txt.slice(-200));
-  check("分辨率 1280x720", res?.[1] === "1280x720", res?.[1] ?? "?");
+  check(`分辨率 ${OUT_W}x${OUT_H}`, res?.[1] === `${OUT_W}x${OUT_H}`, res?.[1] ?? "?");
   check(`时长 ≈ ${expect.toFixed(1)}s`, !!dur && Math.abs((+dur[1]) * 3600 + (+dur[2]) * 60 + (+dur[3]) - expect) < 3, dur ? dur[3] : "?");
   check("无全黑帧", black === 0, `YAVG≤16.5 帧 ${black}/${yavgs.length}`);
 
