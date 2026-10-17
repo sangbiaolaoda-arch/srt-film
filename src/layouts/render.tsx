@@ -15,7 +15,7 @@ import { BgLayer } from "./bg";
 import { DecorLayer } from "./decor";
 import { WashLayer } from "./wash";
 import { photoCutouts } from "./cutout";
-import type { Layout, RenderContent, Slot, SlotKind, Style, Tone } from "./types";
+import type { Layout, RenderContent, Slot, SlotKind, Style, Tone, BgMood } from "./types";
 import { displayHeadline, displayWidth } from "../core/compose";
 import { stripPunct, charWidth, wrapText, FONT_SIZE } from "../core/text";
 import { resolveProfile } from "../styles/style-system";
@@ -466,7 +466,7 @@ export interface LayoutSVGProps {
 }
 
 /** 版式图层：只有槽位，不带 <svg> 外壳与背景 —— 供播放器把多拍叠在同一张 SVG 里。 */
-export function LayoutLayer({ layout, content }: { layout: Layout; content: RenderContent }): JSX.Element {
+export function LayoutLayer({ layout, content, mood }: { layout: Layout; content: RenderContent; mood?: BgMood }): JSX.Element {
   // 专属场景（kaojin.tsx / wangji.tsx）：整拍由手绘画面渲染，槽位机制被绕过。
   const scene = layout.custom ? (KAOJIN_SCENES[layout.custom] ?? WANGJI_SCENES[layout.custom]) : undefined;
   if (scene) {
@@ -495,7 +495,7 @@ export function LayoutLayer({ layout, content }: { layout: Layout; content: Rend
   return (
     <g data-layout={layout.id}>
       {layout.wash !== false && (
-        <WashLayer beat={content.beat} style={layout.style} paper={layout.paper} cutouts={cutouts} />
+        <WashLayer beat={content.beat} style={layout.style} paper={layout.paper} mood={mood} cutouts={cutouts} />
       )}
       {layout.bg && (
         <BgLayer kind={layout.bg} seed={content.beat} colorDim={C.dim} colorHairline={C.hairline} accent={C.accent} cutouts={cutouts} />
