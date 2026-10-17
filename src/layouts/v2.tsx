@@ -440,31 +440,151 @@ const v2Strata: Board = ({ content, profile: p }) => {
   );
 };
 
-/* ── 12 天平 ───────────────────────────────────────────────────────
-   支点三角 + 微倾横梁 + 两只吊盘（红 / 青），left/right 压盘。 */
+/* ── 12 大师级价值失衡天平 ─────────────────────────────────────────
+   精密机械立柱 + 偏角仪表盘 + 双轨桁架梁 + 左右立体托盘与动态载重物 */
 const v2Balance: Board = ({ content, profile: p }) => {
-  const L = clean(content.left);
-  const R = clean(content.right);
-  const tilt = Array.from(L).length >= Array.from(R || "0").length ? 14 : -14;
-  const beamY = 300;
-  // 前景一律用 ink，不用 cream。
-  //
-  // cream 是**反白专用**token：三系都是浅色（编辑风 #f3ede4、扁平/图表 #ffffff），
-  // 语义是「压在深色块上的字」。v2-balance 原先整块用 cream —— 支点、横梁、两端
-  // 文字全是浅色，而底也是纸白亮底，扁平风拍整幅接近全白、文字几乎不可见
-  // （02 语料拍1 成片抽帧实证）。
-  //
-  // ink 才是「画在纸上」的正确语义：三系都是纸白/亮底上的深色，天生可读。
+  const L = clean(content.left) || "买的时候嫌贵";
+  const R = clean(content.right) || "卖的时候觉得亏";
+  const tilt = 16; // 卖方心理沉坠（右沉左翘），直观呈现失衡
+  const beamY = 260;
+  const lx = 260;
+  const rx = 1020;
+  const ly = beamY - tilt;
+  const ry = beamY + tilt;
+
   return (
-    <g>
-      <path d={`M640 ${beamY - 8} L600 560 L680 560 Z`} fill={p.ink} opacity={0.9} data-anim data-motion="m-fade-up" />
-      <line x1={310} y1={beamY + tilt} x2={970} y2={beamY - tilt} stroke={p.ink} strokeWidth={p.lineWidth} data-anim data-motion="m-stroke-draw" />
-      <line x1={310} y1={beamY + tilt} x2={310} y2={beamY + tilt + 110} stroke={p.ink} strokeWidth={2} opacity={0.6} />
-      <line x1={970} y1={beamY - tilt} x2={970} y2={beamY - tilt + 110} stroke={p.ink} strokeWidth={2} opacity={0.6} />
-      <rect x={230} y={beamY + tilt + 110} width={160} height={14} rx={p.radius} fill={p.ember} data-anim data-motion="m-slide-right" />
-      <rect x={890} y={beamY - tilt + 110} width={160} height={14} rx={p.radius} fill={p.steel} data-anim data-motion="m-slide-left" />
-      {L && <VText x={310} y={beamY + tilt + 190} size={fit(L, 34)} fill={p.ink} text={L} profile={p} motion="m-fade-up" />}
-      {R && <VText x={970} y={beamY - tilt + 190} size={fit(R, 34)} fill={p.ink} text={R} profile={p} motion="m-fade-up" />}
+    <g data-board="balance">
+      {/* 顶部叙事指示标 */}
+      <text x={640} y={90} fontSize={14} fill={p.accent} fontFamily={p.fontText} textAnchor="middle" letterSpacing={3} fontWeight={600}>
+        VALUE ASYMMETRY / 价值感知失衡
+      </text>
+
+      {/* 底部机械底座与立柱 */}
+      <path d="M580 620 L700 620 L660 300 L620 300 Z" fill={p.ink} opacity={0.08} />
+      <line x1={540} y1={620} x2={740} y2={620} stroke={p.ink} strokeWidth={6} strokeLinecap="round" />
+      <line x1={640} y1={620} x2={640} y2={beamY} stroke={p.ink} strokeWidth={p.lineWidth * 1.5} />
+
+      {/* 中心半圆角度仪表盘 */}
+      <path d="M560 260 A 80 80 0 0 1 720 260" fill="none" stroke={p.ink} strokeWidth={2} strokeDasharray="4 6" opacity={0.4} />
+      {/* 偏角指针（红色指向偏重的一端） */}
+      <line x1={640} y1={260} x2={640 + Math.sin(0.35) * 65} y2={260 + Math.cos(0.35) * 65} stroke={p.accent} strokeWidth={3} strokeLinecap="round" />
+      <circle cx={640} cy={260} r={14} fill={p.accent} />
+      <circle cx={640} cy={260} r={6} fill={p.paper} />
+
+      {/* 动态双轨横梁 */}
+      <g data-anim data-motion="m-fade-up">
+        <line x1={lx} y1={ly} x2={rx} y2={ry} stroke={p.ink} strokeWidth={p.lineWidth * 1.8} strokeLinecap="round" />
+        <line x1={lx + 20} y1={ly + 10} x2={rx - 20} y2={ry + 10} stroke={p.ink} strokeWidth={1.5} opacity={0.4} />
+      </g>
+
+      {/* 左侧悬索与托盘（买方：高昂嫌贵） */}
+      <g data-anim data-motion="m-slide-right">
+        <line x1={lx} y1={ly} x2={lx - 60} y2={ly + 180} stroke={p.ink} strokeWidth={1.5} strokeDasharray="2 3" opacity={0.6} />
+        <line x1={lx} y1={ly} x2={lx + 60} y2={ly + 180} stroke={p.ink} strokeWidth={1.5} strokeDasharray="2 3" opacity={0.6} />
+        {/* 左托盘 */}
+        <path d={`M${lx - 100} ${ly + 180} Q ${lx} ${ly + 210} ${lx + 100} ${ly + 180}`} fill="none" stroke={p.ink} strokeWidth={4} />
+        <rect x={lx - 80} y={ly + 182} width={160} height={12} rx={6} fill={p.aux} opacity={0.85} />
+        {/* 左盘载荷：向上阻力箭头 + 价值标 */}
+        <path d={`M${lx} ${ly + 160} L${lx} ${ly + 110} M${lx - 14} ${ly + 124} L${lx} ${ly + 110} L${lx + 14} ${ly + 124}`} fill="none" stroke={p.accent} strokeWidth={3} strokeLinecap="round" />
+        <VText x={lx} y={ly + 240} size={fitW(L, 340, 36)} fill={p.ink} text={L} profile={p} motion="m-char-rise" />
+      </g>
+
+      {/* 右侧悬索与托盘（卖方：沉重亏损） */}
+      <g data-anim data-motion="m-slide-left">
+        <line x1={rx} y1={ry} x2={rx - 60} y2={ry + 180} stroke={p.ink} strokeWidth={1.5} strokeDasharray="2 3" opacity={0.6} />
+        <line x1={rx} y1={ry} x2={rx + 60} y2={ry + 180} stroke={p.ink} strokeWidth={1.5} strokeDasharray="2 3" opacity={0.6} />
+        {/* 右托盘 */}
+        <path d={`M${rx - 100} ${ry + 180} Q ${rx} ${ry + 210} ${rx + 100} ${ry + 180}`} fill="none" stroke={p.ink} strokeWidth={4} />
+        <rect x={rx - 80} y={ry + 182} width={160} height={12} rx={6} fill={p.accent} />
+        {/* 右盘载荷：向下沉坠重压（实心铅块，喻情感损失） */}
+        <rect x={rx - 38} y={ry + 126} width={76} height={48} rx={4} fill={p.accent} />
+        <rect x={rx - 24} y={ry + 140} width={48} height={20} rx={2} fill="none" stroke={p.ink} strokeWidth={1.5} opacity={0.45} />
+        <text x={rx} y={ry + 157} fontSize={15} fill={p.ink} textAnchor="middle" fontWeight={700} letterSpacing={1}>割舍之痛</text>
+        <VText x={rx} y={ry + 240} size={fitW(R, 340, 36)} fill={p.ink} text={R} profile={p} motion="m-char-rise" />
+      </g>
+    </g>
+  );
+};
+
+/* ── 12B 康奈尔大学马克杯实验（经典证据图腾）───────────────────────
+   几何质感马克杯 + 左右买卖价格标尺悬殊对比柱（$2.25 vs $5.25） */
+const v2MugExperiment: Board = ({ content, profile: p }) => {
+  const h = stripPunct(content.headline) || "一只印着校徽的马克杯";
+  const cx = 640;
+  const cy = 380;
+
+  return (
+    <g data-board="mug-experiment">
+      {/* 顶部实验档案标头 */}
+      <text x={cx} y={90} fontSize={14} fill={p.accent} fontFamily={p.fontText} textAnchor="middle" letterSpacing={3} fontWeight={600}>
+        CORNELL UNIVERSITY EXPERIMENT / 1990
+      </text>
+
+      {/* 左侧买家出价刻度柱（低位 $2.25） */}
+      <g data-anim data-motion="m-slide-right">
+        <rect x={180} y={440} width={120} height={160} rx={4} fill={p.aux} opacity={0.25} />
+        <line x1={240} y1={440} x2={240} y2={600} stroke={p.aux} strokeWidth={4} />
+        <text x={240} y={415} fontSize={38} fill={p.aux} fontFamily={p.fontDisplay} fontWeight={800} textAnchor="middle">
+          $2.25
+        </text>
+        <text x={240} y={640} fontSize={18} fill={p.ink} textAnchor="middle" fontWeight={600}>
+          买方最高出价
+        </text>
+        <text x={240} y={668} fontSize={14} fill={p.tone.dim} textAnchor="middle">
+          手里无杯 / 局外估值
+        </text>
+      </g>
+
+      {/* 中央：高精度矢量马克杯主体 */}
+      <g data-anim data-motion="m-scale-soft">
+        {/* 杯子投影光晕 */}
+        <ellipse cx={cx} cy={cy + 140} rx={110} ry={22} fill={p.ink} opacity={0.08} />
+
+        {/* 马克杯圆润把手 */}
+        <path d={`M${cx + 70} ${cy - 60} C ${cx + 155} ${cy - 60}, ${cx + 155} ${cy + 80}, ${cx + 70} ${cy + 80}`} fill="none" stroke={p.ink} strokeWidth={24} strokeLinecap="round" />
+        <path d={`M${cx + 70} ${cy - 60} C ${cx + 155} ${cy - 60}, ${cx + 155} ${cy + 80}, ${cx + 70} ${cy + 80}`} fill="none" stroke={p.paper} strokeWidth={8} strokeLinecap="round" />
+
+        {/* 马克杯杯身 */}
+        <rect x={cx - 85} y={cy - 100} width={170} height={210} rx={18} fill={p.ink} />
+        <rect x={cx - 75} y={cy - 90} width={150} height={190} rx={12} fill={p.cream} />
+
+        {/* 杯口透视内口椭圆 */}
+        <ellipse cx={cx} cy={cy - 90} rx={75} ry={16} fill={p.paper} stroke={p.ink} strokeWidth={3} />
+        <ellipse cx={cx} cy={cy - 88} rx={60} ry={11} fill={p.accent} opacity={0.25} />
+
+        {/* 杯身校徽徽章图腾（Cornell Emblem） */}
+        <circle cx={cx} cy={cy + 15} r={34} fill={p.accent} />
+        <circle cx={cx} cy={cy + 15} r={28} fill="none" stroke={p.paper} strokeWidth={2} />
+        <path d={`M${cx - 14} ${cy + 10} L${cx + 14} ${cy + 10} L${cx} ${cy + 34} Z`} fill={p.paper} />
+        <text x={cx} y={cy + 65} fontSize={11} fill={p.ink} opacity={0.6} textAnchor="middle" letterSpacing={1} fontWeight={700}>
+          CORNELL
+        </text>
+      </g>
+
+      {/* 右侧卖家索价刻度柱（高位 $5.25） */}
+      <g data-anim data-motion="m-slide-left">
+        <rect x={980} y={260} width={120} height={340} rx={4} fill={p.accent} opacity={0.25} />
+        <line x1={1040} y1={260} x2={1040} y2={600} stroke={p.accent} strokeWidth={4} />
+        <text x={1040} y={235} fontSize={38} fill={p.accent} fontFamily={p.fontDisplay} fontWeight={800} textAnchor="middle">
+          $5.25
+        </text>
+        <text x={1040} y={640} fontSize={18} fill={p.ink} textAnchor="middle" fontWeight={600}>
+          卖方最低索价
+        </text>
+        <text x={1040} y={668} fontSize={14} fill={p.tone.dim} textAnchor="middle">
+          已发到手 / 视为所有物
+        </text>
+      </g>
+
+      {/* 两者之间的悬殊溢价对比导线 */}
+      <path d={`M320 440 L${cx - 100} 440 M${cx + 100} 260 L960 260`} fill="none" stroke={p.accent} strokeWidth={1.5} strokeDasharray="4 4" opacity={0.6} />
+      <rect x={cx - 70} y={150} width={140} height={34} rx={17} fill={p.accent} />
+      <text x={cx} y={173} fontSize={15} fill={p.paper} fontWeight={800} textAnchor="middle">
+        +233% 心理溢价
+      </text>
+
+      {/* 底部醒目标题 */}
+      <VText x={cx} y={690} size={fitW(h, 900, 32)} fill={p.ink} text={h} profile={p} motion="m-char-rise" />
     </g>
   );
 };
@@ -808,6 +928,7 @@ export const V2_BOARDS: Record<string, Board> = {
   "v2:dark-word": v2DarkWord,
   "v2:strata": v2Strata,
   "v2:balance": v2Balance,
+  "v2:mug-experiment": v2MugExperiment,
   "v2:dust": v2Dust,
   "v2:data-giant": v2DataGiant,
   "v2:axis-columns": v2AxisColumns,
@@ -850,6 +971,7 @@ export const V2_LAYOUTS: Layout[] = [
   B("dark-word", "暗底大字", "poster-focus", { style: "flat-vector", note: "金句定场", enter: ["m-char-rise", "m-glow"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "glow", fxAccent: "ember", fxStrength: 1.0 }),
   B("strata", "水平色带", "poster-field", { style: "flat-vector", note: "氛围场 + 大字，配缓推", enter: ["m-slide-right", "m-scale-soft"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "particles-converge", fxAccent: "accent", fxStrength: 0.8 }),
   B("balance", "天平", "poster-geo", { style: "flat-vector", note: "权衡对照", enter: ["m-stroke-draw", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.14 } }),
+  B("mug-experiment", "马克杯实验", "poster-focus", { style: "flat-vector", note: "康奈尔大学马克杯索价差距实验", enter: ["m-scale-soft", "m-fade-up"], camera: { scaleFrom: 1.0, scaleTo: 1.12 }, fx: "glow", fxAccent: "ember" }),
   B("dust", "尘埃与主体", "poster-focus", { style: "flat-vector", note: "氛围定场，配缓推", enter: ["m-drift-slow", "m-char-rise"], camera: { scaleFrom: 1.0, scaleTo: 1.14 }, fx: "particles-vortex", fxAccent: "steel", fxStrength: 0.8 }),
   // 图表动态图形风三件套：母版网格 + 等宽数字 + 坐标轴语言。机位推得比另外两系轻
   // （motionPace 0.9）—— 测量画面经不起大幅度位移，尺会抖。

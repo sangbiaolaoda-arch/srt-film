@@ -40,17 +40,26 @@ export interface FrameInput {
 }
 
 /** 拍内机位缩放：预览在 stage.tsx 套在舞台 SVG 上，导出链路（rasterizeLayer）不序列化它，
- *  所以这里在绘制每层时补上，保证预览/导出同源。scaleFrom→scaleTo 随拍内进度线性插值。 */
+ *  所以这里在绘制每层时补上，保证预览/导出同源。
+ *  读 shot.camera（schedule 按叙事角色裁决的结果），与预览用同一条 easeInOutQuad 缓动，
+ *  逐帧一致 —— 不再线性插值，也不读 layout.camera（后者已退化为数据残留）。 */
 export function cameraScale(shot: Shot | undefined, t: number): number {
-  const cam = shot?.layout.camera;
+  const cam = shot?.camera;
   if (!cam) return 1;
   const start = shot.tlStart ?? shot.start;
   const local = Math.max(0, t - start);
   const dur = Math.max(shot.end - shot.start, 0.8);
   const p = Math.min(1, Math.max(0, local / dur));
+  const e = easeInOutQuad(p);
   const from = cam.scaleFrom ?? 1;
   const to = cam.scaleTo ?? from;
-  return from + (to - from) * p;
+  return from + (to - from) * e;
+}
+
+/** 与 GSAP power2.inOut 逐帧等价的缓动（stage.tsx 机位时间轴用的就是它）。
+ *  预览与导出走同一条曲线，画面必然一致。 */
+function easeInOutQuad(p: number): number {
+  return p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
 }
 
 /** 时间轴时间 → 拍序号 */

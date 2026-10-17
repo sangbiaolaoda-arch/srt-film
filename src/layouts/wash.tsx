@@ -19,19 +19,53 @@
 
 import { colorsOf } from "./render";
 import { CutoutMask, type Rect } from "./cutout";
-import type { Style } from "./types";
+import type { Style, BgMood } from "./types";
 import { resolveProfile, type StyleProfileId } from "../styles/style-system";
 
 interface WashProps {
-  /** 拍号：驱动色彩脚本档位与光位轮转 */
+  /** 拍号：驱动光位轮转（四角轮转，给画面呼吸感） */
   beat: number;
   style?: Style;
   /** 版式显式指定的底色；给了就用它当基调，不再走色彩脚本 */
   paper?: string;
+  /** 叙事情绪：由叙事角色派生，让整段同角色拍读到同一档色（见 moodForRole）。
+   *  给了就按情绪选档，否则按拍号走色彩脚本（保持旧行为，画廊单帧等无角色场景用）。 */
+  mood?: BgMood;
   /** 要让出透明度的矩形（photo 槽）。给了就在这三层 rect 上加挖洞遮罩 ——
    *  wash 是三层**不透明**满幅 rect，不挖洞的话画在 SVG 之下的照片永远看不见。 */
   cutouts?: Rect[];
 }
+
+/** 叙事角色 → 底色情绪：整片底色按「叙事段落」而非「拍号」切换色调。
+ *  同一角色的所有拍读到同一档色，全片读得出一条色彩弧线（开篇中性 →
+ *  证据转冷 → 收束转暖/亲密）。 */
+export function moodForRole(role?: string): BgMood {
+  switch (role) {
+    case "evidence":
+    case "comparison":
+      return "cool";
+    case "definition":
+    case "explanation":
+      return "neutral";
+    case "consequence":
+      return "warm";
+    case "conclusion":
+      return "close";
+    case "hook":
+    default:
+      return "neutral";
+  }
+}
+
+/** 情绪 → 色彩脚本档位（warm/cool/close/neutral 各落一档，见 PAPER_RAMP 等）。 */
+const MOOD_IDX: Record<BgMood, number> = { warm: 0, cool: 1, close: 2, neutral: 3 };
+/** 情绪 → 柔光色：暖调偏暖白、冷调偏冷白，让「受光」也跟着叙事走。 */
+const MOOD_LIGHT: Record<BgMood, string> = {
+  warm: "#fff3e0",
+  cool: "#eef3ff",
+  close: "#fff0ee",
+  neutral: "#fffdf6",
+};
 
 /** 色彩脚本 · 编辑风：四档暖/冷纸，相邻拍只差几度色相 —— 看得见变化，读得出一体。 */
 const PAPER_RAMP = [
@@ -104,12 +138,13 @@ function shade(hex: string, amt: number): string {
  * 满版底色：线性渐变（一侧受光）+ 大半径柔光斑 + 边缘衰减。
  * 三样都刻意做轻 —— 它的作用是让画面「有空间」，不是自己抢戏。
  */
-export function WashLayer({ beat, style, paper, cutouts = [] }: WashProps): JSX.Element {
+export function WashLayer({ beat, style, paper, mood, cutouts = [] }: WashProps): JSX.Element {
   const p = resolveProfile(style);
   const C = colorsOf(style);
   const cfg = washCfg(p.id);
   const ramp = cfg.ramp;
-  const idx = paper ? -1 : (((beat - 1) % ramp.length) + ramp.length) % ramp.length;
+  // 给了 mood 就按叙事段落选档（同角色同色）；否则按拍号走色彩脚本（旧行为，画廊单帧等）。
+  const idx = paper ? -1 : mood ? MOOD_IDX[mood] : (((beat - 1) % ramp.length) + ramp.length) % ramp.length;
 
   // 渐变两端：给了 paper 就从 paper 推出；否则取色彩脚本档位。
   let from: string;
@@ -130,8 +165,8 @@ export function WashLayer({ beat, style, paper, cutouts = [] }: WashProps): JSX.
   // 挖洞遮罩（只在有 photo 槽时存在）：没有它这三层不透明 rect 会把照片盖死。
   const mid = `wash-cut-${beat}`;
   const mask = cutouts.length > 0 ? `url(#${mid})` : undefined;
-  // 柔光颜色：沿风格档取（图表风近白、扁平风暖白、编辑风暖白），不能用强调色，否则每拍都在发光
-  const lightColor = cfg.lightColor;
+  // 柔光颜色：有 mood 时随叙事走冷暖；否则沿风格档取。绝不用强调色，否则每拍都在发光。
+  const lightColor = mood ? MOOD_LIGHT[mood] : cfg.lightColor;
   const lightOpacity = cfg.lightOpacity;
 
   return (

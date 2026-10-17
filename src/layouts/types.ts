@@ -33,6 +33,13 @@ export type FxKind =
  */
 export type BgKind = "dots-fade" | "halftone" | "contour" | "rays" | "waves";
 
+/**
+ * 底色情绪（BgMood）：由叙事角色派生，让整片底色按「叙事段落」而非「拍号」切换色调，
+ * 同一个角色的所有拍读到同一档色，读出色彩弧线。warm 暖/收束 · cool 冷/证据 ·
+ * close 亲密收尾 · neutral 中性过渡。
+ */
+export type BgMood = "warm" | "cool" | "close" | "neutral";
+
 /** 扁平矢量叙事风的版式组（明亮平涂 + 粗描边 + 圆角）。 */
 export const FLATVECTOR_GROUPS: Group[] = ["poster-focus", "poster-field", "poster-geo", "poster-nest"];
 

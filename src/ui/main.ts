@@ -232,6 +232,18 @@ btnLoad.addEventListener("click", () => {
   stage = buildStage(stageHost, shots);
   (window as unknown as { __stage?: StageHandle; __exportMp4?: typeof exportMp4 }).__stage = stage;
   (window as unknown as { __exportMp4?: typeof exportMp4 }).__exportMp4 = exportMp4;
+  // 导出直推钩子：exportMp4 产出的 Blob 不再经 agent-browser 的 base64 桥（25MB+ 会在回传时
+  // 撑爆桥接或让无头 tab 失联），改为由页面用 fetch 流式 POST 给本机接收端（e2e 工具自起），
+  // 接收端直接落盘。startTime 透传给 exportMp4 以支持分段导出。返回 HTTP 状态码（200=成功）。
+  (window as unknown as { __exportMp4Post?: (stage: StageHandle, url: string, dur: number, opts?: Record<string, unknown>) => Promise<number> }).__exportMp4Post =
+    async (st, url, dur, opts) => {
+      const blob = await exportMp4(st, dur, opts as never);
+      const r = await fetch(url, { method: "POST", body: blob, headers: { "content-type": "video/mp4" } });
+      return r.status;
+    };
+  // 导出错误透出堆栈（分段导出偶发 WebCodecs 报错时便于定位，不影响正常路径）。
+  (window as unknown as { __exportMp4Err?: (e: unknown) => string }).__exportMp4Err = (e) =>
+    String((e && (e as { stack?: string }).stack) || e);
   // QA 钩子：逐帧取样必须走与导出同一条 renderFrame 路径。
   // seek() 只推时间轴并置脏，实际重画由 setAutoRender 控制的 rAF 循环负责；
   // 自动化脚本要关掉那个循环（否则与自身抢时间轴），就失去了画面来源。

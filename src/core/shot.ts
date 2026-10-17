@@ -1,4 +1,4 @@
-import type { Layout, RenderContent } from "../layouts/types";
+import type { Layout, RenderContent, CameraMove } from "../layouts/types";
 import type { NarrativeRole } from "./compose";
 import type { PhotoId } from "../assets/photos";
 
@@ -20,4 +20,8 @@ export interface Shot {
   continuity?: string[];
   /** 缺陷 6：语义选图的结果（版式带 photo 槽时才挂；renderFrame 的 canvas 图像层消费） */
   photo?: PhotoId;
+  /** Phase 8：schedule 按叙事角色裁决后的机位运动（null/undefined = 有意静止）。
+   *  渲染链路（stage.tsx 时间轴 + frame.ts 导出同源）统一读它，不再读 layout.camera
+   *  —— layout.camera 退化为「数据残留」，机位的生杀大权收归 schedule。 */
+  camera?: CameraMove;
 }

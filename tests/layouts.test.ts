@@ -248,10 +248,10 @@ describe("渲染与 canvas 安全", () => {
     const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent() }));
     expect(html.includes('data-char=""'), l.id).toBe(true);
   });
-  it("编辑风不拆字符（保持既有视觉）", () => {
+  it("编辑风大标题拆成逐字符（m-char-rise 才有作用对象，fs≥18 即拆）", () => {
     const l = LAYOUT_BY_ID.get("st-h1-center")!;
     const html = renderToStaticMarkup(createElement(LayoutSVG, { layout: l, content: demoContent() }));
-    expect(html.includes("data-char")).toBe(false);
+    expect(html.includes("data-char"), l.id).toBe(true);
   });
   it("竖排槽长句缩字号而不是丢字（缺陷 4：静默截断）", () => {
     // sp-vertical-tension 的竖排 headline 槽 72px 只放得下 6 字。旧实现直接

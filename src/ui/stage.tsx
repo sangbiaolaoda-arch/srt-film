@@ -12,6 +12,7 @@ import { applyMotion } from "../motion/apply";
 import { buildMotionSchedule, slotTweens } from "../motion/schedule";
 import type { Shot } from "../core/shot";
 import { STAGE_FPS, STAGE_H, STAGE_W, renderFrame } from "../render/frame";
+import { moodForRole } from "../layouts/wash";
 
 export type { Shot };
 
@@ -37,6 +38,23 @@ export interface StageHandle {
 /** 运动编排的全部决策在 motion/schedule.ts（纯函数、可测、确定性）。
  *  这里只做「翻译」：把 MotionPlan 逐条变成 GSAP timeline 调用。 */
 
+/** 槽的叙事优先级（越小越先入场）：标题 > 副文/标注 > 列表 > 图形/结构。
+ *  入场错峰按此排序分配序号，标题先落、图形最后到，制造叙事层次。 */
+function slotPriority(kind: string | null): number {
+  switch (kind) {
+    case "headline": case "text": case "quote": case "subhead":
+      return 0;
+    case "kicker": case "label": case "badge": case "meta":
+    case "attribution": case "source": case "caption":
+    case "bignum": case "num2": case "unit": case "delta":
+      return 1;
+    case "bullets": case "listnum": case "checklist": case "pills": case "tags":
+      return 2;
+    default:
+      return 3; // figure/chart/icon/asset/panel/rule/divider 等图形与结构件
+  }
+}
+
 /** 离屏的版式容器：不可见，但保留布局（GSAP 需要能算盒子）。
  *  导出给测试用：decor:false 时拍号角标与装饰层都不该出现在这一层里
  *  （成片左下角挂母版标记是 baseline-audit 缺陷 1）。 */
@@ -47,11 +65,11 @@ export function Stage({ shots }: { shots: Shot[] }): JSX.Element {
         <g key={i} data-layer={i} data-shot={shot.layout.id}>
           {/* 机位运动作用于这个内层容器：与转场/出场（作用于外层 data-layer）不抢同一 transform */}
           <g data-cam={i}>
-            <LayoutLayer layout={shot.layout} content={shot.content} />
+            <LayoutLayer layout={shot.layout} content={shot.content} mood={moodForRole(shot.narrative?.role)} total={shots.length} />
             {/* 拍号角标跟 DecorLayer 同一个门控：decor:false 的定版式（暗底单图那种）
                 成片左下角不该挂母版标记 —— LayoutSVG 里本来就受门控，舞台这条旁路渲染绕过了。 */}
             {shot.layout.decor !== false && (
-              <BeatMark beat={shot.content.beat} style={shot.layout.style} />
+              <BeatMark beat={shot.content.beat} style={shot.layout.style} total={shots.length} group={shot.layout.group} />
             )}
             {shot.layout.decor !== false && (
               <DecorLayer beat={shot.content.beat} total={shots.length} style={shot.layout.style} />
@@ -109,6 +127,9 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
     const shot = shots[i]!;
     const layer = layers[i]!;
     shot.tlStart = plan.at;
+    // schedule 已按叙事角色裁决本拍机位；写回 shot 让 frame.ts（导出同源）读同一份。
+    // 有意静止的拍 camera 为 undefined —— 下面机位分支跳过，画面靠入场动效制造镜内 Δ。
+    shot.camera = plan.camera?.move;
 
     // 转场：作用于整拍图层（与出场同一个 transform 层，从属主运动）。
     // 落位参数先写成层 data 属性 —— apply.ts 的形状匹配/对位剪辑从上面读
@@ -123,9 +144,15 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
     // 槽位入场 / 槽级 mx / 拍级 emphasis：全部由 slotTweens 统一排期（见 schedule.ts 的注释）。
     // 这里只读 DOM 上声明的 intent（data-motion / data-mx）喂进去，不再自己算时间。
     const slots = Array.from(layer.querySelectorAll<SVGGElement>("[data-anim]"));
-    slots.forEach((slotEl, k) => {
-      const tws = slotTweens(plan, k, { m: slotEl.getAttribute("data-motion"), mx: slotEl.getAttribute("data-mx") });
-      for (const tw of tws) applyMotion(tw.motion, { tl, el: slotEl, at: tw.at, dur: tw.dur });
+    // 叙事错峰：先按「叙事重要性」给槽排序（标题→副文→列表→图形/结构），
+    // 再按排序后的序号分配错峰偏移 —— 标题先落、图形最后到，观众视线被带着走，
+    // 不再是所有元素齐刷刷一起动。
+    const ordered = slots
+      .map((el) => ({ el, kind: el.getAttribute("data-kind") }))
+      .sort((a, b) => slotPriority(a.kind) - slotPriority(b.kind));
+    ordered.forEach(({ el }, k) => {
+      const tws = slotTweens(plan, k, { m: el.getAttribute("data-motion"), mx: el.getAttribute("data-mx") });
+      for (const tw of tws) applyMotion(tw.motion, { tl, el, at: tw.at, dur: tw.dur });
     });
 
     // 环境动效：贯穿整拍图层（schedule 保证总长不超出拍长）
@@ -133,18 +160,16 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
       applyMotion(plan.ambient.motion, { tl, el: layer, at: plan.ambient.at, dur: plan.ambient.dur });
     }
 
-    // 机位运动：贯穿整拍的持续线性运动 —— 镜内 Δ 的来源（推／拉／摇／移）。
-    // 摇／移会平出画面边界，所以带平移时把缩放下限抬到 1.06 兜底防露边。
-    // 有 camera 时它就是主运动，上面的入场/强调/环境全部从属于它。
-    const cam = shot.layout.camera;
+    // 机位运动：贯穿整拍的缓动运动（推／拉）。已由 schedule 按角色裁决是否值得动，
+    // 且幅度克制（≤1.05）。缓动曲线 power2.inOut 与 frame.ts 的 easeInOutQuad 逐帧一致，
+    // 保证预览与导出同源。无平移时缩放下限为 1，不强行放大。
+    const cam = shot.camera;
     if (cam) {
       const camEl = layer.querySelector("[data-cam]") ?? layer;
-      const hasPan = (cam.xFrom ?? 0) !== (cam.xTo ?? 0) || (cam.yFrom ?? 0) !== (cam.yTo ?? 0);
-      const floor = hasPan ? 1.06 : 1;
-      const s0 = Math.max(cam.scaleFrom ?? floor, floor);
-      const s1 = Math.max(cam.scaleTo ?? s0, floor);
+      const s0 = cam.scaleFrom ?? 1;
+      const s1 = cam.scaleTo ?? s0;
       tl.fromTo(camEl, { scale: s0, x: cam.xFrom ?? 0, y: cam.yFrom ?? 0, svgOrigin: "640 360" },
-        { scale: s1, x: cam.xTo ?? 0, y: cam.yTo ?? 0, duration: plan.dur, ease: "none", immediateRender: false }, plan.at);
+        { scale: s1, x: cam.xTo ?? 0, y: cam.yTo ?? 0, duration: plan.dur, ease: "power2.inOut", immediateRender: false }, plan.at);
     }
 
     applyMotion(plan.exit.motion, { tl, el: layer, at: plan.exit.at, dur: plan.exit.dur });
