@@ -142,53 +142,64 @@ export const CUES = [
   [138,252.200,253.466,'重新得到它吗？'],
 ].map(([id, start, end, text]) => ({ id, start, end, text, dur: end - start }));
 
-// 40 个叙事场景：按 138 条字幕的节拍切分（4 分钟 ≈ 6.3s/幕），
-// 每幕 = 构图键（illustrations.SCENE_SVG）+ 可选章节标题卡 + 机位键（camera.CAMERA_LIB）+ 动画键
-// title 仅章节幕显示，其余幕只留插画 + 字幕（负空间原则：一幕一个主焦点）
-export const SCENES = [
-  { key:'s01', illu:'s01', start:0.066,   end:1.966,   cam:'pushInSoft' },
-  { key:'s02', illu:'s02', start:1.966,   end:5.0,     cam:'hold' },
-  { key:'s03', illu:'s03', start:5.0,     end:7.066,   cam:'pushInSoft' },
-  { key:'s04', illu:'s04', start:7.066,   end:9.266,   cam:'hold' },
-  { key:'s05', illu:'s05', start:9.266,   end:13.266,  cam:'pushIn' },
-  { key:'s06', illu:'s06', start:13.266,  end:17.033,  cam:'pushIn',    title:'禀赋效应',           kicker:'它叫什么' },
-  { key:'s07', illu:'s07', start:17.033,  end:19.233,  cam:'hold' },
-  { key:'s08', illu:'s08', start:19.233,  end:25.333,  cam:'pushInSoft' },
-  { key:'s09', illu:'s09', start:25.333,  end:31.266,  cam:'pullOut',   title:'康奈尔马克杯实验',   kicker:'证据 · 1990' },
-  { key:'s10', illu:'s10', start:31.266,  end:35.2,    cam:'hold' },
-  { key:'s11', illu:'s11', start:35.233,  end:40.933,  cam:'panLR' },
-  { key:'s12', illu:'s12', start:40.933,  end:46.133,  cam:'panRL' },
-  { key:'s13', illu:'s13', start:46.133,  end:50.766,  cam:'pushIn' },
-  { key:'s14', illu:'s14', start:50.766,  end:57.366,  cam:'panLR' },
-  { key:'s15', illu:'s15', start:57.366,  end:66.166,  cam:'pushInSoft' },
-  { key:'s16', illu:'s16', start:66.166,  end:70.033,  cam:'panLR' },
-  { key:'s17', illu:'s17', start:70.033,  end:76.4,    cam:'pushInSoft' },
-  { key:'s18', illu:'s18', start:76.466,  end:81.0,    cam:'pushIn' },
-  { key:'s19', illu:'s19', start:81.033,  end:87.0,    cam:'hold' },
-  { key:'s20', illu:'s20', start:87.066,  end:94.133,  cam:'pushIn' },
-  { key:'s21', illu:'s21', start:94.133,  end:104.266, cam:'pushIn',    title:'损失厌恶',           kicker:'为什么放手这么贵', anim:'tilt' },
-  { key:'s22', illu:'s22', start:104.266, end:110.966, cam:'panLR' },
-  { key:'s23', illu:'s23', start:110.966, end:125.066, cam:'pushInSoft',title:'科斯定理',           kicker:'一个体面的预测' },
-  { key:'s24', illu:'s24', start:125.066, end:129.666, cam:'hold' },
-  { key:'s25', illu:'s25', start:129.666, end:135.566, cam:'pushIn' },
-  { key:'s26', illu:'s26', start:135.566, end:140.9,   cam:'panRL' },
-  { key:'s27', illu:'s27', start:140.933, end:146.066, cam:'hold' },
-  { key:'s28', illu:'s28', start:146.066, end:150.8,   cam:'pushInSoft' },
-  { key:'s29', illu:'s29', start:150.833, end:154.766, cam:'pushIn' },
-  { key:'s30', illu:'s30', start:154.766, end:163.0,   cam:'sway',      title:'你身边的变体',       kicker:'七天无理由', anim:'loop' },
-  { key:'s31', illu:'s31', start:163.0,   end:167.366, cam:'pushInSoft' },
-  { key:'s32', illu:'s32', start:167.366, end:176.233, cam:'panLR' },
-  { key:'s33', illu:'s33', start:176.233, end:187.433, cam:'pushIn' },
-  { key:'s34', illu:'s34', start:187.433, end:197.466, cam:'pushInSoft',title:'它不是铁律',         kicker:'经验磨薄了它' },
-  { key:'s35', illu:'s35', start:197.466, end:206.533, cam:'hold' },
-  { key:'s36', illu:'s36', start:206.566, end:212.333, cam:'pushIn',    title:'说我',               kicker:'自我反思' },
-  { key:'s37', illu:'s37', start:212.333, end:227.4,   cam:'pushDown',  anim:'draw' },
-  { key:'s38', illu:'s38', start:227.4,   end:239.966, cam:'panLR' },
-  { key:'s39', illu:'s39', start:239.966, end:247.666, cam:'pushInSoft',title:'一个自检',           kicker:'马上能用' },
-  { key:'s40', illu:'s40', start:247.766, end:253.466, cam:'pushIn' },
+// 40 个叙事场景：start/end 不再手工誊写——由 cue 区间 [首条cue, 末条cue] 推导
+// （单一数据源：改 SRT 只需重新生成上方 CUES，幕边界自动跟随，管道闭环）
+// trans = 入场转场语义（联网查证：转场是工具不是装饰——
+//   zoom=揭示/章节开场  whip=能量/对比转折  rise=承接默认  fade=开场收场；
+//   "如果转场比内容更抢眼，就是用错了"）
+const SCENE_DEF = [
+  { key:'s01', illu:'s01', cue:[1,2],      cam:'pushInSoft', trans:'fade' },
+  { key:'s02', illu:'s02', cue:[3,4],      cam:'hold',       trans:'rise' },
+  { key:'s03', illu:'s03', cue:[5,5],      cam:'pushInSoft', trans:'rise' },
+  { key:'s04', illu:'s04', cue:[6,7],      cam:'hold',       trans:'rise' },
+  { key:'s05', illu:'s05', cue:[8,9],      cam:'pushIn',     trans:'rise' },
+  { key:'s06', illu:'s06', cue:[10,11],    cam:'pushIn',     trans:'zoom', title:'禀赋效应',           kicker:'它叫什么' },
+  { key:'s07', illu:'s07', cue:[12,12],    cam:'hold',       trans:'rise' },
+  { key:'s08', illu:'s08', cue:[13,16],    cam:'pushInSoft', trans:'rise' },
+  { key:'s09', illu:'s09', cue:[17,19],    cam:'pullOut',    trans:'zoom', title:'康奈尔马克杯实验',   kicker:'证据 · 1990' },
+  { key:'s10', illu:'s10', cue:[20,21],    cam:'hold',       trans:'rise' },
+  { key:'s11', illu:'s11', cue:[22,23],    cam:'panLR',      trans:'rise' },
+  { key:'s12', illu:'s12', cue:[24,26],    cam:'panRL',      trans:'whip' },
+  { key:'s13', illu:'s13', cue:[27,29],    cam:'pushIn',     trans:'whip' },
+  { key:'s14', illu:'s14', cue:[30,33],    cam:'panLR',      trans:'rise' },
+  { key:'s15', illu:'s15', cue:[34,38],    cam:'pushInSoft', trans:'rise' },
+  { key:'s16', illu:'s16', cue:[39,40],    cam:'panLR',      trans:'whip' },
+  { key:'s17', illu:'s17', cue:[41,43],    cam:'pushInSoft', trans:'rise' },
+  { key:'s18', illu:'s18', cue:[44,45],    cam:'pushIn',     trans:'zoom' },
+  { key:'s19', illu:'s19', cue:[46,48],    cam:'hold',       trans:'rise' },
+  { key:'s20', illu:'s20', cue:[49,52],    cam:'pushIn',     trans:'rise' },
+  { key:'s21', illu:'s21', cue:[53,58],    cam:'pushIn',     trans:'zoom', title:'损失厌恶',           kicker:'为什么放手这么贵', anim:'tilt' },
+  { key:'s22', illu:'s22', cue:[59,62],    cam:'panLR',      trans:'whip' },
+  { key:'s23', illu:'s23', cue:[63,69],    cam:'pushInSoft', trans:'zoom', title:'科斯定理',           kicker:'一个体面的预测' },
+  { key:'s24', illu:'s24', cue:[70,72],    cam:'hold',       trans:'rise' },
+  { key:'s25', illu:'s25', cue:[73,76],    cam:'pushIn',     trans:'zoom' },
+  { key:'s26', illu:'s26', cue:[77,79],    cam:'panRL',      trans:'whip' },
+  { key:'s27', illu:'s27', cue:[80,82],    cam:'hold',       trans:'rise' },
+  { key:'s28', illu:'s28', cue:[83,85],    cam:'pushInSoft', trans:'rise' },
+  { key:'s29', illu:'s29', cue:[86,87],    cam:'pushIn',     trans:'whip' },
+  { key:'s30', illu:'s30', cue:[88,92],    cam:'sway',       trans:'zoom', title:'你身边的变体',       kicker:'七天无理由', anim:'loop' },
+  { key:'s31', illu:'s31', cue:[93,94],    cam:'pushInSoft', trans:'rise' },
+  { key:'s32', illu:'s32', cue:[95,98],    cam:'panLR',      trans:'rise' },
+  { key:'s33', illu:'s33', cue:[99,102],   cam:'pushIn',     trans:'whip' },
+  { key:'s34', illu:'s34', cue:[103,107],  cam:'pushInSoft', trans:'zoom', title:'它不是铁律',         kicker:'经验磨薄了它' },
+  { key:'s35', illu:'s35', cue:[108,113],  cam:'hold',       trans:'rise' },
+  { key:'s36', illu:'s36', cue:[114,116],  cam:'pushIn',     trans:'zoom', title:'说我',               kicker:'自我反思' },
+  { key:'s37', illu:'s37', cue:[117,123],  cam:'pushDown',   trans:'rise', anim:'draw' },
+  { key:'s38', illu:'s38', cue:[124,130],  cam:'panLR',      trans:'rise' },
+  { key:'s39', illu:'s39', cue:[131,135],  cam:'pushInSoft', trans:'zoom', title:'一个自检',           kicker:'马上能用' },
+  { key:'s40', illu:'s40', cue:[136,138],  cam:'pushIn',     trans:'fade' },
 ];
 
-export const TOTAL_DURATION = 253.466;
+export const SCENES = SCENE_DEF.map((s) => {
+  const { cue, ...rest } = s;
+  return {
+    ...rest,
+    start: CUES[cue[0] - 1].start,
+    end: CUES[cue[1] - 1].end,
+  };
+});
+
+export const TOTAL_DURATION = CUES[CUES.length - 1].end;
 
 // 给定时间 t，返回当前场景
 export function sceneAt(t) {

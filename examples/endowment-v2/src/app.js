@@ -4,11 +4,36 @@ const gsap = window.gsap;
 import { PALETTE } from './palette.js';
 import { SCENES, CUES, TOTAL_DURATION, sceneAt, cueAt } from './storyboard.js';
 import { backgroundSVG } from './backgrounds.js';
-import { SCENE_SVG, ILLU_ANIM, runChoreo, choreoScale } from './illustrations.js';
+import { SCENE_SVG } from './illustrations.js';
+import { runChoreo, choreoScale, ILLU_ANIM } from './choreography.js';
 import { applyCamera } from './camera.js';
 import { ZONES, intersectArea } from './layout.js';
 
 const W = 1280, H = 720;
+
+// 字幕关键词强调（kinetic typography 两层系统，联网查证 2026-10-17）：
+// 基础字幕保持稳定，只强调关键词/数字/对比短语（约 10-25% 的行），
+// 教育类内容用平滑可预期的入场（fade+上浮，时间函数驱动，seek 绝对安全）
+const EMPH_WORDS = [
+  '禀赋效应', '两倍', '翻倍', '失去', '得到', '损失厌恶', '科斯定理', '失效',
+  '九成', '一半一半', '七天无理由', '闲鱼', '两千多', '一百多', '不是命', '是生疏',
+  '舍不得', '值得', '自检', '买入价', '卖出', '割肉', '拥有它', '冒充', '重新得到它',
+  '两倍以上', '凭空多出一倍', '放手的代价', '贴着买家', '价差会消失', '磨薄',
+];
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+// 命中强调词的字幕 → 拆成 普通前缀 + 琥珀加粗关键词 + 普通后缀 三段 tspan
+function captionHTML(text) {
+  for (const w of EMPH_WORDS) {
+    const i = text.indexOf(w);
+    if (i >= 0) {
+      return esc(text.slice(0, i))
+        + `<tspan fill="${PALETTE.accent}" font-weight="800">${esc(w)}</tspan>`
+        + esc(text.slice(i + w.length));
+    }
+  }
+  return esc(text);
+}
+const easeOutCubic = (p) => 1 - Math.pow(1 - p, 3);
 
 // ---------- DOM 装配 ----------
 const stage = document.getElementById('stage');
@@ -118,21 +143,28 @@ SCENES.forEach((scene, i) => {
     }
   }
 
-  // 幕间转场·进侧：速度匹配（进慢 0.55s 减速，速度峰值与上一幕的出侧在切点相接）
+  // 幕间转场·进侧：语义化（scene.trans）+ 速度匹配（进慢 0.55s 减速，
+  // 速度峰值与上一幕的出侧在切点相接）。转场类型由叙事含义决定：
+  // zoom=揭示/章节 whip=能量/对比 rise=承接 fade=开场收场
   if (i > 0) {
-    const kind = ['whip', 'rise', 'zoom'][(i - 1) % 3];
-    const ent = kind === 'whip' ? { x: 190 } : kind === 'rise' ? { y: 110 } : { scale: 0.86 };
-    tl.fromTo(layer, ent, { x: 0, y: 0, scale: 1, duration: 0.55, ease: 'power3.out', transformOrigin: '50% 50%' }, scene.start - 0.22);
+    const kind = scene.trans || 'rise';
+    const ent = kind === 'whip' ? { x: 190 } : kind === 'zoom' ? { scale: 0.86 } : kind === 'fade' ? { opacity: 0 } : { y: 110 };
+    const vars = kind === 'fade'
+      ? { opacity: 1, duration: 0.55, ease: 'power2.out' }
+      : { x: 0, y: 0, scale: 1, duration: 0.55, ease: 'power3.out', transformOrigin: '50% 50%' };
+    if (kind === 'fade') tl.set(layer, { opacity: 0 }, scene.start - 0.3);
+    tl.fromTo(layer, ent, vars, scene.start - 0.22);
   }
 
   // 幕间转场·出侧：加速离场（出快 0.3s；转场本身就是退场，不再单独退场）
   const outStart = (i < SCENES.length - 1) ? SCENES[i + 1].start - 0.6 : scene.end - 1.0;
   tl.to(`.bgScene[data-scene="${i}"]`, { opacity: 0, duration: 0.8, ease: 'power1.inOut' }, outStart);
   if (i < SCENES.length - 1) {
-    const kind = ['whip', 'rise', 'zoom'][i % 3];
+    const kind = SCENES[i + 1].trans || 'rise';
     if (kind === 'whip') tl.to(layer, { x: -150, opacity: 0, duration: 0.3, ease: 'power2.in' }, SCENES[i + 1].start - 0.3);
-    else if (kind === 'rise') tl.to(layer, { y: -110, opacity: 0, duration: 0.3, ease: 'power2.in' }, SCENES[i + 1].start - 0.3);
-    else tl.to(layer, { scale: 1.14, opacity: 0, duration: 0.28, ease: 'power3.in', transformOrigin: '50% 50%' }, SCENES[i + 1].start - 0.28);
+    else if (kind === 'zoom') tl.to(layer, { scale: 1.14, opacity: 0, duration: 0.28, ease: 'power3.in', transformOrigin: '50% 50%' }, SCENES[i + 1].start - 0.28);
+    else if (kind === 'fade') tl.to(layer, { opacity: 0, duration: 0.5, ease: 'power1.inOut' }, SCENES[i + 1].start - 0.5);
+    else tl.to(layer, { y: -110, opacity: 0, duration: 0.3, ease: 'power2.in' }, SCENES[i + 1].start - 0.3);
     tl.to(`.bgScene[data-scene="${i + 1}"]`, { opacity: 1, duration: 0.8, ease: 'power1.inOut' }, outStart);
   } else {
     tl.to(layer, { opacity: 0, duration: 0.6, ease: 'power1.inOut' }, outStart);
@@ -189,16 +221,24 @@ window.__layoutReport = function () {
 };
 
 // ---------- 实时预览 / 渲染时的文案与进度（按时间求值，seek 安全） ----------
+// 字幕入场是"时间的函数"（age→透明度/上浮量），不用 tween——逐帧 seek 下绝对可复现
+const CAP_Y = 660, CAP_BG_Y = 624;
 function updateOverlay(t) {
   const cue = cueAt(t);
   const text = cue ? cue.text : '';
-  captionEl.textContent = text;
+  // 入场动效：0.28s 内 fade + 上浮 12px（easeOutCubic），强调词带琥珀色（两层系统）
+  const age = cue ? (t - cue.start) : 99;
+  const p = easeOutCubic(Math.min(1, age / 0.28));
+  const lift = Math.round((1 - p) * 12);
+  captionEl.innerHTML = text ? captionHTML(text) : '';
+  captionEl.setAttribute('y', CAP_Y - lift);
+  captionEl.style.opacity = text ? String(p) : '0';
   // 字幕底框宽度随文字
   const approxW = Math.max(120, text.length * 30 + 80);
   capBgEl.setAttribute('x', 640 - approxW / 2);
   capBgEl.setAttribute('width', approxW);
-  capBgEl.style.opacity = text ? '0.82' : '0';
-  captionEl.style.opacity = text ? '1' : '0';
+  capBgEl.setAttribute('y', CAP_BG_Y - lift);
+  capBgEl.style.opacity = text ? String(0.82 * p) : '0';
   progressEl.setAttribute('width', (W * (t / TOTAL_DURATION)).toFixed(1));
 }
 
@@ -290,6 +330,7 @@ window.__stage = stage;
 window.__tl = tl;
 window.__ready = true;
 window.__duration = TOTAL_DURATION;
+window.__updateOverlay = updateOverlay; // 测试钩子：直接按时间刷新字幕层
 
 // 启动预览
 updateOverlay(0);

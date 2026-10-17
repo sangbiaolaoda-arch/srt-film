@@ -12,11 +12,14 @@ function txt(x, y, s, { size = 26, fill = PALETTE.ink, anchor = 'middle', weight
 const P = (enter) => `class="part" data-enter="${enter || 'fade'}"`;
 
 // ---- 人物剪影（高约 190）；enter=null 时输出普通 <g>（供复合组件内部使用，避免嵌套 part）----
+// 风格化（2026-10-17 描边风技法查证）：右下暗面块 + 左上高光，统一光源
 export function person(x, y, { enter = 'up', fill = PALETTE.steel, s = 1 } = {}) {
   const open = enter ? `<g ${P(enter)}>` : '<g>';
   return `${open}
     <circle cx="${x}" cy="${y - 72 * s}" r="${30 * s}" fill="${fill}"/>
     <path d="M${x - 36 * s} ${y - 26 * s} q${36 * s} ${-22 * s} ${72 * s} 0 l${7 * s} ${100 * s} q${-43 * s} ${15 * s} ${-86 * s} 0 z" fill="${fill}"/>
+    <path d="M${x + 2 * s} ${y - 44 * s} q${30 * s} ${4 * s} ${33 * s} ${20 * s} l${5 * s} ${78 * s} q${-20 * s} ${6 * s} ${-38 * s} ${2 * s} z" fill="${PALETTE.baseTop}" opacity="0.22"/>
+    <circle cx="${x - 11 * s}" cy="${y - 82 * s}" r="${8 * s}" fill="${PALETTE.paper}" opacity="0.35"/>
     <ellipse cx="${x}" cy="${y + 82 * s}" rx="${50 * s}" ry="${10 * s}" fill="${PALETTE.vignette}" opacity="0.6"/>
   </g>`;
 }
@@ -60,10 +63,13 @@ export function pill(x, y, text, { enter = 'up', bg = PALETTE.accent, fg = PALET
 }
 
 // ---- 马克杯（约 170 宽 × 170 高，含把手）----
+// 风格化：右侧内阴影带 + 杯口高光弧（统一左上光源）
 export function mug(x, y, { enter = 'scale', s = 1, opacity = 1, id = '' } = {}) {
   const w = 68 * s, h = 78 * s, hw = w, hh = h;
   return `<g ${P(enter)} opacity="${opacity}" ${id ? `id="${id}"` : ''}>
     <rect x="${x - hw}" y="${y - hh}" width="${2 * hw}" height="${2 * hh}" rx="${14 * s}" fill="${PALETTE.paper}"/>
+    <rect x="${x + hw * 0.18}" y="${y - hh + 6 * s}" width="${hw * 0.62}" height="${2 * hh - 12 * s}" rx="${10 * s}" fill="${PALETTE.steelDim}" opacity="0.3"/>
+    <path d="M${x - hw * 0.72} ${y - hh + 16 * s} q${hw * 0.5} ${-9 * s} ${hw * 1.05} 0" fill="none" stroke="${PALETTE.accentSoft}" stroke-width="${3.5 * s}" opacity="0.55" stroke-linecap="round"/>
     <rect x="${x - hw}" y="${y - hh}" width="${2 * hw}" height="${2 * hh}" rx="${14 * s}" fill="none" stroke="${PALETTE.steelDim}" stroke-width="3"/>
     <path d="M${x + hw} ${y - hh * 0.55} q${46 * s} ${4 * s} ${46 * s} ${hh * 0.55} q0 ${hh * 0.55 - 4 * s} ${-46 * s} ${hh * 0.55}" fill="none" stroke="${PALETTE.paper}" stroke-width="${17 * s}"/>
     <path d="M${x + hw} ${y - hh * 0.55} q${46 * s} ${4 * s} ${46 * s} ${hh * 0.55} q0 ${hh * 0.55 - 4 * s} ${-46 * s} ${hh * 0.55}" fill="none" stroke="${PALETTE.steelDim}" stroke-width="3"/>
@@ -198,11 +204,12 @@ export function wallDiv(x, y, { enter = 'scale', h = 220 } = {}) {
   </g>`;
 }
 
-// ---- 巧克力 ----
+// ---- 巧克力（左上高光角 + 格纹）----
 export function choco(x, y, { enter = 'right', s = 1 } = {}) {
   const w = 62 * s, h = 72 * s;
   return `<g ${P(enter)}>
     <rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="10" fill="${PALETTE.accentDeep}" stroke="${PALETTE.accentSoft}" stroke-width="3"/>
+    <rect x="${x - w / 2 + 5}" y="${y - h / 2 + 5}" width="${w * 0.32}" height="${h * 0.26}" rx="6" fill="${PALETTE.accent}" opacity="0.45"/>
     <line x1="${x - w / 2}" y1="${y - h / 6}" x2="${x + w / 2}" y2="${y - h / 6}" stroke="${PALETTE.baseTop}" stroke-width="2" opacity="0.5"/>
     <line x1="${x - w / 2}" y1="${y + h / 6}" x2="${x + w / 2}" y2="${y + h / 6}" stroke="${PALETTE.baseTop}" stroke-width="2" opacity="0.5"/>
     <line x1="${x - w / 6}" y1="${y - h / 2}" x2="${x - w / 6}" y2="${y + h / 2}" stroke="${PALETTE.baseTop}" stroke-width="2" opacity="0.5"/>
@@ -256,11 +263,12 @@ export function cart(x, y, { enter = 'left' } = {}) {
   </g>`;
 }
 
-// ---- 手机出价 ----
+// ---- 手机出价（屏幕下方暗面渐隐带）----
 export function phoneBid(x, y, { enter = 'right', label = '出价' } = {}) {
   return `<g ${P(enter)}>
     <rect x="${x - 58}" y="${y - 98}" width="116" height="196" rx="18" fill="${PALETTE.panel}"/>
     <rect x="${x - 44}" y="${y - 78}" width="88" height="150" rx="8" fill="${PALETTE.baseTop}"/>
+    <rect x="${x - 44}" y="${y + 22}" width="88" height="50" rx="8" fill="${PALETTE.steelDim}" opacity="0.35"/>
     <circle cx="${x}" cy="${y + 86}" r="12" fill="${PALETTE.accent}"/>
     <rect x="${x + 44}" y="${y - 96}" width="88" height="40" rx="12" fill="${PALETTE.paper}"/>
     ${txt(x + 88, y - 70, label, { size: 18, fill: PALETTE.baseTop, weight: 700 })}
@@ -326,10 +334,12 @@ export function mirrorGlass(x, y, { enter = 'scale' } = {}) {
   </g>`;
 }
 
-// ---- 对勾徽章 ----
+// ---- 对勾徽章（内圈暗面 + 高光点）----
 export function checkBadge(x, y, { enter = 'scale' } = {}) {
   return `<g ${P(enter)}>
     <circle cx="${x}" cy="${y}" r="38" fill="${PALETTE.accent}"/>
+    <path d="M${x + 6} ${y + 37} a38 38 0 0 0 32 -30 a38 38 0 0 1 -32 30 z" fill="${PALETTE.accentDeep}" opacity="0.5"/>
+    <circle cx="${x - 14}" cy="${y - 15}" r="7" fill="${PALETTE.paper}" opacity="0.5"/>
     <path d="M${x - 18} ${y} l14 16 l26 -32" fill="none" stroke="${PALETTE.baseTop}" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
   </g>`;
 }
@@ -431,19 +441,22 @@ export function campus(x, y, { enter = 'up', w = 300 } = {}) {
   </g>`;
 }
 
-// ---- 金币 ----
+// ---- 金币（暗面月牙 + 左上高光弧）----
 export function coin(x, y, { enter = 'scale', r = 26, s = 1 } = {}) {
   return `<g ${P(enter)}>
     <circle cx="${x}" cy="${y}" r="${r * s}" fill="${PALETTE.accent}"/>
+    <path d="M${x + r * s * 0.1} ${y + r * s * 0.98} a${r * s} ${r * s} 0 0 0 ${r * s * 0.88} -${r * s * 0.5} a${r * s * 1.15} ${r * s * 1.15} 0 0 1 -${r * s * 0.88} ${r * s * 0.5} z" fill="${PALETTE.accentDeep}" opacity="0.55"/>
     <circle cx="${x}" cy="${y}" r="${r * s - 7 * s}" fill="none" stroke="${PALETTE.baseTop}" stroke-width="2.5" opacity="0.75"/>
+    <path d="M${x - r * s * 0.55} ${y - r * s * 0.62} a${r * s * 0.85} ${r * s * 0.85} 0 0 1 ${r * s * 0.62} -${r * s * 0.5}" fill="none" stroke="${PALETTE.accentSoft}" stroke-width="${3.2 * s}" opacity="0.8" stroke-linecap="round"/>
     ${txt(x, y + 9 * s, '¥', { size: 26 * s, fill: PALETTE.baseTop, weight: 800 })}
   </g>`;
 }
 
-// ---- 心（依恋）----
+// ---- 心（依恋，左上高光点）----
 export function heart(x, y, { enter = 'scale', s = 1, fill = PALETTE.warn } = {}) {
   const k = 30 * s;
   return `<g ${P(enter)}>
     <path d="M${x} ${y + k} C${x - k * 1.7} ${y - k * 0.2} ${x - k * 0.7} ${y - k * 1.4} ${x} ${y - k * 0.45} C${x + k * 0.7} ${y - k * 1.4} ${x + k * 1.7} ${y - k * 0.2} ${x} ${y + k} Z" fill="${fill}"/>
+    <circle cx="${x - k * 0.55}" cy="${y - k * 0.35}" r="${k * 0.16}" fill="${PALETTE.paper}" opacity="0.55"/>
   </g>`;
 }
