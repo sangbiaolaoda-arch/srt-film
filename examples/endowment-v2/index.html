@@ -54,13 +54,8 @@
     <rect x="0" y="0" width="1280" height="720" filter="url(#grainFx)" opacity="0.55"/>
     <!-- 文字编排层（v2.6）：舞台元素化文字，不随机位运动，颗粒之上、UI 之下 -->
     <g id="typoLayer"></g>
-    <!-- UI 层：字幕 + 进度（按时间求值，seek 安全） -->
+    <!-- UI 层：进度条（字幕已全部舞台化，见 typography.js；底部字幕条已退役） -->
     <g id="uiLayer">
-      <rect id="capBg" x="500" y="624" width="280" height="56" rx="14"
-            fill="#FDF9EE" opacity="0.9" stroke="#A7987B" stroke-width="1"/>
-      <text id="caption" x="640" y="660"
-            font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif"
-            font-size="30" font-weight="600" fill="#3A2F1D" text-anchor="middle" opacity="0">字幕</text>
       <rect id="progress" x="0" y="712" width="0" height="8" fill="#C87A1E"/>
     </g>
   </svg>
