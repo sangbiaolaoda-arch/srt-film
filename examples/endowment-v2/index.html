@@ -16,12 +16,25 @@
 </head>
 <body>
   <svg id="stage" viewBox="0 0 1280 720" width="1280" height="720" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <!-- 胶片颗粒（静态细噪点，给画面加质感） -->
+      <filter id="grainFx" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" stitchTiles="stitch"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0"/>
+      </filter>
+      <!-- 柔和投影（元素落地感） -->
+      <filter id="softFx" x="-40%" y="-40%" width="180%" height="180%">
+        <feDropShadow dx="0" dy="9" stdDeviation="11" flood-color="#020409" flood-opacity="0.4"/>
+      </filter>
+    </defs>
     <!-- 背景层（安静负空间 + 单一锚点 + 暗角） -->
     <g id="bgLayer"></g>
     <!-- 机位层（有意图运动作用于此） -->
     <g id="camera">
       <g id="illuLayer"></g>
     </g>
+    <!-- 质感层：胶片颗粒（不随机位运动，覆盖全画幅） -->
+    <rect x="0" y="0" width="1280" height="720" filter="url(#grainFx)" opacity="0.55"/>
     <!-- UI 层：字幕 + 进度（按时间求值，seek 安全） -->
     <g id="uiLayer">
       <rect id="capBg" x="500" y="624" width="280" height="56" rx="14"

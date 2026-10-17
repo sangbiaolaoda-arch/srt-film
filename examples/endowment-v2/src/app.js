@@ -36,6 +36,11 @@ SCENES.forEach((scene, i) => {
   g.setAttribute('class', 'sceneLayer');
   g.setAttribute('data-scene', String(i));
   g.innerHTML = (scene.title ? titleBlock(scene) : '') + SCENE_SVG[scene.illu]();
+  // 质感：形状部件统一柔和投影（首子元素为文本的部件除外，避免文字重影）
+  g.querySelectorAll('.part').forEach((p) => {
+    const firstEl = p.querySelector('*');
+    if (firstEl && firstEl.tagName.toLowerCase() !== 'text') p.setAttribute('filter', 'url(#softFx)');
+  });
   g.style.opacity = '0';
   illuLayer.appendChild(g);
   sceneEls[i] = g;
@@ -100,12 +105,37 @@ SCENES.forEach((scene, i) => {
   // 机位语言
   applyCamera(tl, cameraEl, scene);
 
-  // 出场：与下一场景交叉淡化（最后一场淡出收尾）
+  // 长幕 idle 微动：编排收束后主焦点保持呼吸，避免长幕后段死屏（偶数次回位）
+  if (dur > 9) {
+    const main = layer.querySelector('[data-key="A"]');
+    if (main) {
+      const idleStart = 6 * K;
+      const remain = dur - idleStart - 1.2;
+      if (remain > 2.5) {
+        const n = Math.max(1, 2 * Math.floor(remain / 3.2));
+        tl.to(main, { y: '-=6', duration: 1.6, yoyo: true, repeat: n, ease: 'sine.inOut' }, scene.start + idleStart);
+      }
+    }
+  }
+
+  // 幕间转场·进侧：速度匹配（进慢 0.55s 减速，速度峰值与上一幕的出侧在切点相接）
+  if (i > 0) {
+    const kind = ['whip', 'rise', 'zoom'][(i - 1) % 3];
+    const ent = kind === 'whip' ? { x: 190 } : kind === 'rise' ? { y: 110 } : { scale: 0.86 };
+    tl.fromTo(layer, ent, { x: 0, y: 0, scale: 1, duration: 0.55, ease: 'power3.out', transformOrigin: '50% 50%' }, scene.start - 0.22);
+  }
+
+  // 幕间转场·出侧：加速离场（出快 0.3s；转场本身就是退场，不再单独退场）
   const outStart = (i < SCENES.length - 1) ? SCENES[i + 1].start - 0.6 : scene.end - 1.0;
-  tl.to(layer, { opacity: 0, duration: 0.6, ease: 'power1.inOut' }, outStart);
   tl.to(`.bgScene[data-scene="${i}"]`, { opacity: 0, duration: 0.8, ease: 'power1.inOut' }, outStart);
   if (i < SCENES.length - 1) {
+    const kind = ['whip', 'rise', 'zoom'][i % 3];
+    if (kind === 'whip') tl.to(layer, { x: -150, opacity: 0, duration: 0.3, ease: 'power2.in' }, SCENES[i + 1].start - 0.3);
+    else if (kind === 'rise') tl.to(layer, { y: -110, opacity: 0, duration: 0.3, ease: 'power2.in' }, SCENES[i + 1].start - 0.3);
+    else tl.to(layer, { scale: 1.14, opacity: 0, duration: 0.28, ease: 'power3.in', transformOrigin: '50% 50%' }, SCENES[i + 1].start - 0.28);
     tl.to(`.bgScene[data-scene="${i + 1}"]`, { opacity: 1, duration: 0.8, ease: 'power1.inOut' }, outStart);
+  } else {
+    tl.to(layer, { opacity: 0, duration: 0.6, ease: 'power1.inOut' }, outStart);
   }
 });
 

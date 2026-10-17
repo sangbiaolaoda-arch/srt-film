@@ -33,10 +33,12 @@ function ticketOne(x, y, val, label, enter) {
 
 // 大数字徽章（val / val2：双文本交叉淡化做数字变化，seek 安全——不用 onUpdate 回调）
 function bigNum(x, y, val, { r = 60, val2 = '' } = {}) {
+  // manim 高亮契约：细描边 + 低不透明度填充，从不整块实心
   return `<g class="part" data-enter="scale">
-    <circle cx="${x}" cy="${y}" r="${r}" fill="${PALETTE.accent}"/>
-    <text x="${x}" y="${y + 14}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="44" font-weight="800" fill="${PALETTE.baseTop}" text-anchor="middle">${val}</text>
-    ${val2 ? `<text x="${x}" y="${y + 14}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="44" font-weight="800" fill="${PALETTE.baseTop}" text-anchor="middle" opacity="0">${val2}</text>` : ''}
+    <circle cx="${x}" cy="${y}" r="${r}" fill="${PALETTE.accent}" fill-opacity="0.16"/>
+    <circle cx="${x}" cy="${y}" r="${r}" fill="none" stroke="${PALETTE.accent}" stroke-width="2.5"/>
+    <text x="${x}" y="${y + 14}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="44" font-weight="800" fill="${PALETTE.accent}" text-anchor="middle">${val}</text>
+    ${val2 ? `<text x="${x}" y="${y + 14}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="44" font-weight="800" fill="${PALETTE.accent}" text-anchor="middle" opacity="0">${val2}</text>` : ''}
   </g>`;
 }
 // 七天日历
