@@ -20,7 +20,7 @@ export interface PostConfig {
 }
 
 /** 编辑风：一层可感知的「纸感」+ 轻微暗角，让静止帧也有呼吸。 */
-export const POST_EDITORIAL: PostConfig = { grain: 0.06, vignette: 0.12, scanline: 0, warm: 0.02 };
+export const POST_EDITORIAL: PostConfig = { grain: 0.09, vignette: 0.22, scanline: 0, warm: 0.03 };
 
 /** 扁平矢量叙事风：明快，略带胶片质感与暗角，但比编辑风更亮。 */
 export const POST_FLATVECTOR: PostConfig = { grain: 0.11, vignette: 0.28, scanline: 0.03, warm: 0, grainBlend: "overlay" };

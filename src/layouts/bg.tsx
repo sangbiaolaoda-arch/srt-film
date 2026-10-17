@@ -42,17 +42,19 @@ export function BgLayer({ kind, seed, colorDim, colorHairline, accent, cutouts =
     );
   }
   switch (kind) {
-    // A01 圆点网格渐隐：从右上密到左下疏，印刷网点退晕
+    // A01 圆点网格渐隐：从右上密到左下疏，印刷网点退晕。
+    // step 从 44 提到 88，点阵稀疏，把中央主体区让给文字；
+    // opacity 上限从 0.22 降到 0.15，避免点阵盖过前景。
     case "dots-fade": {
       const dots: JSX.Element[] = [];
-      const step = 44;
+      const step = 88;
       for (let gy = 0; gy < 720 / step + 1; gy++) {
         for (let gx = 0; gx < 1280 / step + 1; gx++) {
           const x = gx * step;
           const y = gy * step;
           const t = 1 - (x / 1280) * 0.55 - (y / 720) * 0.45; // 右上 1 → 左下 0
           const r = 1.2 + t * 3.4;
-          dots.push(<circle key={`${gx}-${gy}`} cx={x} cy={y} r={r} fill={colorDim} opacity={0.1 + t * 0.22} />);
+          dots.push(<circle key={`${gx}-${gy}`} cx={x} cy={y} r={r} fill={colorDim} opacity={0.08 + t * 0.15} />);
         }
       }
       return <g data-bg="dots-fade">{dots}</g>;

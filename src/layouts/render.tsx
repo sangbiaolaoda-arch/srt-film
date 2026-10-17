@@ -172,7 +172,17 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
   const size: number = FONT_SIZE[slot.size ?? "m"];
   const anchor = textAnchor(slot.align);
   const tx = anchor === "middle" ? x + w / 2 : anchor === "end" ? x + w : x;
-  const motion = slot.m ?? ctx.layout.enter[index % (ctx.layout.enter.length || 1)] ?? "m-fade-up";
+  // 标题类：headline/text/quote/subhead —— 逐字入场，给层次感。
+  const isHeadlineLike = ["headline", "text", "quote", "subhead"].includes(slot.k);
+  let motion: string;
+  if (slot.m) {
+    motion = slot.m;
+  } else if (isHeadlineLike) {
+    // 标题类默认逐字上浮，给观众“先看大字、后看副标题”的层次感。
+    motion = "m-char-rise";
+  } else {
+    motion = ctx.layout.enter[index % (ctx.layout.enter.length || 1)] ?? "m-fade-up";
+  }
 
   const g = (children: React.ReactNode) => (
     <g
@@ -392,8 +402,9 @@ function SlotNode({ slot, ctx, index }: { slot: Slot; ctx: Ctx; index: number })
       const startY = y + Math.min(h * 0.5 + (rows.length - 1) * lineH * 0.5, h * 0.9) - (rows.length - 1) * lineH + fs * 0.18;
       const sem = SEM_COLORS[ctx.layout.style ?? "editorial"];
       // 海报风大字拆成逐字符独立 <text>：这样逐字动效（上浮／打出）才有对象，
-      // 每个字也都是可以单独做变换的图形。编辑风保持整行，不动既有视觉。
-      const splitChars = isHeadlineLike && fs >= 24 && ctx.layout.style === "flat-vector";
+      // 每个字也是可以单独做变换的图形。非编辑风 / 小字可根据需求开启；
+      // 编辑风的标题类若 fs≥18 同样拆成字符，用于逐字入场与强调。
+      const splitChars = isHeadlineLike && fs >= 18;
       return g(
         <g>
           {rows.map((row, i) => {
