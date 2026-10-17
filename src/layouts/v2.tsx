@@ -201,13 +201,17 @@ const v2NumBand: Board = ({ content, profile: p }) => {
 };
 
 /* ── 04 引语卡 ─────────────────────────────────────────────────────
-   左上朱红竖条 + 左对齐引文 + 底部出处细线。 */
+   左上朱红竖条 + 艺术大引号水印 + 左对齐引文 + 底部出处细线。 */
 const v2QuoteCard: Board = ({ content, profile: p }) => {
   const rows = wrap(stripPunct(content.headline), 3);
   const size = Math.min(68, fit(rows[0] ?? "", 880));
   const from = clean(content.subhead);
   return (
     <g>
+      {/* 艺术大引号水印（建立一眼可辨的引语焦点） */}
+      <text x={100} y={260} fontSize={180} fill={p.accent} opacity={0.12} fontFamily="Georgia,serif" fontWeight={900} pointerEvents="none">
+        “
+      </text>
       <rect x={120} y={200} width={7} height={150} fill={p.accent} data-anim data-motion="m-fade-up" />
       <VLines rows={rows} x={170} y0={300} size={size} fill={p.ink} profile={p} motion="m-char-rise" />
       {from && (
@@ -309,15 +313,21 @@ const v2Vertical: Board = ({ content, profile: p }) => {
 };
 
 /* ── 07 章节卡 ─────────────────────────────────────────────────────
-   顶部序号小字条 + 中央大字 + 朱红分隔短线 + 底部序号点。 */
+   顶部序号小字条 + 背景浮雕暗框/大水印 + 中央大字 + 朱红分隔短线。 */
 const v2Chapter: Board = ({ content, profile: p }) => {
   const rows = wrap(stripPunct(content.headline), 2);
   return (
     <g>
-      <VText x={640} y={150} size={26} fill={p.ink} text={String(content.beat).padStart(2, "0")} profile={p} spacing={8} opacity={0.6} motion="m-fade-up" />
-      <rect x={560} y={186} width={160} height={1.5} fill={p.ink} opacity={0.4} />
-      <VLines rows={rows} x={170} y0={400} size={fitW(rows[0] ?? "", 930, 112)} fill={p.ink} profile={p} motion="m-char-rise" />
-      <rect x={590} y={rows.length > 1 ? 590 : 540} width={100} height={5} fill={p.accent} data-anim data-motion="m-bar-sweep" />
+      {/* 仪式感空间外框与背景大水印 */}
+      <rect x={160} y={100} width={960} height={520} fill={p.ink} opacity={0.02} rx={4} />
+      <rect x={160} y={100} width={960} height={520} fill="none" stroke={p.ink} strokeWidth={1} strokeDasharray="6 8" opacity={0.12} />
+      <text x={640} y={400} fontSize={200} fill={p.ink} opacity={0.03} textAnchor="middle" fontFamily={p.fontDisplay} fontWeight={900} pointerEvents="none">
+        CHAPTER
+      </text>
+      <VText x={640} y={160} size={24} fill={p.accent} text={String(content.beat).padStart(2, "0")} profile={p} spacing={8} opacity={0.85} motion="m-fade-up" />
+      <rect x={580} y={192} width={120} height={1.5} fill={p.accent} opacity={0.6} />
+      <VLines rows={rows} x={200} y0={380} size={fitW(rows[0] ?? "", 880, 100)} fill={p.ink} profile={p} motion="m-char-rise" />
+      <rect x={590} y={rows.length > 1 ? 550 : 500} width={100} height={5} fill={p.accent} data-anim data-motion="m-bar-sweep" />
     </g>
   );
 };

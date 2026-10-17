@@ -80,51 +80,41 @@ export const STYLE_PROFILES: Record<StyleProfileId, StyleProfile> = {
   "editorial": {
     id: "editorial",
     name: "编辑排版风",
-    paper: "#f2ede4", ink: "#1d1a16", accent: "#c8401f", aux: "#33506b",
-    dark: "#161410", cream: "#f3ede4", ember: "#ff4d2e", steel: "#3e6e83",
-    blush: "#e8c9c2", sand: "#d9c8ae", clay: "#b0603c",
+    paper: "#f4f6f8", ink: "#0f141c", accent: "#c92a2a", aux: "#183153",
+    dark: "#070a0e", cream: "#ffffff", ember: "#c92a2a", steel: "#22577a",
+    blush: "#fde8e8", sand: "#f3f0e6", clay: "#e9ecef",
     fontDisplay: SERIF, fontText: SERIF, fontNum: SERIF,
     lineWidth: 2.5, radius: 0, density: 0.35, motionPace: 1.0, transitionBias: "slide",
-    // 编辑风的「动」只能是纸面掠光：大面积低对比 —— 一眼看到有东西掠过，又不脏不抢字。
-    // （浮尘试过，稀疏小点单帧看不出差异，峰值拉到 66 也白搭，见 effects.ts paperSheen 注释。）
     fxBias: "paper-sheen", fxStrength: 0.45,
     grid: false, axis: false, rounded: false, flat: false, monoNum: false, paperTexture: true,
-    sem: { danger: "#a5170a", cost: "#9a6b1c", safe: "#1a6b52", warm: "#c8401f" },
-    tone: { ink: "#1d1a16", dim: "#8a867c", accent: "#c8401f", paper: "#f2ede4", hairline: "rgba(29,26,22,0.14)" },
+    sem: { danger: "#a61e1e", cost: "#8f5c00", safe: "#137333", warm: "#c92a2a" },
+    tone: { ink: "#0f141c", dim: "#5c6779", accent: "#c92a2a", paper: "#f4f6f8", hairline: "rgba(15,20,28,0.12)" },
   },
   "flat-vector": {
     id: "flat-vector",
     name: "扁平矢量叙事风",
-    paper: "#fbf7f0", ink: "#15233b", accent: "#ff3e1b", aux: "#2b7fff",
-    dark: "#101a2e", cream: "#ffffff", ember: "#ff3e1b", steel: "#2b7fff",
-    blush: "#ffd6cc", sand: "#ffe2a8", clay: "#ff8a3d",
+    paper: "#f8f9fa", ink: "#0b132b", accent: "#e63946", aux: "#1d3557",
+    dark: "#050811", cream: "#ffffff", ember: "#e63946", steel: "#457b9d",
+    blush: "#fed0d0", sand: "#f1faee", clay: "#a8dadc",
     fontDisplay: SANS, fontText: SANS, fontNum: SANS,
     lineWidth: 6, radius: 18, density: 0.5, motionPace: 1.18, transitionBias: "wipe",
-    // 扁平风的色粉颗粒（板式自带粒子场的仍用粒子场，其余落回浮尘 —— 见 plan.ts 的派生）。
     fxBias: "drift-motes", fxStrength: 0.7,
     grid: false, axis: false, rounded: true, flat: true, monoNum: false, paperTexture: false,
-    // 强调色（accent / sem.warm / ember）压纸白必须 ≥3.0（WCAG AA 大字）：原 #ff5a3c 只有
-    // 2.90 ——「强调」到看不清就不再是强调。同色相同饱和度、只降明度到 #ff3e1b（3.30），
-    // 观感不变。ember 只是特效色、不承载文字，仍跟着 accent 走，免得画面里出现两个橙红。
-    // 同样的值在 layouts/emphasis.ts 与 layouts/figures.tsx 各有一份（那边不 import 本模块），
-    // 三处必须同改 —— 见 style-system.test.ts 的对比度与同源断言。
-    sem: { danger: "#d63a1f", cost: "#c77a12", safe: "#0f9d6b", warm: "#ff3e1b" },
-    tone: { ink: "#15233b", dim: "#7b8499", accent: "#ff3e1b", paper: "#fbf7f0", hairline: "rgba(21,35,59,0.14)" },
+    sem: { danger: "#b7094c", cost: "#99582a", safe: "#007200", warm: "#e63946" },
+    tone: { ink: "#0b132b", dim: "#6c757d", accent: "#e63946", paper: "#f8f9fa", hairline: "rgba(11,19,43,0.12)" },
   },
   "chart-motion": {
     id: "chart-motion",
     name: "图表动态图形风",
-    paper: "#ffffff", ink: "#10243a", accent: "#eb6200", aux: "#1f6feb",
-    dark: "#0c1a2b", cream: "#ffffff", ember: "#eb6200", steel: "#1f6feb",
-    blush: "#dfeeff", sand: "#eef3f7", clay: "#0c7b5e",
+    paper: "#f0f4f8", ink: "#0a192f", accent: "#0066cc", aux: "#028090",
+    dark: "#020c1b", cream: "#ffffff", ember: "#0066cc", steel: "#1b4965",
+    blush: "#e0f2fe", sand: "#e2e8f0", clay: "#bee3f8",
     fontDisplay: SANS, fontText: SANS, fontNum: MONO,
     lineWidth: 3, radius: 4, density: 0.7, motionPace: 0.9, transitionBias: "mask",
-    // 图表风是网格在呼吸：脉冲点落在板内既有 40px 网格上，不是另加一层装饰。
     fxBias: "grid-pulse", fxStrength: 0.5,
     grid: true, axis: true, rounded: false, flat: true, monoNum: true, paperTexture: false,
-    // 同上：#ff6a00 压纯白纸底只有 2.87，降到 #eb6200（3.34）；三处同改。
-    sem: { danger: "#d6391f", cost: "#b9740f", safe: "#0c8a5e", warm: "#eb6200" },
-    tone: { ink: "#10243a", dim: "#5b6b80", accent: "#eb6200", paper: "#ffffff", hairline: "rgba(16,36,58,0.16)" },
+    sem: { danger: "#c53030", cost: "#975a16", safe: "#22543d", warm: "#0066cc" },
+    tone: { ink: "#0a192f", dim: "#4a5568", accent: "#0066cc", paper: "#f0f4f8", hairline: "rgba(10,25,47,0.14)" },
   },
 };
 

@@ -42,38 +42,55 @@ export function BgLayer({ kind, seed, colorDim, colorHairline, accent, cutouts =
     );
   }
   switch (kind) {
-    // A01 圆点网格渐隐：从右上密到左下疏，印刷网点退晕。
-    // step 从 44 提到 88，点阵稀疏，把中央主体区让给文字；
-    // opacity 上限从 0.22 降到 0.15，避免点阵盖过前景。
+    // A01 圆点网格渐隐 + 空间几何分割（大师级空间纵深重构）
+    // 大师构图法则：背景绝非纯平，必有非对称空间分割（左2/3与右1/3对峙）+ 焦点建筑经纬标尺
     case "dots-fade": {
       const dots: JSX.Element[] = [];
-      const step = 88;
+      const step = 80;
       for (let gy = 0; gy < 720 / step + 1; gy++) {
         for (let gx = 0; gx < 1280 / step + 1; gx++) {
           const x = gx * step;
           const y = gy * step;
-          const t = 1 - (x / 1280) * 0.55 - (y / 720) * 0.45; // 右上 1 → 左下 0
-          const r = 1.2 + t * 3.4;
-          dots.push(<circle key={`${gx}-${gy}`} cx={x} cy={y} r={r} fill={colorDim} opacity={0.08 + t * 0.15} />);
+          const t = 1 - (x / 1280) * 0.55 - (y / 720) * 0.45;
+          const r = 1.0 + t * 2.8;
+          dots.push(<circle key={`${gx}-${gy}`} cx={x} cy={y} r={r} fill={colorDim} opacity={0.04 + t * 0.08} />);
         }
       }
-      return <g data-bg="dots-fade">{dots}</g>;
+      return (
+        <g data-bg="dots-fade">
+          {/* 大师级背景空间分割：右侧 38% 区域浅色透光层，形成天然的非对称虚实张力 */}
+          <rect x={1280 * 0.62} y={0} width={1280 * 0.38} height={720} fill={colorDim} opacity={0.035} />
+          {/* 黄金分割透视基线（x=427, y=240），微细刻度消除背景空洞 */}
+          <line x1={1280 * 0.62} y1={40} x2={1280 * 0.62} y2={680} stroke={colorHairline} strokeWidth={1} strokeDasharray="6 8" opacity={0.35} />
+          <line x1={40} y1={720 * 0.33} x2={1240} y2={720 * 0.33} stroke={colorHairline} strokeWidth={1} strokeDasharray="4 12" opacity={0.2} />
+          {/* 建筑十字标定位点 */}
+          <path d="M790 236 L798 236 M794 232 L794 240" stroke={accent} strokeWidth={1.5} opacity={0.4} />
+          {dots}
+        </g>
+      );
     }
-    // A03 半调大渐变：行距渐变 + 半径渐变，做出「由暗到亮」的印刷网点海
+    // A03 半调大渐变 + 空间立体块面：行距渐变 + 焦点透视导轨
     case "halftone": {
       const rnd = lcg(seed + 7);
       const dots: JSX.Element[] = [];
       const rows = 16;
       for (let i = 0; i < rows; i++) {
         const y = (i + 0.5) * (720 / rows);
-        const t = 1 - i / (rows - 1); // 顶部 1 → 底部 0
+        const t = 1 - i / (rows - 1);
         const step = 26 + (1 - t) * 26;
         for (let x = step / 2; x < 1280; x += step) {
           const wob = rnd() * 0.35 + 0.82;
-          dots.push(<circle key={`${i}-${x}`} cx={x} cy={y} r={(1.4 + t * 5) * wob} fill={colorDim} opacity={0.16 + t * 0.3} />);
+          dots.push(<circle key={`${i}-${x}`} cx={x} cy={y} r={(1.2 + t * 4.2) * wob} fill={colorDim} opacity={0.05 + t * 0.12} />);
         }
       }
-      return <g data-bg="halftone">{dots}</g>;
+      return (
+        <g data-bg="halftone">
+          {/* 左下非对称色块承托层：给大数字/竖排字提供稳固的大地感 */}
+          <rect x={0} y={720 * 0.68} width={1280} height={720 * 0.32} fill={colorDim} opacity={0.03} />
+          <line x1={40} y1={720 * 0.68} x2={1240} y2={720 * 0.68} stroke={colorHairline} strokeWidth={1} strokeDasharray="8 6" opacity={0.3} />
+          {dots}
+        </g>
+      );
     }
     // A05 山形层叠：4 层山脊剪影，最远层最淡
     case "contour": {
@@ -90,7 +107,7 @@ export function BgLayer({ kind, seed, colorDim, colorHairline, accent, cutouts =
           pts.push(`${x},${y.toFixed(1)}`);
         }
         pts.push(`1280,720`);
-        layers.push(<polygon key={l} points={pts.join(" ")} fill={colorDim} opacity={0.12 + l * 0.06} />);
+        layers.push(<polygon key={l} points={pts.join(" ")} fill={colorDim} opacity={0.05 + l * 0.04} />);
       }
       return <g data-bg="contour">{layers}</g>;
     }
@@ -113,14 +130,14 @@ export function BgLayer({ kind, seed, colorDim, colorHairline, accent, cutouts =
             y2={cy + Math.sin(a) * r1}
             stroke={accent}
             strokeWidth={1}
-            opacity={0.3}
+            opacity={0.14}
           />,
         );
       }
       return (
         <g data-bg="rays">
           {lines}
-          <circle cx={cx} cy={cy} r={5} fill={accent} opacity={0.75} />
+          <circle cx={cx} cy={cy} r={5} fill={accent} opacity={0.4} />
         </g>
       );
     }
@@ -132,7 +149,7 @@ export function BgLayer({ kind, seed, colorDim, colorHairline, accent, cutouts =
         const y = 470 + i * 21;
         const amp = 5 + i * 0.7;
         const d = `M0 ${y} Q 80 ${y - amp} 160 ${y} T 320 ${y} T 480 ${y} T 640 ${y} T 800 ${y} T 960 ${y} T 1120 ${y} T 1280 ${y}`;
-        lines.push(<path key={i} d={d} fill="none" stroke={colorHairline} strokeWidth={1.6} opacity={0.9} />);
+        lines.push(<path key={i} d={d} fill="none" stroke={colorHairline} strokeWidth={1.1} opacity={0.38} />);
       }
       return <g data-bg="waves">{lines}</g>;
     }
