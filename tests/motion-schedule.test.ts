@@ -115,16 +115,39 @@ describe("Phase 7 · 统一时间轴与运动关系模型", () => {
     }
   });
 
-  it("机位运动优先成为主运动（入场从属于它）", () => {
-    const { plans } = buildMotionSchedule(threeShots({ camera: { scaleFrom: 1, scaleTo: 1.1 } }));
-    expect(plans[0]!.primary.kind).toBe("camera");
-    expect(plans[0]!.primary.rationale.subject).toContain("机位");
+  it("机位由叙事角色决定：definition/consequence 轻推、evidence 轻拉，成为主运动", () => {
+    const mk = (role: string) => {
+      const shots = threeShots();
+      shots[0]!.narrative = { role: role as never, purpose: "", forbidden: [] };
+      return buildMotionSchedule(shots).plans[0]!;
+    };
+    const def = mk("definition");
+    expect(def.primary.kind).toBe("camera");
+    expect(def.primary.rationale.subject).toContain("机位");
+    expect(def.camera?.spec).toContain("缓推");
+    const con = mk("consequence");
+    expect(con.primary.kind).toBe("camera");
+    expect(con.camera?.spec).toContain("缓推");
+    const ev = mk("evidence");
+    expect(ev.primary.kind).toBe("camera");
+    expect(ev.camera?.spec).toContain("缓拉");
   });
 
-  it("纯平移相机也是主运动（无缩放变化的摇/移）", () => {
-    const { plans } = buildMotionSchedule(threeShots({ camera: { xFrom: 0, xTo: -30 } }));
-    expect(plans[0]!.primary.kind).toBe("camera");
-    expect(plans[0]!.primary.rationale.path).toContain("平移");
+  it("非证据/定义/结果的拍有意静止：无相机主运动（靠入场动效制造镜内 Δ），且幅度克制", () => {
+    const mk = (role: string) => {
+      const shots = threeShots();
+      shots[0]!.narrative = { role: role as never, purpose: "", forbidden: [] };
+      return buildMotionSchedule(shots).plans[0]!;
+    };
+    for (const role of ["hook", "comparison", "explanation", "conclusion"]) {
+      expect(mk(role).primary.kind).not.toBe("camera");
+    }
+    // 推 ≤1.05、拉精确 1.04→1.0
+    const push = mk("definition").camera!.move;
+    expect(push.scaleTo! - push.scaleFrom!).toBeLessThanOrEqual(0.05 + 1e-9);
+    const pull = mk("evidence").camera!.move;
+    expect(pull.scaleFrom!).toBeCloseTo(1.04, 5);
+    expect(pull.scaleTo!).toBeCloseTo(1.0, 5);
   });
 
   it("假相机（无位移）不占主运动位，让给入场", () => {
@@ -243,11 +266,11 @@ describe("Phase 7 · 统一时间轴与运动关系模型", () => {
     expect(enterForSlot(empty, 3)).toBe("m-fade-up");
   });
 
-  it("staggerAt：0.08×min(k,4)，第 5 个槽起封顶", () => {
+  it("staggerAt：0.16×min(k,4)，先后感需要 ≥150ms onset 差", () => {
     const { plans } = buildMotionSchedule(threeShots());
     expect(staggerAt(plans[0]!, 0)).toBeCloseTo(0, 5);
-    expect(staggerAt(plans[0]!, 4)).toBeCloseTo(0.32, 5);
-    expect(staggerAt(plans[0]!, 7)).toBeCloseTo(0.32, 5);
+    expect(staggerAt(plans[0]!, 4)).toBeCloseTo(0.64, 5);
+    expect(staggerAt(plans[0]!, 7)).toBeCloseTo(0.64, 5);
   });
 
   /* ── ④ 全局动效不掩盖静止 ── */

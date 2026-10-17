@@ -12,14 +12,17 @@
 
 import { MOTION_BY_ID } from "./catalog";
 import type { Shot } from "../core/shot";
+import type { CameraMove } from "../layouts/types";
 import { resolveProfile } from "../styles/style-system";
 import type { StyleProfile } from "../styles/style-system";
 import { motifOf, type MotifCorner } from "../render/continuity";
 
 /** 拍间交叠：交叉溶解窗口，无黑场。 */
 export const OVERLAP = 0.25;
-/** 槽序错峰的步长（与 stage 原实现一致）。 */
-export const STAGGER_STEP = 0.08;
+/** 槽序错峰的步长（叙事错峰：标题先到、图形最后到）。0.08–0.12 实测仍像
+ *  「一起冒出来」——先后感需要 ≥150ms 的 onset 差；0.16 时 4 层最大差 0.48s，
+ *  最短拍 1.2s（min 出场窗口 0.6s + 入场 0.3s）仍装得下。 */
+export const STAGGER_STEP = 0.16;
 /** pace 缩放的钳制范围（秒）。 */
 const PACE_CLAMP: [number, number] = [0.3, 2.5];
 
@@ -79,7 +82,7 @@ export interface MotionPlan {
   emphasis?: TweenPlan;
   ambient?: TweenPlan;
   exit: TweenPlan;
-  camera?: { at: number; dur: number; spec: string };
+  camera?: { at: number; dur: number; spec: string; move: CameraMove };
   /** 本拍唯一的主运动（其余全部从属于它） */
   primary: PrimaryMotion;
   /** 有意静止：无任何运动时的显式声明（通过标准要求「或有意静止」） */
@@ -208,7 +211,7 @@ const EXIT_DIRECTION: Record<string, "left" | "right"> = {
 
 /* ── 主运动选择与五问 ──────────────────────────────────────────────────── */
 
-function cameraSpec(cam: NonNullable<Shot["layout"]["camera"]>): string {
+function cameraSpec(cam: CameraMove): string {
   const parts: string[] = [];
   const s0 = cam.scaleFrom ?? 1;
   const s1 = cam.scaleTo ?? s0;
@@ -218,8 +221,26 @@ function cameraSpec(cam: NonNullable<Shot["layout"]["camera"]>): string {
   const dy = (cam.yTo ?? 0) - (cam.yFrom ?? 0);
   if (dx || dy) parts.push(`平移 (${dx}, ${dy})px`);
   if (parts.length === 0) parts.push("固定机位（有意静止的镜头）");
-  parts.push("线性（ease:none）");
+  parts.push("缓动（power2.inOut）");
   return parts.join(" · ");
+}
+
+/**
+ * 相机语法（Phase 8）：机位运动必须由叙事角色决定「是否值得动」，
+ * 不再每拍默认缓推。规则：
+ *   · evidence   —— 轻拉揭示（1.04→1.0）：数据/事实像被推到眼前；
+ *   · definition —— 轻推强调（1.0→1.05）：关键概念落定时给一点镜内 Δ；
+ *   · consequence—— 轻推落点（1.0→1.05）：推论/结果这一拍收束时轻轻顶一下；
+ *   · 其余（hook/comparison/explanation/conclusion）—— 有意静止，靠入场动效制造镜内 Δ。
+ * 幅度全部 ≤1.05（推）或 1.04→1.0（拉），克制，不抢文字主语。
+ */
+function decideCamera(shot: Shot): CameraMove | undefined {
+  switch (shot.narrative?.role) {
+    case "evidence": return { scaleFrom: 1.04, scaleTo: 1.0 };
+    case "definition": return { scaleFrom: 1.0, scaleTo: 1.05 };
+    case "consequence": return { scaleFrom: 1.0, scaleTo: 1.05 };
+    default: return undefined;
+  }
 }
 
 function pickPrimary(shot: Shot, plan: Omit<MotionPlan, "primary" | "still">): PrimaryMotion | { still: string } {
@@ -228,15 +249,10 @@ function pickPrimary(shot: Shot, plan: Omit<MotionPlan, "primary" | "still">): P
   const at = plan.at;
   const dur = plan.dur;
 
-  // ① 机位运动优先：镜头语言是主运动，入场/强调/环境全部从属于它。
-  //    有位移（缩放变化或平移）才算；scaleFrom==scaleTo 且无平移的「假相机」不占位。
-  const cam = layout.camera;
-  const camMoves =
-    !!cam &&
-    ((cam.scaleTo ?? cam.scaleFrom ?? 1) !== (cam.scaleFrom ?? 1) ||
-      (cam.xTo ?? 0) !== (cam.xFrom ?? 0) ||
-      (cam.yTo ?? 0) !== (cam.yFrom ?? 0));
-  if (plan.camera && cam && camMoves) {
+  // ① 机位运动优先（仅当 schedule 判定「本拍值得动」）：镜头语言是主运动，
+  //    入场/强调/环境全部从属于它。plan.camera 已由 decideCamera 按叙事角色裁决，
+  //    存在即代表一次有意义的、克制的、缓动的镜内运动。
+  if (plan.camera) {
     return {
       kind: "camera",
       motion: "camera",
@@ -244,7 +260,7 @@ function pickPrimary(shot: Shot, plan: Omit<MotionPlan, "primary" | "still">): P
         task,
         subject: "整幅画面（机位运动，作用于独立内层容器）",
         timing: `第 ${at.toFixed(2)}s 起贯穿整拍（${dur.toFixed(2)}s）—— 与旁白同步，内容静止时机位持续制造镜内 Δ`,
-        path: cameraSpec(cam),
+        path: cameraSpec(plan.camera.move),
         result: "画面完成一次镜头运动，构图关系随位移被读完后停在终值",
       },
     };
@@ -354,9 +370,11 @@ export function buildMotionSchedule(shots: Shot[]): MotionSchedule {
       if (def) ambient = { motion: def.id, at, dur };
     }
 
-    // 机位：贯穿整拍，线性
+    // 机位：由叙事角色决定「是否值得动」—— 不再每拍默认缓推。
+    // 只有 evidence（轻拉揭示）/ definition·consequence（轻推强调）才动，其余有意静止。
+    const camMove = decideCamera(shot);
     let camera: MotionPlan["camera"];
-    if (layout.camera) camera = { at, dur, spec: cameraSpec(layout.camera) };
+    if (camMove) camera = { at, dur, spec: cameraSpec(camMove), move: camMove };
 
     // 出场：拍末（原口径 at + max(dur - exitDur, 0.6)）
     const exitId = layout.exit ?? EXIT_FALLBACK[i % EXIT_FALLBACK.length]!;
