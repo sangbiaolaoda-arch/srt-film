@@ -26,10 +26,6 @@
       <filter id="softFx" x="-40%" y="-40%" width="180%" height="180%">
         <feDropShadow dx="0" dy="9" stdDeviation="11" flood-color="#020409" flood-opacity="0.4"/>
       </filter>
-      <!-- 三档模糊：落地影 / 脚下光池 / 前景散景（v3 主体画法用） -->
-      <filter id="blurSm" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2"/></filter>
-      <filter id="blurMd" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="7"/></filter>
-      <filter id="blurLg" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="18"/></filter>
     </defs>
     <!-- 背景层（安静负空间 + 单一锚点 + 暗角） -->
     <g id="bgLayer"></g>
@@ -39,6 +35,8 @@
     </g>
     <!-- 质感层：胶片颗粒（不随机位运动，覆盖全画幅） -->
     <rect x="0" y="0" width="1280" height="720" filter="url(#grainFx)" opacity="0.55"/>
+    <!-- 文字编排层（v2.6）：舞台元素化文字，不随机位运动，颗粒之上、UI 之下 -->
+    <g id="typoLayer"></g>
     <!-- UI 层：字幕 + 进度（按时间求值，seek 安全） -->
     <g id="uiLayer">
       <rect id="capBg" x="500" y="624" width="280" height="56" rx="14"

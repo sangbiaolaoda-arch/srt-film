@@ -8,6 +8,7 @@ import { SCENE_SVG } from './illustrations.js';
 import { runChoreo, choreoScale, ILLU_ANIM } from './choreography.js';
 import { applyCamera } from './camera.js';
 import { ZONES, intersectArea } from './layout.js';
+import { buildTypoLayer } from './typography.js';
 
 const W = 1280, H = 720;
 
@@ -44,6 +45,9 @@ const captionEl = document.getElementById('caption');
 const capBgEl = document.getElementById('capBg');
 const progressEl = document.getElementById('progress');
 const FONT = 'font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif"';
+
+// 文字编排层（v2.6）：登记在 TYPO_SCENES 的幕，字幕从底部底框升级为舞台元素
+const typo = buildTypoLayer();
 
 // 标题卡（每场景一套，写在各自 sceneLayer 内，随场景显隐）
 function titleBlock(scene) {
@@ -225,7 +229,9 @@ window.__layoutReport = function () {
 const CAP_Y = 660, CAP_BG_Y = 624;
 function updateOverlay(t) {
   const cue = cueAt(t);
-  const text = cue ? cue.text : '';
+  // 文字编排幕：该幕 cue 文案由 typo 层接管（舞台元素化），底部底框保持安静
+  const typoOn = typo.covers(t);
+  const text = (cue && !typoOn) ? cue.text : '';
   // 入场动效：0.28s 内 fade + 上浮 12px（easeOutCubic），强调词带琥珀色（两层系统）
   const age = cue ? (t - cue.start) : 99;
   const p = easeOutCubic(Math.min(1, age / 0.28));
@@ -239,6 +245,8 @@ function updateOverlay(t) {
   capBgEl.setAttribute('width', approxW);
   capBgEl.setAttribute('y', CAP_BG_Y - lift);
   capBgEl.style.opacity = text ? String(0.82 * p) : '0';
+  // 文字编排层（自身按窗口显隐，seek 安全）
+  typo.update(t);
   progressEl.setAttribute('width', (W * (t / TOTAL_DURATION)).toFixed(1));
 }
 
@@ -253,35 +261,11 @@ window.__play = () => { playing = true; tl.play(); previewLoop(); };
 window.__pause = () => { playing = false; tl.pause(); };
 
 // ---------- 无头导出 ----------
-// 性能关键：同屏有 40 幕图层 + 40 张背景，全量序列化是逐帧导出 1fps 的元凶。
-// 序列化前把「不在当前帧」的图层 display:none（保留 DOM，不触发重排动画），
-// 序列化后立刻恢复 —— 输出只含当前幕，体积小一两个数量级，画质不变。
-let serializing = false;
-function serializeStage(scale = 1) {
-  if (serializing) return "";
-  serializing = true;
-  const layers = stage.querySelectorAll('.sceneLayer, .bgScene, .fgScene');
-  const hidden = [];
-  for (const el of layers) {
-    if (parseFloat(getComputedStyle(el).opacity) < 0.02) {
-      hidden.push(el);
-      el.style.display = 'none';
-    }
-  }
-  let xml;
-  try {
-    xml = new XMLSerializer().serializeToString(stage);
-  } finally {
-    for (const el of hidden) el.style.display = '';
-    serializing = false;
-  }
+function serializeStage() {
+  let xml = new XMLSerializer().serializeToString(stage);
   if (!/\bxmlns=/.test(xml)) xml = xml.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
-  // 根节点尺寸决定光栅化分辨率：1x=1280×720，1.5x=1920×1080（矢量清晰，不是放大）
-  const w = Math.round(1280 * scale), h = Math.round(720 * scale);
-  xml = xml.replace(/<svg([^>]*?)\bwidth="[^"]*"/, `<svg$1width="${w}"`);
-  xml = xml.replace(/<svg([^>]*?)\bheight="[^"]*"/, `<svg$1height="${h}"`);
-  if (!/\bwidth=/.test(xml)) xml = xml.replace('<svg', `<svg width="${w}"`);
-  if (!/\bheight=/.test(xml)) xml = xml.replace('<svg', `<svg height="${h}"`);
+  if (!/\bwidth=/.test(xml)) xml = xml.replace('<svg', '<svg width="1280"');
+  if (!/\bheight=/.test(xml)) xml = xml.replace('<svg', '<svg height="720"');
   return '<?xml version="1.0" encoding="UTF-8"?>\n' + xml;
 }
 
@@ -304,11 +288,9 @@ window.__exportMp4Post = async function (opts) {
   const quality = opts.quality || 0.92;
   const framesDir = opts.framesDir;
   const recv = opts.recv;
-  const scale = Math.max(1, Math.min(2, opts.scale || 1));
   const dt = 1000 / fps;
   const canvas = document.createElement('canvas');
-  canvas.width = Math.round(W * scale);
-  canvas.height = Math.round(H * scale);
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
   // 轮询状态（driver 通过 agent-browser 读这些标量，不回拉字节）
@@ -325,11 +307,11 @@ window.__exportMp4Post = async function (opts) {
       const t = ms / 1000;
       tl.seek(t);
       updateOverlay(t);
-      const svgStr = serializeStage(scale);
+      const svgStr = serializeStage();
       const { img, url } = await rasterize(svgStr);
       if (img) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, W, H);
+        ctx.drawImage(img, 0, 0, W, H);
         const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', quality));
         const buf = await blob.arrayBuffer();
         const name = 'frame-' + String(idx).padStart(6, '0') + '.jpg';

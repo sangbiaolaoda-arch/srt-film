@@ -14,11 +14,10 @@ import { createServer } from "node:http";
 import { dirname, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");          // .../endowment-v2
-// 输出与 ffmpeg 路径均可用环境变量覆盖（FFMPEG_BIN / OUT_MP4 / OUT_SHEET）
-const FFMPEG = process.env.FFMPEG_BIN || "ffmpeg";
-const OUT_MP4 = process.env.OUT_MP4 || join(ROOT, "out", "endowment_effect_v2.mp4");
-const SHEET = process.env.OUT_SHEET || join(ROOT, "out", "contact_sheet_v2.jpg");
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");          // .../v2
+const FFMPEG = "E:/WorkBuddy/tools/ffmpeg.exe";
+const OUT_MP4 = "E:/WorkBuddy/outputs/20251017_endowment_effect/final/endowment_effect_v2.mp4";
+const SHEET = "E:/WorkBuddy/outputs/20251017_endowment_effect/final/contact_sheet_v2.jpg";
 const LOG = join(ROOT, "render.log");
 
 /* ------------------------------ agent-browser ------------------------------ */
@@ -123,6 +122,8 @@ const FPS = Number(argOf("--fps", "24"));
 const SEG = Number(argOf("--seg", "40"));
 const OUT = resolve(argOf("--out", OUT_MP4));
 const KEEP = argv.includes("--keep");
+const FROM = Number(argOf("--from", "0"));   // 片段渲染起点（秒），0 = 从头
+const TO = Number(argOf("--to", "0"));       // 片段渲染终点（秒），0 = 到片尾
 
 const results = [];
 const check = (name, ok, detail = "") => { results.push({ name, ok }); console.log(`${ok ? "✓" : "✗"} ${name}${detail ? ` —— ${detail}` : ""}`); };
@@ -159,8 +160,10 @@ try {
   mkdirSync(dirname(OUT), { recursive: true });
   const RUN = join(ROOT, "frames", `run-${Date.now()}`);
   mkdirSync(RUN, { recursive: true });
+  const startT = Math.max(0, FROM);
+  const endT = TO > 0 ? Math.min(TO, fullDur) : fullDur;
   const segs = [];
-  for (let st = 0; st < fullDur - 1e-6; st += SEG) segs.push({ start: st, dur: Math.min(SEG, fullDur - st) });
+  for (let st = startT; st < endT - 1e-6; st += SEG) segs.push({ start: st, dur: Math.min(SEG, endT - st) });
   console.log(`· 分段导出：${segs.length} 段 × ≤${SEG}s @ ${FPS}fps → ${RUN}`);
 
   const segPaths = [];
@@ -239,12 +242,14 @@ try {
   const black = yavgs.filter((y) => y <= 16.5).length;
   check("ffprobe 容器可读", pr.code === 0 && !!dur, dur ? `${dur[1]}h${dur[2]}m${dur[3]}s ${res?.[1] ?? "?"}` : txt.slice(-200));
   check("分辨率 1280x720", res?.[1] === "1280x720", res?.[1] ?? "?");
-  check("时长 ≈ 253s", !!dur && Math.abs((+dur[1]) * 3600 + (+dur[2]) * 60 + (+dur[3]) - 253.5) < 3, dur ? dur[3] : "?");
+  const expectDur = endT - startT;
+  check(`时长 ≈ ${expectDur.toFixed(1)}s`, !!dur && Math.abs((+dur[1]) * 3600 + (+dur[2]) * 60 + (+dur[3]) - expectDur) < 3, dur ? dur[3] : "?");
   check("无全黑帧", black === 0, `YAVG≤16.5 帧 ${black}/${yavgs.length}`);
 
-  // 7. 接触印相（12 帧拼图，供视觉验收）
-  const cr2 = await run(FFMPEG, ["-y", "-i", OUT, "-vf", "fps=12/253,scale=426:-1,tile=4x3", "-frames:v", "1", "-q:v", "3", SHEET]);
-  check("接触印相生成", cr2.code === 0 && existsSync(SHEET), SHEET);
+  // 7. 接触印相（12 帧拼图，供视觉验收；片段渲染时印相落在成片旁边）
+  const sheetPath = (FROM > 0 || TO > 0) ? OUT.replace(/\.mp4$/, "_sheet.jpg") : SHEET;
+  const cr2 = await run(FFMPEG, ["-y", "-i", OUT, "-vf", `fps=12/${expectDur},scale=426:-1,tile=4x3`, "-frames:v", "1", "-q:v", "3", sheetPath]);
+  check("接触印相生成", cr2.code === 0 && existsSync(sheetPath), sheetPath);
 
 } catch (e) {
   check("执行", false, (e?.stack || String(e)).slice(-400));
