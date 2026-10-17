@@ -26,9 +26,26 @@
       <filter id="softFx" x="-40%" y="-40%" width="180%" height="180%">
         <feDropShadow dx="0" dy="9" stdDeviation="11" flood-color="#5A4828" flood-opacity="0.28"/>
       </filter>
+      <!-- 背景双光团模糊（固定配方 blob-glow GOLD_WARM）：
+           原 demo 用 CSS blur(52px)@1920 输出；本工程输出 1280 → 等效 52×1280/1920 = 34.7px
+           ≈ stdDeviation 17.33 屏幕 px；嵌套 svg viewBox 为 1920 坐标系（1 局部单位 = 2/3 屏幕 px），
+           故局部 stdDeviation = 26。为导出可靠性用 SVG feGaussianBlur（不用 CSS filter） -->
+      <filter id="blobBlurFx" x="-25%" y="-25%" width="150%" height="150%">
+        <feGaussianBlur stdDeviation="26"/>
+      </filter>
     </defs>
     <!-- 背景层（安静负空间 + 单一锚点 + 暗角） -->
     <g id="bgLayer"></g>
+    <!-- 背景双光团（固定配方 blob-glow GOLD_WARM，参数不得改动）：
+         层序约定 = 底 → 网格 → 暗角 → 光团 → 内容（光团压在暗角之上才不会被吃亮度）。
+         path 的 d 由 app.js 按时间函数逐帧求值（t×3 推进，seek 安全），不走 rAF 时钟 -->
+    <svg id="blobGlow" x="0" y="0" width="1280" height="720" viewBox="0 0 1920 1080"
+         preserveAspectRatio="xMidYMid slice">
+      <g filter="url(#blobBlurFx)">
+        <path id="blobA" fill="#D6A03A" opacity="0.165"/>
+        <path id="blobB" fill="#BE4F2C" opacity="0.157"/>
+      </g>
+    </svg>
     <!-- 机位层（有意图运动作用于此） -->
     <g id="camera">
       <g id="illuLayer"></g>

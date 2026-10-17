@@ -59,3 +59,9 @@ GSAP 对 SVG 元素的 `transformOrigin` 像素值是**相对元素自身包围�
 | charts.js | 规范图表（选型见 docs/chart-method.md） |
 | layout.js | 槽位锚点 + 受保护区 + 碰撞工具 |
 | app.js | 装配、主时间轴、字幕系统、导出钩子 |
+
+## 5. 背景双光团（blob-glow，固定配方）
+- 参数唯一来源：`src/blob-glow.js`（正本 `E:/WorkBuddy/outputs/20261017_blob_glow/final/`），**用户指定长期固定 GOLD_WARM，参数不得改**（金 #D6A03A 左上 / 朱砂 #BE4F2C 右下，amp/seed/speed/phase/opacity 见文件）。
+- 集成方式：嵌套 `<svg viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMid slice">`，坐标直接用 1920 系；**不用 rAF 时钟**，由 app.js `updateBlobs(t)` 按时间函数逐帧求值（t×3 推进，seek 安全，与导出通路一致）。
+- 模糊：**必须用 SVG feGaussianBlur（stdDeviation=26，1920 局部坐标）而非 CSS filter blur**——CSS filter 在序列化→img 光栅化通路里不可靠，SVG filter 已验证 13/13 导出通过。换算关系：CSS blur(52px)@1920 输出 = std 26 输出px = std 26 局部单位（1280 宽下等效 CSS 34.7px）。
+- 层序约定（坑）：底 → 网格 → 暗角 → **光团** → 内容；光团放暗角下面会被四周压暗吃掉一半亮度。

@@ -9,6 +9,7 @@ import { runChoreo, choreoScale, ILLU_ANIM } from './choreography.js';
 import { applyCamera } from './camera.js';
 import { ZONES, intersectArea } from './layout.js';
 import { buildTypoLayer } from './typography.js';
+import { blobPath, GOLD_WARM } from './blob-glow.js';
 
 const W = 1280, H = 720;
 
@@ -227,6 +228,18 @@ window.__layoutReport = function () {
 // ---------- 实时预览 / 渲染时的文案与进度（按时间求值，seek 安全） ----------
 // 字幕入场是"时间的函数"（age→透明度/上浮量），不用 tween——逐帧 seek 下绝对可复现
 const CAP_Y = 660, CAP_BG_Y = 624;
+
+// 背景双光团（固定配方 GOLD_WARM，参数不得改动——用户 2026-10-17 指定长期沿用）：
+// t 推进速度 = 3/秒（配方约定，见 blob-glow.js 头注）；全时间函数求值，seek 安全。
+// 嵌套 svg 的 viewBox 是 1920×1080 坐标系，GOLD_WARM 的 cx/cy/r 直接可用。
+const blobEls = [document.getElementById('blobA'), document.getElementById('blobB')];
+function updateBlobs(t) {
+  GOLD_WARM.layers.forEach((l, i) => {
+    blobEls[i].setAttribute('d',
+      blobPath(t * 3 * (l.speed ?? 1) + (l.phase ?? 0), l.cx, l.cy, l.r, l.seed ?? 0, l.amp ?? 0.12));
+  });
+}
+
 function updateOverlay(t) {
   const cue = cueAt(t);
   // 文字编排幕：该幕 cue 文案由 typo 层接管（舞台元素化），底部底框保持安静
@@ -247,6 +260,8 @@ function updateOverlay(t) {
   capBgEl.style.opacity = text ? String(0.82 * p) : '0';
   // 文字编排层（自身按窗口显隐，seek 安全）
   typo.update(t);
+  // 背景双光团（按时间求值，seek 安全）
+  updateBlobs(t);
   progressEl.setAttribute('width', (W * (t / TOTAL_DURATION)).toFixed(1));
 }
 
