@@ -140,7 +140,7 @@ class Cdp {
  * 起浏览器 → 连第一个 page target → 跑 fn → 关浏览器。
  * fn 收到一个 Cdp 实例。抛错会向上传播。
  */
-export async function run(fn, { port = 9333, headless = true } = {}) {
+export async function run(fn, { port = 9333, headless = true, downloadDir } = {}) {
   const bin = findChrome();
   if (!bin) throw new Error("找不到 Chrome/Edge，设置 CHROME_BIN 指定路径");
   // profile 必须放项目外：放项目里 vite 的 watcher 会去 watch Chrome 正在写的
@@ -169,6 +169,7 @@ const profile = resolve(tmpdir(), `srt-film-cdp-${port}`);
     "--mute-audio",
     `--remote-debugging-port=${port}`,
     `--user-data-dir=${usable}`,
+    `--download-dir=${downloadDir}`,
     "about:blank",
   ].filter(Boolean);
 
@@ -186,6 +187,18 @@ const profile = resolve(tmpdir(), `srt-film-cdp-${port}`);
     });
     cdp = new Cdp(ws, page.id);
     cdp.browserVersion = ver.Browser;
+    // 允许浏览器下载并定向到 downloadDir（headless 下默认会拦截下载对话框，导致文件写不出来）
+    if (downloadDir) {
+      try {
+        await cdp.send("Page.setDownloadBehavior", {
+          behavior: "allow",
+          downloadPath: downloadDir,
+          eventsEnabled: true,
+        });
+      } catch {
+        /* 旧版 Chrome 不支持，忽略 */
+      }
+    }
     return await fn(cdp);
   } finally {
     try {
