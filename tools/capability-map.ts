@@ -8,7 +8,7 @@ import { HANDOFF } from "../src/core/compose";
 const files = [
   "01-explanatory-tech.srt", "02-narrative-emotion.srt", "03-data-comparison.srt",
   "04-longform-3min.srt", "05-kaojin-60s.srt", "06-history-events.srt",
-  "08-forgetting-20s.srt", "10-reasoning-chain.srt",
+  "08-forgetting-20s.srt", "10-reasoning-chain.srt", "11-visual-density.srt",
 ];
 
 const roles: Record<string, number> = {};

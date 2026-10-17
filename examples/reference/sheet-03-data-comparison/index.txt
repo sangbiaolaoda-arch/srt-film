@@ -1,0 +1,12 @@
+shot01  v2-strata  group=poster-field  style=flat-vector  role=hook  t=3.56
+shot02  v2-axis-columns  group=chart  style=chart-motion  role=evidence  t=10.57
+shot03  im-photo-split  group=image  style=editorial  role=comparison  t=17.61
+shot04  v2-num-giant  group=number  style=editorial  role=evidence  t=22.89
+shot05  im-photo-split  group=image  style=editorial  role=evidence  t=28.38
+shot06  v2-num-giant  group=number  style=editorial  role=evidence  t=33.95
+shot07  v2-num-band  group=number  style=editorial  role=comparison  t=41.2
+shot08  im-photo-split  group=image  style=editorial  role=definition  t=50.2
+shot09  v2-num-band  group=number  style=editorial  role=comparison  t=57.53
+shot10  v2-duo  group=poster-geo  style=flat-vector  role=definition  t=63.02
+shot11  v2-ink-line  group=statement  style=editorial  role=consequence  t=68.59
+shot12  v2-vertical  group=statement  style=editorial  role=definition  t=75.17
