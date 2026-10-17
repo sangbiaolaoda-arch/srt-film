@@ -25,10 +25,10 @@ const L = 300, C = 640, R = 980, Y = 415, B = 268, G = 552; // 槽位锚点速�
 function ticketOne(x, y, val, label, enter) {
   return `<g class="part" data-enter="${enter}">
     <g transform="rotate(-6 ${x} ${y})">
-      <rect x="${x - 92}" y="${y - 56}" width="184" height="112" rx="12" fill="${PALETTE.panelSoft}" stroke="${PALETTE.baseTop}" stroke-width="2" stroke-dasharray="8 6"/>
+      <rect x="${x - 92}" y="${y - 56}" width="184" height="112" rx="12" fill="${PALETTE.panelSoft}" stroke="${PALETTE.deep}" stroke-width="2" stroke-dasharray="8 6"/>
     </g>
-    <text x="${x}" y="${y - 8}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="30" font-weight="800" fill="${PALETTE.baseTop}" text-anchor="middle">${val}</text>
-    <text x="${x}" y="${y + 26}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="18" fill="${PALETTE.baseTop}" text-anchor="middle" opacity="0.85">${label}</text>
+    <text x="${x}" y="${y - 8}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="30" font-weight="800" fill="${PALETTE.deep}" text-anchor="middle">${val}</text>
+    <text x="${x}" y="${y + 26}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="18" fill="${PALETTE.deep}" text-anchor="middle" opacity="0.85">${label}</text>
   </g>`;
 }
 
@@ -47,7 +47,7 @@ function cal7(x, y) {
   return `<g class="part" data-enter="right">
     <rect x="${x - 62}" y="${y - 70}" width="124" height="140" rx="14" fill="${PALETTE.panel}" stroke="${PALETTE.steel}" stroke-width="2"/>
     <rect x="${x - 62}" y="${y - 70}" width="124" height="34" rx="14" fill="${PALETTE.accent}"/>
-    <text x="${x}" y="${y - 46}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="20" font-weight="700" fill="${PALETTE.baseTop}" text-anchor="middle">7 天</text>
+    <text x="${x}" y="${y - 46}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="20" font-weight="700" fill="${PALETTE.deep}" text-anchor="middle">7 天</text>
     <text x="${x}" y="${y + 34}" font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif" font-size="40" font-weight="800" fill="${PALETTE.ink}" text-anchor="middle">7</text>
   </g>`;
 }

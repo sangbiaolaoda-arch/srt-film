@@ -11,58 +11,16 @@ function txt(x, y, s, { size = 26, fill = PALETTE.ink, anchor = 'middle', weight
 }
 const P = (enter) => `class="part" data-enter="${enter || 'fade'}"`;
 
-// v3 画法小工具：唯一 id（同屏 40 幕共存，渐变/裁剪 id 不能撞）+ 线性渐变 + 落地影。
-let UID = 0;
-const uid = (p) => `${p}${++UID}`;
-function lg(stops, { x1 = 0, y1 = 0, x2 = 0, y2 = 1 } = {}) {
-  const id = uid('lg');
-  const def = `<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}">${stops
-    .map(([o, c, op]) => `<stop offset="${o}" stop-color="${c}" stop-opacity="${op == null ? 1 : op}"/>`)
-    .join('')}</linearGradient>`;
-  return { id, def };
-}
-/** 落地影（大而柔）+ 接触影（小而深）。 */
-function shadow(x, y, rx, ry = rx * 0.22, op = 0.55) {
-  return `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${ry}" fill="${PALETTE.shadow}" opacity="${op}" filter="url(#blurMd)"/>
-    <ellipse cx="${x}" cy="${y}" rx="${rx * 0.55}" ry="${ry * 0.5}" fill="#000" opacity="${op * 0.5}" filter="url(#blurSm)"/>`;
-}
-
-// ---- 人物剪影（高约 184；y 仍是「腰线」语义，脚底 = y+82，与旧版一致）----
-// v3 画法：肩线用曲线（不是梯形）、下摆有弧度、双腿分开但不留「图标感」缝隙、
-// 身体竖向渐变 + 右半压暗 + 左缘边缘光 + 落地影。统一左上光源。
+// ---- 人物剪影（高约 190）；enter=null 时输出普通 <g>（供复合组件内部使用，避免嵌套 part）----
+// 风格化（2026-10-17 描边风技法查证）：右下暗面块 + 左上高光，统一光源
 export function person(x, y, { enter = 'up', fill = PALETTE.steel, s = 1 } = {}) {
-  const r = 16 * s;
-  const headY = y - 86 * s;
-  const shY = y - 56 * s;
-  const hemY = y + 46 * s;
-  const feet = y + 82 * s;
-  const g = lg([[0, fill], [1, PALETTE.steelDim]]);
-  // 暗面用「横向渐变」而不是一块硬边矩形：硬边会在身体正中留一条竖缝。
-  const sh = lg([[0, "#000", 0], [0.42, "#000", 0], [1, "#000", 0.3]], { x1: 0, y1: 0, x2: 1, y2: 0 });
-  const body = `M${x - 40 * s} ${shY} C${x - 40 * s} ${y - 70 * s} ${x - 22 * s} ${y - 78 * s} ${x - 10 * s} ${y - 78 * s}
-    L${x + 10 * s} ${y - 78 * s} C${x + 22 * s} ${y - 78 * s} ${x + 40 * s} ${y - 70 * s} ${x + 40 * s} ${shY}
-    L${x + 32 * s} ${hemY} Q${x} ${hemY + 8 * s} ${x - 32 * s} ${hemY} Z`;
-  const legs = `M${x - 28 * s} ${hemY - 2 * s} L${x - 6 * s} ${hemY - 2 * s} L${x - 8 * s} ${feet} L${x - 28 * s} ${feet} Z
-    M${x + 6 * s} ${hemY - 2 * s} L${x + 28 * s} ${hemY - 2 * s} L${x + 28 * s} ${feet} L${x + 8 * s} ${feet} Z`;
-  const clip = uid('pc');
-  const open = enter ? `<g ${P(enter)}>` : "<g>";
+  const open = enter ? `<g ${P(enter)}>` : '<g>';
   return `${open}
-    <defs>${g.def}${sh.def}<clipPath id="${clip}"><path d="${body}"/><path d="${legs}"/></clipPath></defs>
-    ${shadow(x + 6 * s, feet + 2, 46 * s, 10 * s, 0.6)}
-    <path d="M${x - 10 * s} ${y - 78 * s} L${x + 10 * s} ${y - 78 * s} L${x + 9 * s} ${y - 72 * s} L${x - 9 * s} ${y - 72 * s} Z" fill="${PALETTE.steelDeep}"/>
-    <ellipse cx="${x}" cy="${headY}" rx="${r * 0.94}" ry="${r}" fill="${fill}"/>
-    <ellipse cx="${x - r * 0.3}" cy="${headY - r * 0.3}" rx="${r * 0.42}" ry="${r * 0.34}" fill="#fff" opacity="0.12"/>
-    <path d="${body}" fill="url(#${g.id})"/>
-    <path d="${legs}" fill="${PALETTE.steelDeep}"/>
-    <g clip-path="url(#${clip})">
-      <rect x="${x - 40 * s}" y="${y - 110 * s}" width="${80 * s}" height="${210 * s}" fill="url(#${sh.id})"/>
-      <path d="M${x - 34 * s} ${y - 48 * s} L${x - 30 * s} ${hemY - 6 * s}" stroke="#000" stroke-width="${7 * s}" opacity="0.18" stroke-linecap="round"/>
-      <path d="M${x + 34 * s} ${y - 48 * s} L${x + 30 * s} ${hemY - 6 * s}" stroke="#000" stroke-width="${7 * s}" opacity="0.18" stroke-linecap="round"/>
-    </g>
-    <path d="M${x - 40 * s} ${shY} C${x - 40 * s} ${y - 70 * s} ${x - 22 * s} ${y - 78 * s} ${x - 10 * s} ${y - 78 * s}"
-      fill="none" stroke="${PALETTE.rimCool}" stroke-width="${2 * s}" opacity="0.55"/>
-    <path d="M${x - 39 * s} ${shY + 8 * s} L${x - 32 * s} ${hemY - 6 * s}"
-      stroke="${PALETTE.rimCool}" stroke-width="${1.8 * s}" opacity="0.35"/>
+    <circle cx="${x}" cy="${y - 72 * s}" r="${30 * s}" fill="${fill}"/>
+    <path d="M${x - 36 * s} ${y - 26 * s} q${36 * s} ${-22 * s} ${72 * s} 0 l${7 * s} ${100 * s} q${-43 * s} ${15 * s} ${-86 * s} 0 z" fill="${fill}"/>
+    <path d="M${x + 2 * s} ${y - 44 * s} q${30 * s} ${4 * s} ${33 * s} ${20 * s} l${5 * s} ${78 * s} q${-20 * s} ${6 * s} ${-38 * s} ${2 * s} z" fill="${PALETTE.deep}" opacity="0.22"/>
+    <circle cx="${x - 11 * s}" cy="${y - 82 * s}" r="${8 * s}" fill="${PALETTE.paper}" opacity="0.35"/>
+    <ellipse cx="${x}" cy="${y + 82 * s}" rx="${50 * s}" ry="${10 * s}" fill="${PALETTE.vignette}" opacity="0.6"/>
   </g>`;
 }
 
@@ -72,25 +30,15 @@ export function questionBig(x, y, { enter = 'scale', size = 110 } = {}) {
 }
 
 // ---- 标签卡（东西 / 钱）----
-// v3：纸卡有厚度（底边压暗 + 折角）与落地影；钱卡保留 ¥ 徽标。
 export function cardItem(x, y, label, { enter = 'left', variant = 'paper', w = 150, h = 96 } = {}) {
-  const isPaper = variant === 'paper';
-  const bg = isPaper ? PALETTE.paper : PALETTE.panelSoft;
-  const fg = isPaper ? '#1B2436' : PALETTE.ink;
-  const stroke = isPaper ? PALETTE.paperDark : PALETTE.steelDeep;
-  const clip = uid('cc');
-  const body = isPaper
+  const bg = variant === 'paper' ? PALETTE.paper : PALETTE.panelSoft;
+  const fg = variant === 'paper' ? PALETTE.deep : PALETTE.ink;
+  const stroke = variant === 'paper' ? PALETTE.steelDim : PALETTE.steel;
+  const body = variant === 'paper'
     ? txt(x, y + 9, label, { size: 30, fill: fg, weight: 700 })
     : `<text x="${x}" y="${y - 2}" ${FONT} font-size="32" font-weight="700" fill="${PALETTE.accent}" text-anchor="middle">¥</text>${txt(x, y + 30, label, { size: 24, fill: fg, weight: 700 })}`;
   return `<g ${P(enter)}>
-    ${shadow(x + 4, y + h / 2 + 4, w * 0.56, 10, 0.5)}
-    <rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="10" fill="${bg}" stroke="${stroke}" stroke-width="2"/>
-    <defs><clipPath id="${clip}"><rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="10"/></clipPath></defs>
-    <g clip-path="url(#${clip})">
-      <rect x="${x - w / 2}" y="${y + h / 2 - h * 0.24}" width="${w}" height="${h * 0.24}" fill="#000" opacity="${isPaper ? 0.1 : 0.16}"/>
-      <path d="M${x + w / 2 - 24} ${y + h / 2} L${x + w / 2} ${y + h / 2 - 24} L${x + w / 2} ${y + h / 2} Z" fill="#000" opacity="0.14"/>
-      <rect x="${x - w / 2 + 10}" y="${y - h / 2 + 8}" width="${w * 0.5}" height="3" rx="1.5" fill="#fff" opacity="${isPaper ? 0.5 : 0.12}"/>
-    </g>
+    <rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="14" fill="${bg}" stroke="${stroke}" stroke-width="2"/>
     ${body}
   </g>`;
 }
@@ -106,7 +54,7 @@ export function swapArrows(x, y, { enter = 'scale' } = {}) {
 }
 
 // ---- 药丸标签 ----
-export function pill(x, y, text, { enter = 'up', bg = PALETTE.accent, fg = PALETTE.baseTop, w = 0, size = 24 } = {}) {
+export function pill(x, y, text, { enter = 'up', bg = PALETTE.accent, fg = PALETTE.deep, w = 0, size = 24 } = {}) {
   const ww = w || (text.length * size * 1.06 + 56);
   return `<g ${P(enter)}>
     <rect x="${x - ww / 2}" y="${y - 24}" width="${ww}" height="48" rx="24" fill="${bg}"/>
@@ -114,34 +62,18 @@ export function pill(x, y, text, { enter = 'up', bg = PALETTE.accent, fg = PALET
   </g>`;
 }
 
-// ---- 马克杯（y 仍是中心；杯底 = y+78，杯口 = y-78）----
-// v3 画法：圆柱体三段渐变（左受光→右压暗）、口沿内壁阴影 + 高光弧、把手带内侧暗边、落地影。
+// ---- 马克杯（约 170 宽 × 170 高，含把手）----
+// 风格化：右侧内阴影带 + 杯口高光弧（统一左上光源）
 export function mug(x, y, { enter = 'scale', s = 1, opacity = 1, id = '' } = {}) {
-  const w = 62 * s, h = 84 * s;
-  const top = y - h / 2;
-  const bot = y + h / 2;
-  const g = lg([[0, PALETTE.paper], [0.58, PALETTE.paper], [1, PALETTE.paperShade]], { x1: 0, y1: 0, x2: 1, y2: 0 });
-  const sh = lg([[0, "#000", 0], [0.5, "#000", 0], [1, "#000", 0.24]], { x1: 0, y1: 0, x2: 1, y2: 0 });
-  const clip = uid('mc');
-  const bodyPath = `M${x - w} ${top} L${x - w} ${bot - 12 * s} Q${x - w} ${bot} ${x - w + 12 * s} ${bot}
-    L${x + w - 12 * s} ${bot} Q${x + w} ${bot} ${x + w} ${bot - 12 * s} L${x + w} ${top} Z`;
+  const w = 68 * s, h = 78 * s, hw = w, hh = h;
   return `<g ${P(enter)} opacity="${opacity}" ${id ? `id="${id}"` : ''}>
-    <defs>${g.def}${sh.def}<clipPath id="${clip}"><path d="${bodyPath}"/></clipPath></defs>
-    ${shadow(x + 7 * s, bot + 3, 58 * s, 11 * s, 0.55)}
-    <path d="M${x + w} ${top + 14 * s} q${42 * s} ${6 * s} ${42 * s} ${h * 0.34} q0 ${h * 0.34 - 6 * s} ${-42 * s} ${h * 0.34}"
-      fill="none" stroke="${PALETTE.paperShade}" stroke-width="${17 * s}" stroke-linecap="round"/>
-    <path d="M${x + w} ${top + 14 * s} q${42 * s} ${6 * s} ${42 * s} ${h * 0.34} q0 ${h * 0.34 - 6 * s} ${-42 * s} ${h * 0.34}"
-      fill="none" stroke="${PALETTE.paperDark}" stroke-width="${2.6 * s}" opacity="0.5"/>
-    <path d="${bodyPath}" fill="url(#${g.id})"/>
-    <g clip-path="url(#${clip})">
-      <rect x="${x - w}" y="${top}" width="${2 * w}" height="${h}" fill="url(#${sh.id})"/>
-      <rect x="${x - w}" y="${bot - 10 * s}" width="${2 * w}" height="${10 * s}" fill="#000" opacity="0.18"/>
-      <path d="M${x - w + 7 * s} ${top + 14 * s} q${13 * s} ${8 * s} ${7 * s} ${26 * s}" fill="none" stroke="#fff" stroke-width="${4 * s}" opacity="0.3" stroke-linecap="round"/>
-    </g>
-    <ellipse cx="${x}" cy="${top}" rx="${w}" ry="${13 * s}" fill="${PALETTE.paperShade}" stroke="${PALETTE.paperDark}" stroke-width="${2.2 * s}"/>
-    <ellipse cx="${x}" cy="${top + 2 * s}" rx="${w - 7 * s}" ry="${9 * s}" fill="${PALETTE.paperDark}" opacity="0.5"/>
-    <path d="M${x - w + 4 * s} ${top - 4 * s} A${w - 4 * s} ${11 * s} 0 0 1 ${x + 4 * s} ${top - 12 * s}"
-      fill="none" stroke="#fff" stroke-width="${2.4 * s}" opacity="0.4" stroke-linecap="round"/>
+    <rect x="${x - hw}" y="${y - hh}" width="${2 * hw}" height="${2 * hh}" rx="${14 * s}" fill="${PALETTE.paper}"/>
+    <rect x="${x + hw * 0.18}" y="${y - hh + 6 * s}" width="${hw * 0.62}" height="${2 * hh - 12 * s}" rx="${10 * s}" fill="${PALETTE.steelDim}" opacity="0.3"/>
+    <path d="M${x - hw * 0.72} ${y - hh + 16 * s} q${hw * 0.5} ${-9 * s} ${hw * 1.05} 0" fill="none" stroke="${PALETTE.accentSoft}" stroke-width="${3.5 * s}" opacity="0.55" stroke-linecap="round"/>
+    <rect x="${x - hw}" y="${y - hh}" width="${2 * hw}" height="${2 * hh}" rx="${14 * s}" fill="none" stroke="${PALETTE.steelDim}" stroke-width="3"/>
+    <path d="M${x + hw} ${y - hh * 0.55} q${46 * s} ${4 * s} ${46 * s} ${hh * 0.55} q0 ${hh * 0.55 - 4 * s} ${-46 * s} ${hh * 0.55}" fill="none" stroke="${PALETTE.paper}" stroke-width="${17 * s}"/>
+    <path d="M${x + hw} ${y - hh * 0.55} q${46 * s} ${4 * s} ${46 * s} ${hh * 0.55} q0 ${hh * 0.55 - 4 * s} ${-46 * s} ${hh * 0.55}" fill="none" stroke="${PALETTE.steelDim}" stroke-width="3"/>
+    <ellipse cx="${x}" cy="${y - hh}" rx="${hw}" ry="${13 * s}" fill="${PALETTE.paper}" stroke="${PALETTE.steelDim}" stroke-width="3"/>
   </g>`;
 }
 
@@ -157,13 +89,13 @@ export function sparkles(x, y, { enter = 'fade', r = 20 } = {}) {
 export function upPrice(x, y, { enter = 'up' } = {}) {
   return `<g ${P(enter)}>
     <rect x="${x - 78}" y="${y - 20}" width="156" height="46" rx="10" fill="${PALETTE.paper}"/>
-    ${txt(x, y + 9, '估价 ¥', { size: 24, fill: PALETTE.baseTop, weight: 800 })}
+    ${txt(x, y + 9, '估价 ¥', { size: 24, fill: PALETTE.deep, weight: 800 })}
     <path d="M${x + 96} ${y + 18} l0 -44 m-13 14 l13 -16 l13 16" stroke="${PALETTE.accent}" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
   </g>`;
 }
 
 // ---- 结论横幅（BANNER 槽专用）----
-export function banner(x, y, text, { enter = 'up', bg = PALETTE.accent, fg = PALETTE.baseTop, size = 24 } = {}) {
+export function banner(x, y, text, { enter = 'up', bg = PALETTE.accent, fg = PALETTE.deep, size = 24 } = {}) {
   return pill(x, y, text, { enter, bg, fg, size });
 }
 
@@ -264,7 +196,7 @@ export function wallDiv(x, y, { enter = 'scale', h = 220 } = {}) {
   let rows = '';
   for (let i = 0; i < 5; i++) {
     const ry = y - h / 2 + i * (h / 5);
-    rows += `<line x1="${x - 24}" y1="${ry + h / 10}" x2="${x + 24}" y2="${ry + h / 10}" stroke="${PALETTE.baseTop}" stroke-width="3" opacity="0.4"/>`;
+    rows += `<line x1="${x - 24}" y1="${ry + h / 10}" x2="${x + 24}" y2="${ry + h / 10}" stroke="${PALETTE.deep}" stroke-width="3" opacity="0.4"/>`;
   }
   return `<g ${P(enter)}>
     <rect x="${x - 30}" y="${y - h / 2}" width="60" height="${h}" rx="6" fill="${PALETTE.steelDim}" opacity="0.85"/>
@@ -278,10 +210,10 @@ export function choco(x, y, { enter = 'right', s = 1 } = {}) {
   return `<g ${P(enter)}>
     <rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="10" fill="${PALETTE.accentDeep}" stroke="${PALETTE.accentSoft}" stroke-width="3"/>
     <rect x="${x - w / 2 + 5}" y="${y - h / 2 + 5}" width="${w * 0.32}" height="${h * 0.26}" rx="6" fill="${PALETTE.accent}" opacity="0.45"/>
-    <line x1="${x - w / 2}" y1="${y - h / 6}" x2="${x + w / 2}" y2="${y - h / 6}" stroke="${PALETTE.baseTop}" stroke-width="2" opacity="0.5"/>
-    <line x1="${x - w / 2}" y1="${y + h / 6}" x2="${x + w / 2}" y2="${y + h / 6}" stroke="${PALETTE.baseTop}" stroke-width="2" opacity="0.5"/>
-    <line x1="${x - w / 6}" y1="${y - h / 2}" x2="${x - w / 6}" y2="${y + h / 2}" stroke="${PALETTE.baseTop}" stroke-width="2" opacity="0.5"/>
-    <line x1="${x + w / 6}" y1="${y - h / 2}" x2="${x + w / 6}" y2="${y + h / 2}" stroke="${PALETTE.baseTop}" stroke-width="2" opacity="0.5"/>
+    <line x1="${x - w / 2}" y1="${y - h / 6}" x2="${x + w / 2}" y2="${y - h / 6}" stroke="${PALETTE.deep}" stroke-width="2" opacity="0.5"/>
+    <line x1="${x - w / 2}" y1="${y + h / 6}" x2="${x + w / 2}" y2="${y + h / 6}" stroke="${PALETTE.deep}" stroke-width="2" opacity="0.5"/>
+    <line x1="${x - w / 6}" y1="${y - h / 2}" x2="${x - w / 6}" y2="${y + h / 2}" stroke="${PALETTE.deep}" stroke-width="2" opacity="0.5"/>
+    <line x1="${x + w / 6}" y1="${y - h / 2}" x2="${x + w / 6}" y2="${y + h / 2}" stroke="${PALETTE.deep}" stroke-width="2" opacity="0.5"/>
   </g>`;
 }
 
@@ -291,8 +223,8 @@ export function halfSplit(x, y, { enter = 'up' } = {}) {
   return `<g ${P(enter)}>
     <rect x="${x - w / 2}" y="${y - h / 2}" width="${w / 2}" height="${h}" rx="12" fill="${PALETTE.cool}" opacity="0.85"/>
     <rect x="${x}" y="${y - h / 2}" width="${w / 2}" height="${h}" rx="12" fill="${PALETTE.warn}" opacity="0.85"/>
-    ${txt(x - w / 4, y + 9, '换 ≈50%', { size: 22, fill: PALETTE.baseTop, weight: 800 })}
-    ${txt(x + w / 4, y + 9, '不换 ≈50%', { size: 22, fill: PALETTE.baseTop, weight: 800 })}
+    ${txt(x - w / 4, y + 9, '换 ≈50%', { size: 22, fill: PALETTE.deep, weight: 800 })}
+    ${txt(x + w / 4, y + 9, '不换 ≈50%', { size: 22, fill: PALETTE.deep, weight: 800 })}
   </g>`;
 }
 
@@ -335,11 +267,11 @@ export function cart(x, y, { enter = 'left' } = {}) {
 export function phoneBid(x, y, { enter = 'right', label = '出价' } = {}) {
   return `<g ${P(enter)}>
     <rect x="${x - 58}" y="${y - 98}" width="116" height="196" rx="18" fill="${PALETTE.panel}"/>
-    <rect x="${x - 44}" y="${y - 78}" width="88" height="150" rx="8" fill="${PALETTE.baseTop}"/>
+    <rect x="${x - 44}" y="${y - 78}" width="88" height="150" rx="8" fill="${PALETTE.deep}"/>
     <rect x="${x - 44}" y="${y + 22}" width="88" height="50" rx="8" fill="${PALETTE.steelDim}" opacity="0.35"/>
     <circle cx="${x}" cy="${y + 86}" r="12" fill="${PALETTE.accent}"/>
     <rect x="${x + 44}" y="${y - 96}" width="88" height="40" rx="12" fill="${PALETTE.paper}"/>
-    ${txt(x + 88, y - 70, label, { size: 18, fill: PALETTE.baseTop, weight: 700 })}
+    ${txt(x + 88, y - 70, label, { size: 18, fill: PALETTE.deep, weight: 700 })}
   </g>`;
 }
 
@@ -356,10 +288,10 @@ export function barsPair(x, y, a, b, la, lb, { enter = 'up', va = '2×', vb = '�
 // ---- 球票对 ----
 export function ticketPair(x, y, { enter = 'up' } = {}) {
   const t = (bx, val, fill, label) => `<g transform="rotate(-6 ${bx} ${y})">
-      <rect x="${bx - 95}" y="${y - 58}" width="190" height="116" rx="12" fill="${fill}" stroke="${PALETTE.baseTop}" stroke-width="2" stroke-dasharray="8 6"/>
+      <rect x="${bx - 95}" y="${y - 58}" width="190" height="116" rx="12" fill="${fill}" stroke="${PALETTE.deep}" stroke-width="2" stroke-dasharray="8 6"/>
     </g>
-    ${txt(bx, y - 12, val, { size: 32, fill: PALETTE.baseTop, weight: 800 })}
-    ${txt(bx, y + 24, label, { size: 19, fill: PALETTE.baseTop, opacity: 0.85 })}`;
+    ${txt(bx, y - 12, val, { size: 32, fill: PALETTE.deep, weight: 800 })}
+    ${txt(bx, y + 24, label, { size: 19, fill: PALETTE.deep, opacity: 0.85 })}`;
   return `<g ${P(enter)}>${t(x - 150, '$100+', PALETTE.panelSoft)}${t(x + 150, '$2000+', PALETTE.accent)}</g>`;
 }
 
@@ -408,7 +340,7 @@ export function checkBadge(x, y, { enter = 'scale' } = {}) {
     <circle cx="${x}" cy="${y}" r="38" fill="${PALETTE.accent}"/>
     <path d="M${x + 6} ${y + 37} a38 38 0 0 0 32 -30 a38 38 0 0 1 -32 30 z" fill="${PALETTE.accentDeep}" opacity="0.5"/>
     <circle cx="${x - 14}" cy="${y - 15}" r="7" fill="${PALETTE.paper}" opacity="0.5"/>
-    <path d="M${x - 18} ${y} l14 16 l26 -32" fill="none" stroke="${PALETTE.baseTop}" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M${x - 18} ${y} l14 16 l26 -32" fill="none" stroke="${PALETTE.deep}" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
   </g>`;
 }
 
@@ -418,7 +350,7 @@ export function bubble(x, y, lines, { enter = 'left', w = 330 } = {}) {
   return `<g ${P(enter)}>
     <rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="16" fill="${PALETTE.paper}"/>
     <path d="M${x + w / 2 - 40} ${y + h / 2} l14 26 l22 -26 z" fill="${PALETTE.paper}"/>
-    ${lines.map((t, i) => txt(x, y - h / 2 + 36 + i * 34, t, { size: 22, fill: i === lines.length - 1 ? PALETTE.warn : PALETTE.baseTop, weight: 700 })).join('')}
+    ${lines.map((t, i) => txt(x, y - h / 2 + 36 + i * 34, t, { size: 22, fill: i === lines.length - 1 ? PALETTE.warn : PALETTE.deep, weight: 700 })).join('')}
   </g>`;
 }
 
@@ -454,7 +386,7 @@ export function noteCard(x, y, text, { enter = 'left', rot = -5, w = 300 } = {})
     <g transform="rotate(${rot} ${x} ${y})">
       <rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="${h}" rx="8" fill="${PALETTE.paper}"/>
       <rect x="${x - w / 2}" y="${y - h / 2}" width="${w}" height="26" rx="8" fill="${PALETTE.accentSoft}" opacity="0.55"/>
-      ${txt(x, y + 16, text, { size: 28, fill: PALETTE.baseTop, weight: 800 })}
+      ${txt(x, y + 16, text, { size: 28, fill: PALETTE.deep, weight: 800 })}
     </g>
   </g>`;
 }
@@ -505,19 +437,18 @@ export function campus(x, y, { enter = 'up', w = 300 } = {}) {
     <path d="M${x - w / 2 - 10} ${top + 30} L${x} ${top - 26} L${x + w / 2 + 10} ${top + 30} Z" fill="${PALETTE.accent}" opacity="0.85"/>
     ${c}
     <rect x="${x - w / 2 - 16}" y="${top + 125}" width="${w + 32}" height="12" rx="4" fill="${PALETTE.steelDim}"/>
-    <circle cx="${x}" cy="${top + 2}" r="6" fill="${PALETTE.baseTop}"/>
+    <circle cx="${x}" cy="${top + 2}" r="6" fill="${PALETTE.deep}"/>
   </g>`;
 }
 
 // ---- 金币（暗面月牙 + 左上高光弧）----
 export function coin(x, y, { enter = 'scale', r = 26, s = 1 } = {}) {
   return `<g ${P(enter)}>
-    ${shadow(x + 3, y + r * s * 0.86, r * s * 0.9, r * s * 0.26, 0.5)}
     <circle cx="${x}" cy="${y}" r="${r * s}" fill="${PALETTE.accent}"/>
     <path d="M${x + r * s * 0.1} ${y + r * s * 0.98} a${r * s} ${r * s} 0 0 0 ${r * s * 0.88} -${r * s * 0.5} a${r * s * 1.15} ${r * s * 1.15} 0 0 1 -${r * s * 0.88} ${r * s * 0.5} z" fill="${PALETTE.accentDeep}" opacity="0.55"/>
-    <circle cx="${x}" cy="${y}" r="${r * s - 7 * s}" fill="none" stroke="${PALETTE.baseTop}" stroke-width="2.5" opacity="0.75"/>
+    <circle cx="${x}" cy="${y}" r="${r * s - 7 * s}" fill="none" stroke="${PALETTE.deep}" stroke-width="2.5" opacity="0.75"/>
     <path d="M${x - r * s * 0.55} ${y - r * s * 0.62} a${r * s * 0.85} ${r * s * 0.85} 0 0 1 ${r * s * 0.62} -${r * s * 0.5}" fill="none" stroke="${PALETTE.accentSoft}" stroke-width="${3.2 * s}" opacity="0.8" stroke-linecap="round"/>
-    ${txt(x, y + 9 * s, '¥', { size: 26 * s, fill: PALETTE.baseTop, weight: 800 })}
+    ${txt(x, y + 9 * s, '¥', { size: 26 * s, fill: PALETTE.deep, weight: 800 })}
   </g>`;
 }
 

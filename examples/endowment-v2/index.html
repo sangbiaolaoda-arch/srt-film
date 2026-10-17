@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>禀赋效应 · 叙事短片（v2）</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #05080f; overflow: hidden; }
+  html, body { margin: 0; height: 100%; background: #EDE2C8; overflow: hidden; }
   #stage {
     position: absolute; inset: 0; width: 100%; height: 100%;
-    display: block; background: #05080f;
+    display: block; background: #EDE2C8;
   }
 </style>
 <!-- gsap 以 UMD 全局方式加载，供 app.js（ES module）取 window.gsap 使用 -->
@@ -17,14 +17,14 @@
 <body>
   <svg id="stage" viewBox="0 0 1280 720" width="1280" height="720" preserveAspectRatio="xMidYMid meet">
     <defs>
-      <!-- 胶片颗粒（静态细噪点，给画面加质感） -->
+      <!-- 胶片颗粒（静态细噪点；米黄浅底用暖褐噪点，比深底版更淡） -->
       <filter id="grainFx" x="0" y="0" width="100%" height="100%">
         <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" stitchTiles="stitch"/>
-        <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0.35  0 0 0 0 0.28  0 0 0 0 0.16  0 0 0 0.04 0"/>
       </filter>
-      <!-- 柔和投影（元素落地感） -->
+      <!-- 柔和投影（元素落地感；浅底用暖褐低透明阴影） -->
       <filter id="softFx" x="-40%" y="-40%" width="180%" height="180%">
-        <feDropShadow dx="0" dy="9" stdDeviation="11" flood-color="#020409" flood-opacity="0.4"/>
+        <feDropShadow dx="0" dy="9" stdDeviation="11" flood-color="#5A4828" flood-opacity="0.28"/>
       </filter>
     </defs>
     <!-- 背景层（安静负空间 + 单一锚点 + 暗角） -->
@@ -40,11 +40,11 @@
     <!-- UI 层：字幕 + 进度（按时间求值，seek 安全） -->
     <g id="uiLayer">
       <rect id="capBg" x="500" y="624" width="280" height="56" rx="14"
-            fill="#0E1525" opacity="0.82" stroke="#2E3E5C" stroke-width="1"/>
+            fill="#FDF9EE" opacity="0.9" stroke="#A7987B" stroke-width="1"/>
       <text id="caption" x="640" y="660"
             font-family="Microsoft YaHei, Noto Sans SC, PingFang SC, sans-serif"
-            font-size="30" font-weight="600" fill="#EEF3FB" text-anchor="middle" opacity="0">字幕</text>
-      <rect id="progress" x="0" y="712" width="0" height="8" fill="#FFB454"/>
+            font-size="30" font-weight="600" fill="#3A2F1D" text-anchor="middle" opacity="0">字幕</text>
+      <rect id="progress" x="0" y="712" width="0" height="8" fill="#C87A1E"/>
     </g>
   </svg>
 
