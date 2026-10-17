@@ -159,13 +159,24 @@ function contrast(a: string, b: string): number {
   return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
 }
 
-describe("强调色压纸白的对比度（WCAG AA 大字 ≥3.0）", () => {
-  it("三系的 sem 四色 / tone.accent / tone.dim 都过 3.0", () => {
+describe("强调色压浅底的对比度（WCAG AA 大字 ≥3.0）", () => {
+  // 强调字只落在浅底上：纸白 paper，以及近白 cream（暗底版式里 cream 当浅底用）。
+  // 彩底 / 深底（aux / steel / clay / dark / ember / blush / sand）不承载强调字，
+  // 故不在门禁范围；完整矩阵见 docs/project/sem-contrast-report.md（其中 sub-3.0 的格子
+  // 全是「sem 压彩底/深底」的装饰组合，产品里强调字从不出现在那些底上）。
+  it("三系的 sem 四色压 paper / cream 都过 3.0", () => {
     for (const id of PROFILE_ORDER) {
       const p = STYLE_PROFILES[id];
       for (const [k, v] of Object.entries(p.sem)) {
-        expect(contrast(v, p.paper), `${id}.sem.${k}=${v}`).toBeGreaterThanOrEqual(3);
+        expect(contrast(v, p.paper), `${id}.sem.${k}=${v} on paper`).toBeGreaterThanOrEqual(3);
+        expect(contrast(v, p.cream), `${id}.sem.${k}=${v} on cream`).toBeGreaterThanOrEqual(3);
       }
+    }
+  });
+
+  it("三系的 tone.accent / tone.dim 压纸白过 3.0", () => {
+    for (const id of PROFILE_ORDER) {
+      const p = STYLE_PROFILES[id];
       expect(contrast(p.tone.accent, p.paper), `${id}.tone.accent=${p.tone.accent}`).toBeGreaterThanOrEqual(3);
       expect(contrast(p.tone.dim, p.paper), `${id}.tone.dim=${p.tone.dim}`).toBeGreaterThanOrEqual(3);
     }
