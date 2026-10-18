@@ -86,9 +86,15 @@ const CASES: Case[] = [
   {
     id: "illegal-overlap",
     text: "精装书比平装书好，字大行疏，读起来不费劲。",
-    // 反向 4：两个主对象意外重叠
+    // 反向 4：两个主对象意外重叠 —— 把主体组整体搬到参照组位置上。
+    // （初版把参照组左移 200px，实测触发的是「出安全区」而不是「净空」——
+    //  夹具必须打中它声称要打中的那条关系，否则等于没测。）
     break: ({ graph }) => {
-      for (const n of graph.nodes) if (n.id === NODE.grpSecondary) n.bounds = { ...n.bounds, x: n.bounds.x - 200 };
+      const target = graph.nodes.find((n) => n.id === NODE.grpSecondary)!.bounds;
+      const shift = target.x - graph.nodes.find((n) => n.id === NODE.grpPrimary)!.bounds.x;
+      for (const n of graph.nodes) {
+        if (n.id === NODE.grpPrimary || n.parentId === NODE.grpPrimary) n.bounds = { ...n.bounds, x: n.bounds.x + shift };
+      }
     },
   },
   {
@@ -127,7 +133,8 @@ const summary: Array<{ id: string; expect: "pass" | "fail"; got: string }> = [];
 for (const c of CASES) {
   const { graph, moves, relations } = build(c.text);
   c.break?.({ graph, moves, relations });
-  const rep = auditMotionGeometry(graph, moves, relations, { from: AT, to: AT + DUR, fps: 30 });  const expectFail = !!c.break;
+  const rep = auditMotionGeometry(graph, moves, relations, { from: AT, to: AT + DUR, fps: 30 });
+  const expectFail = !!c.break;
   const errors = rep.violations.filter((v) => v.severity === "error");
   const ok = expectFail ? errors.length > 0 : errors.length === 0;
   if (!ok) failures++;
