@@ -104,7 +104,7 @@ function buildS02(layer) {
   const r1 = revealLine(g, { size: 34, weight: 500, fill: PALETTE.ink });
   r1.el.textContent = '你觉得他想要的';
   const r2 = revealLine(g, { size: 54, weight: 800, fill: PALETTE.ink });
-  setStyledTextMarks(r2.el, '是赢，还是回本？', [
+  setStyledTextMarks(r2.el, '是赢 还是回本', [
     { w: '赢', fill: PALETTE.cool },
     { w: '回本', fill: PALETTE.accent },
   ]);
@@ -190,7 +190,7 @@ function buildS31(layer) {
   const r1 = revealLine(g, { size: 28, weight: 500, fill: PALETTE.ink });
   r1.el.textContent = '我先承认一件事';
   const r2 = revealLine(g, { size: 28, weight: 500, fill: PALETTE.ink });
-  r2.el.textContent = '上面这些数字，我第一遍看的时候';
+  r2.el.textContent = '上面这些数字 我第一遍看的时候';
   const r3 = revealLine(g, { size: 34, weight: 700, fill: PALETTE.ink });
   setStyledTextMarks(r3.el, '记住的不是百分之九十九', [{ w: '百分之九十九', fill: PALETTE.inkDim }]);
   const r4 = revealLine(g, { size: 56, weight: 800, fill: PALETTE.accent, ls: 4 });
@@ -230,7 +230,7 @@ function buildS33(layer) {
   const r2 = revealLine(g, { size: 32, weight: 500, fill: PALETTE.ink });
   r2.el.textContent = '是为了得到它';
   const r3 = revealLine(g, { size: 50, weight: 800, fill: PALETTE.accent, ls: 4 });
-  setStyledTextMarks(r3.el, '还是为了不承认已经失去的？', [
+  setStyledTextMarks(r3.el, '还是为了不承认已经失去的', [
     { w: '不承认', fill: PALETTE.warn },
     { w: '失去', fill: PALETTE.warn },
   ]);
@@ -304,20 +304,40 @@ const ICON_TRIGGERS = [
   ['追什么', 'eye', PALETTE.cool],
 ];
 
-// 长句拆行：只在标点处拆（避免切词）；无标点长句保持单行
+// ---- 无标点铁律（2026-10-18，学 20261018_jensen_process）----
+// 画面文字不带标点：\p{P}/\p{S} 一律换成空格（引号直接丢弃不占位）。
+// 两类例外是信息不是标点：数字内部的 . , （2.5 / 1,234）、紧跟数字的符号（60% $5.75 25°C）。
+export function dePunct(s) {
+  const chars = [...String(s)];
+  let out = '';
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i];
+    if (!/\p{P}|\p{S}/u.test(ch)) { out += ch; continue; }
+    const prev = chars[i - 1] || '';
+    const next = chars[i + 1] || '';
+    if (/[.,]/.test(ch) && /\d/.test(prev) && /\d/.test(next)) { out += ch; continue; }
+    if (/[%°$±×÷=<>~]/.test(ch) && (/\d/.test(prev) || /\d/.test(next))) { out += ch; continue; }
+    if (/["“”‘’]/.test(ch)) continue;
+    out += ' ';
+  }
+  return out.replace(/ {2,}/g, ' ').trim();
+}
+
+// 长句拆行：在标点或空格处拆（标点已被 dePunct 换成空格，两处都认，避免切词）；
+// 拆点字符不进任何一行。无合适拆点 → 单行
 function splitLines(text) {
   if ([...text].length <= 12) return [text];
-  const punct = ['，', '：', '、', '；'];
   const chars = [...text];
+  const isBreak = (ch) => ch === ' ' || '，：、；'.includes(ch);
   let best = -1, bestD = 1e9;
   chars.forEach((ch, i) => {
-    if (punct.includes(ch)) {
-      const d = Math.abs(i - chars.length / 2);
+    if (isBreak(ch)) {
+      const d = Math.abs(i + 0.5 - chars.length / 2);
       if (d < bestD) { bestD = d; best = i; }
     }
   });
-  if (best < 3 || best > chars.length - 4) return [text];   // 无合适标点 → 单行
-  return [chars.slice(0, best + 1).join('').trim(), chars.slice(best + 1).join('').trim()];
+  if (best < 3 || best > chars.length - 4) return [text];   // 无合适拆点 → 单行
+  return [chars.slice(0, best).join('').trim(), chars.slice(best + 1).join('').trim()];
 }
 
 // ---- 每幕编排配置 ----
@@ -374,7 +394,8 @@ function buildAuto(key, cfg, layer) {
     const cue = CUES[id - 1];
     const isPayoff = id === payoffId;
     const enter0 = cue.start + 0.12;
-    const lines = isPayoff ? [cue.text] : splitLines(cue.text);
+    const shown = dePunct(cue.text);   // 画面显示用；配色/图标检测仍用原句 cue.text
+    const lines = isPayoff ? [shown] : splitLines(shown);
     const size = isPayoff ? payoffSize : base;
     const g = mkGroup(layer);
 
@@ -389,7 +410,7 @@ function buildAuto(key, cfg, layer) {
     if (unitWarn) warnUsed = true;
 
     // 入场风格（词义驱动）：引语→打字机；数字→pop；长句→逐字错峰；默认遮罩滑升
-    const style = /["“”]/.test(cue.text) ? 'type' : (NUM_RE.test(cue.text) ? 'pop' : ([...cue.text].length >= 10 ? 'stagger' : 'reveal'));
+    const style = /["“”]/.test(cue.text) ? 'type' : (NUM_RE.test(cue.text) ? 'pop' : ([...shown].length >= 10 ? 'stagger' : 'reveal'));
 
     // 图标（F 类触发）
     let icon = null, iconKind = null, iconColor = null;

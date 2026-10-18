@@ -78,7 +78,7 @@ export const SCENE_SVG = {
   s12: () => `<g data-key="A">${bigNum(C, Y - 6, '99%', { r: 84 })}</g>`,
 
   // 13 少玩几把？答案正好相反：思考者
-  s13: () => personThink(C, Y, ['少玩几把', '就能躲开吗？']),
+  s13: () => personThink(C, Y, ['少玩几把', '就能躲开吗']),
 
   // 14 一次押完 52.6%：金币 + 大数字
   s14: () => `<g data-key="A">${coin(L + 60, Y, { s: 1.5 })}</g>`
@@ -92,7 +92,7 @@ export const SCENE_SVG = {
   s16: () => `<g data-key="A" data-at="0.3">
       ${barSeries(C, Y - 4, [52.6, 99.5], ['一把死', '慢慢死'], { fmt: (v) => v + '%', maxH: 180, maxV: 110, highlight: 1 })}
     </g>`
-    + statement(C, G + 26, '跟运气没关系，是结构', { size: 30, accentWord: '结构', enter: 'fade' }),
+    + statement(C, G + 26, '跟运气没关系 是结构', { size: 30, accentWord: '结构', enter: 'fade' }),
 
   // 17 章节卡：赌徒谬误——轮盘 + 连黑点列
   s17: () => roulette(C, Y - 20, { s: 0.86 }) + `<g data-key="B" data-at="0.8">${dotRow(C, G + 14, 10, 10, { s: 0.8, gap: 26 })}</g>`,
@@ -149,7 +149,7 @@ export const SCENE_SVG = {
 
   // 30 生活里多试可能成/问题在追什么：分叉（继续/停下）+ 气泡
   s30: () => `<g data-key="A">${choiceFork(C, Y + 14, { la: '继续', lb: '停下', foot: '' })}</g>`
-    + `<g data-key="B" data-at="1.4">${bubble(R + 10, Y - 120, ['你在追什么？'], { w: 250 })}</g>`,
+    + `<g data-key="B" data-at="1.4">${bubble(R + 10, Y - 120, ['你在追什么'], { w: 250 })}</g>`,
 
   // 31 自白：记住的不是 99%/是差一点（文字手工块接管；插画留白 + 一枚硬币）
   s31: () => `<g data-key="A">${coin(C + 300, Y + 60, { s: 0.9 })}</g>`,
