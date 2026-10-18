@@ -6,15 +6,19 @@
 // 分工（为什么拆成两个文件）：浏览器启动必须走 node 直接跑（经 vite SSR 的
 // run-ts.mjs 跑时，子进程 spawn 拿不到句柄，Chrome 起不来 —— 实测）。
 // 所以：
-//   · 本文件（.mjs）负责 dev server + CDP + 采集真实几何 → 写 raw JSON；
-//   · tools/motion-ir-predict.ts 读那份 JSON，用同一份 IR 算出预测值并比对。
+//   · 本文件（.mjs）负责 dev server + CDP + 采集真实几何 → 写 browser-frames.json；
+//   · tools/motion-ir-predict.ts 读那份 JSON，用 plan()+buildMotionSchedule 重建
+//     同一份 IR 预测并比对（时基与 qa:motion 门禁严格同源）。
+//
+// 采集对象不写死：载入 SRT 后找**第一个带 semantic 的拍**，量它图层里的全部
+// [data-group]（compare 量两组、causal 量三组 —— 探针按 DOM 属性走，与事件类型无关）。
 //
 // 测量口径：getBoundingClientRect 相对离屏 svg 换算回 1280×720 逻辑坐标。
 // 不用 getBBox —— 它不含祖先 transform（而 GSAP 恰好只改祖先 transform）。
 // 不用隐藏 svg 的视口绝对坐标 —— 舞台在 left:-20000px，绝对坐标没有意义。
 
 import { spawn, execFileSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { run } from "./cdp.mjs";
@@ -27,6 +31,16 @@ mkdirSync(OUT, { recursive: true });
 // 报错却是「CDP 端口未就绪」—— 误导排查方向。phase10-qa 一直是 5199/9333 分开的。
 const DEV_PORT = 5198;
 const PORT = Number(process.env.MGB_CDP_PORT ?? 9338);
+
+/** 被采集的语料（argv[2]，缺省 = 比较基准切片）。 */
+const SRT_FILE = process.argv[2] ?? "examples/13-compare-book.srt";
+const SRT = readFileSync(resolve(ROOT, SRT_FILE), "utf8");
+
+/** 采样时点：覆盖 compare（落位 1.9）与 causal（落位 1.55）两套模板的
+ *  move 开始/结束/中段 + 保持尾。比对侧只用到 holds 起点之后的帧做参照。 */
+const TIMES = [0.02, 0.08, 0.24, 0.4, 0.66, 0.98, 1.25, 1.53, 1.55, 1.9, 2.6, 3.0, 3.99];
+/** 存关键帧 PNG 的时点（入场中 / 让位中 / 主体入场中 / 落位 / 保持尾）。 */
+const SHOT_TIMES = new Set([0.24, 0.66, 1.25, 1.9, 3.99]);
 
 /** 与 phase10-qa 同一套 dev server 启法（--host 127.0.0.1 是必须的，见那边注释）。 */
 function startServer(port) {
@@ -87,24 +101,25 @@ async function warm(port) {
   }
 }
 
-/** 与 IR 夹具同一条旁白（基准语料 13）：保证两边验算的是同一个东西。 */
-import { readFileSync } from "node:fs";
-const SRT = readFileSync(resolve(ROOT, "examples", "13-compare-book.srt"), "utf8");
-
-const NODE = { grpPrimary: "grp-primary", grpSecondary: "grp-secondary", figPrimary: "fig-primary", figSecondary: "fig-secondary", labelPrimary: "label-primary", labelSecondary: "label-secondary" };
-
-/** 页面内探针：读某个元素的世界包围盒，换算回 1280×720 逻辑坐标。 */
+/** 页面内探针：量语义拍图层里所有 [data-group] 的世界包围盒（逻辑坐标）。 */
 const PROBE = `
 window.__mgb = {
-  box: (sel) => {
-    const el = window.__stage.svg.querySelector(sel);
-    if (!el) return null;
+  /** 找到第一个带 semantic 的拍号；没有返回 -1 */
+  semanticIndex: () => window.__stage.shots.findIndex((s) => s.semantic),
+  /** 该拍图层内全部组的包围盒，按 data-group id 归键 */
+  groups: (idx) => {
+    const layer = window.__stage.svg.querySelector('[data-layer="' + idx + '"]');
+    if (!layer) return null;
     const svg = window.__stage.svg;
     const r = svg.getBoundingClientRect();
-    const b = el.getBoundingClientRect();
-    if (b.width === 0 && b.height === 0) return null;
     const sx = 1280 / r.width, sy = 720 / r.height;
-    return { x: (b.left - r.left) * sx, y: (b.top - r.top) * sy, w: b.width * sx, h: b.height * sy };
+    const out = {};
+    for (const el of layer.querySelectorAll('[data-group]')) {
+      const b = el.getBoundingClientRect();
+      if (b.width === 0 && b.height === 0) continue;
+      out[el.getAttribute('data-group')] = { x: (b.left - r.left) * sx, y: (b.top - r.top) * sy, w: b.width * sx, h: b.height * sy };
+    }
+    return out;
   },
 };
 "ok";
@@ -142,62 +157,60 @@ try {
         stage: !!window.__stage,
         errs: items.filter(li => !li.classList.contains('ok') && !li.classList.contains('warn')).map(li => li.textContent),
         shots: window.__stage ? window.__stage.shots.length : 0,
-        layoutId: window.__stage && window.__stage.shots[0] ? window.__stage.shots[0].layout.id : null,
       };
     `);
     if (!gate.stage) {
       console.error("✗ 规划没建起舞台：", gate.errs.slice(0, 3).join(" | "));
       throw new Error("无舞台");
     }
-    console.log(`✓ 舞台就绪（${gate.shots} 拍，版式 ${gate.layoutId}）${gate.errs.length ? `；门禁问题：${gate.errs.slice(0, 2).join(" | ")}` : ""}`);
-
     await b.eval(PROBE);
+    const semIdx = await b.eval(`return window.__mgb.semanticIndex();`);
+    if (semIdx < 0) {
+      console.error(`✗ ${SRT_FILE} 里没有语义接管拍（plan 没产 semantic 切片）—— 层 B 无从比对`);
+      throw new Error("无语义拍");
+    }
+    const meta = await b.eval(`
+      return (() => {
+        const s = window.__stage.shots[${semIdx}];
+        return JSON.stringify({ layoutId: s.layout.id, kind: s.semantic.kind, template: s.semantic.plan.templateId, at: s.tlStart ?? s.start, end: s.end });
+      })()
+    `);
+    const m = JSON.parse(meta);
+    console.log(`✓ 语义拍 #${semIdx}：${m.layoutId}（${m.kind}/${m.template}）· ${gate.shots} 拍`);
 
-    // 关键时点：各 move 的开始/结束/中段（与 IR 夹具同一时基 at=0, dur=4.0）。
-    // 取样从 0.02 起而不是 0 —— GSAP 的零时长 set 在 playhead 恰好停在 0 时不渲染，
-    // 第一帧组还停在终位；但此刻整层 autoAlpha=0，画面无差别。把这一渲染边界
-    // 排除在样点外，免得校准把「seek(0) 的渲染时机」误读成「计划与画面漂移」。
-    const times = [0.02, 0.08, 0.24, 0.4, 0.66, 0.98, 1.25, 1.53, 1.9, 2.6, 3.0, 3.99];
-    // 关键时点截图：入场中段 / 让位中 / 主体入场中 / 落位 / 保持尾，各存一张 PNG。
-    // 机器指标不能替代视觉判断（方案 §0 原则 D），这些帧就是给人看的那一份。
-    const SHOT_TIMES = new Set([0.24, 0.66, 1.25, 1.9, 3.99]);
     const shotDir = resolve(OUT, "frames");
     mkdirSync(shotDir, { recursive: true });
     const rows = [];
-    for (const t of times) {
-      const r = await b.eval(`
+    for (const t of TIMES) {
+      const boxes = await b.eval(`
         return (() => {
           const s = window.__stage;
           s.pause();
           s.seek(${t});
-          const pick = (id) => window.__mgb.box('[data-group="' + id + '"]');
-          return {
-            t: ${t},
-            ${JSON.stringify(NODE.grpPrimary)}: pick(${JSON.stringify(NODE.grpPrimary)}),
-            ${JSON.stringify(NODE.grpSecondary)}: pick(${JSON.stringify(NODE.grpSecondary)}),
-          };
+          return JSON.stringify(window.__mgb.groups(${semIdx}));
         })()
       `);
-      rows.push(r);
+      const parsed = JSON.parse(boxes);
+      rows.push({ t, boxes: parsed });
+      const ids = Object.keys(parsed);
       console.log(
-        `  t=${String(t).padStart(5)}s  主体 x=${r[NODE.grpPrimary] ? r[NODE.grpPrimary].x.toFixed(1) : "—"}  参照 x=${r[NODE.grpSecondary] ? r[NODE.grpSecondary].x.toFixed(1) : "—"}`,
+        `  t=${String(t).padStart(5)}s  ` + ids.map((id) => `${id} x=${parsed[id].x.toFixed(1)}`).join("  "),
       );
       if (SHOT_TIMES.has(t)) {
         // 等舞台的 rAF 循环把 seek 后的画面画进可见 canvas（seek 只置 dirty）
         await b.eval(`return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 120))));`);
-        // 只截可见画布（画面本体），不带页面其他 chrome
         const rectJson = await b.eval(`
           return (() => { const r = window.__stage.canvas.getBoundingClientRect(); return JSON.stringify({x: r.x, y: r.y, width: r.width, height: r.height}); })();
         `);
         const rect = JSON.parse(rectJson);
         const png = await b.shot({ x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 });
-        writeFileSync(resolve(shotDir, `t-${String(t).replace(".", "_")}.png`), Buffer.from(png, "base64"));
+        writeFileSync(resolve(shotDir, `${m.kind}-t-${String(t).replace(".", "_")}.png`), Buffer.from(png, "base64"));
       }
     }
 
     writeFileSync(
       resolve(OUT, "browser-frames.json"),
-      JSON.stringify({ srt: SRT, shotIndex: 0, fps: 30, times, rows }, null, 2),
+      JSON.stringify({ srtFile: SRT_FILE, srt: SRT, shotIndex: semIdx, fps: 30, times: TIMES, rows }, null, 2),
     );
     console.log(`\n  采集完成 → .tmp/motion-audit/browser-frames.json（下一步由 motion-ir-predict.ts 比对）`);
   }, { port: PORT });
