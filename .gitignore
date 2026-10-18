@@ -14,3 +14,7 @@ src/layouts/sedIofnPI
 examples/endowment-v2/out/
 examples/endowment-v2/frames/
 examples/endowment-v2/render.log
+# oct18-gambler 出片产物与中间帧（同 endowment-v2，不入库）
+examples/oct18-gambler/out/
+examples/oct18-gambler/frames/
+examples/oct18-gambler/render.log

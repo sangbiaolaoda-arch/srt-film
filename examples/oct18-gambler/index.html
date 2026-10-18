@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>禀赋效应 · 叙事短片（v2）</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #EDE2C8; overflow: hidden; }
+  #stage {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    display: block; background: #EDE2C8;
+  }
+</style>
+<!-- gsap 以 UMD 全局方式加载，供 app.js（ES module）取 window.gsap 使用 -->
+<script src="./lib/gsap.min.js"></script>
+</head>
+<body>
+  <svg id="stage" viewBox="0 0 1280 720" width="1280" height="720" preserveAspectRatio="xMidYMid meet">
+    <defs>
+      <!-- 胶片颗粒（静态细噪点；米黄浅底用暖褐噪点，比深底版更淡） -->
+      <filter id="grainFx" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" stitchTiles="stitch"/>
+        <feColorMatrix type="matrix" values="0 0 0 0 0.35  0 0 0 0 0.28  0 0 0 0 0.16  0 0 0 0.04 0"/>
+      </filter>
+      <!-- 柔和投影（元素落地感；浅底用暖褐低透明阴影） -->
+      <filter id="softFx" x="-40%" y="-40%" width="180%" height="180%">
+        <feDropShadow dx="0" dy="9" stdDeviation="11" flood-color="#5A4828" flood-opacity="0.28"/>
+      </filter>
+      <!-- 背景双光团模糊（固定配方 blob-glow GOLD_WARM）：
+           原 demo 用 CSS blur(52px)@1920 输出；本工程输出 1280 → 等效 52×1280/1920 = 34.7px
+           ≈ stdDeviation 17.33 屏幕 px；嵌套 svg viewBox 为 1920 坐标系（1 局部单位 = 2/3 屏幕 px），
+           故局部 stdDeviation = 26。为导出可靠性用 SVG feGaussianBlur（不用 CSS filter） -->
+      <filter id="blobBlurFx" x="-25%" y="-25%" width="150%" height="150%">
+        <feGaussianBlur stdDeviation="26"/>
+      </filter>
+    </defs>
+    <!-- 背景层（安静负空间 + 单一锚点 + 暗角） -->
+    <g id="bgLayer"></g>
+    <!-- 背景双光团（固定配方 blob-glow GOLD_WARM，参数不得改动）：
+         层序约定 = 底 → 网格 → 暗角 → 光团 → 内容（光团压在暗角之上才不会被吃亮度）。
+         path 的 d 由 app.js 按时间函数逐帧求值（t×3 推进，seek 安全），不走 rAF 时钟 -->
+    <svg id="blobGlow" x="0" y="0" width="1280" height="720" viewBox="0 0 1920 1080"
+         preserveAspectRatio="xMidYMid slice">
+      <g filter="url(#blobBlurFx)">
+        <path id="blobA" fill="#D6A03A" opacity="0.165"/>
+        <path id="blobB" fill="#BE4F2C" opacity="0.157"/>
+      </g>
+    </svg>
+    <!-- 机位层（有意图运动作用于此） -->
+    <g id="camera">
+      <g id="illuLayer"></g>
+    </g>
+    <!-- 质感层：胶片颗粒（不随机位运动，覆盖全画幅） -->
+    <rect x="0" y="0" width="1280" height="720" filter="url(#grainFx)" opacity="0.55"/>
+    <!-- 文字编排层（v2.6）：舞台元素化文字，不随机位运动，颗粒之上、UI 之下 -->
+    <g id="typoLayer"></g>
+    <!-- UI 层：进度条（字幕已全部舞台化，见 typography.js；底部字幕条已退役） -->
+    <g id="uiLayer">
+      <rect id="progress" x="0" y="712" width="0" height="8" fill="#C87A1E"/>
+    </g>
+  </svg>
+
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
