@@ -110,9 +110,7 @@ const SEG = "[^，。；！？、\\n…\\s]{1,12}?";
 /** 维度种子：从词表派生（唯一事实来源），正则门禁与分类器共用同一撮词。
  *  枚举不全 = 漏抽（安全，走 statement），绝不代表「抽到的都判得准」。 */
 const DIM_SEED = [...EVAL_GOOD, ...EVAL_BAD, ...MEASURABLE].sort((a, b) => b.length - a.length).join("|");
-const COMPARE_RULES: Array<{ id: string; re: RegExp; negated: boolean; verdict?: "subject" | "reference"; dimGroup?: number; swapped?: boolean }> = [
-  // 标记前后允许一个可选逗号：真实语料常写「慢慢死，比一把死，概率高得多」。
-  // 这不破坏硬约束①（A/B 段内 SEG 仍不跨句读），只是容忍句间的自然停顿。
+const COMPARE_RULES: Array<{ id: string; re: RegExp; negated: boolean; verdict?: "subject" | "reference"; dimGroup?: number; swapped?: boolean; aBoundary?: boolean }> = [
   // A 并不比 B —— 否定作用域覆盖整个比较结论
   { id: "compare-negated", re: new RegExp(`(${SEG})[，,]?并不比(${SEG})[，,]?(?:更|还|比较|有点|要)?(${DIM_SEED})`), negated: true, dimGroup: 3 },
   // 相比 A，B 更 DIM —— 参照在前、主体在后（11 语料「相比光，声音慢了 88 万倍」）
@@ -121,11 +119,13 @@ const COMPARE_RULES: Array<{ id: string; re: RegExp; negated: boolean; verdict?:
   { id: "compare-not-as-good", re: new RegExp(`(${SEG})[，,]?不如(${SEG})`), negated: false, verdict: "reference" },
   // A 比/比起 B + 维度 —— 方向由维度类别决定（比起 在前：交替按顺序匹配，否则
   // 「比起」会被拆成「比」+「起」，"起" 就成了 B 实体的首字）
-  { id: "compare-bi", re: new RegExp(`(${SEG})[，,]?(?:比起|比)较?(${SEG})[，,]?(?:更|还|比较|有点|要)?(${DIM_SEED})`), negated: false, dimGroup: 3 },
-  // A，比 B，<前缀>+维度 —— 逗号后常带「概率/胜率/幅度」这类修饰再落到维度词
+  { id: "compare-bi", re: new RegExp(`(${SEG})(?:比起|比)较?(${SEG})[，,]?(?:更|还|比较|有点|要)?(${DIM_SEED})`), negated: false, dimGroup: 3 },
+  // A，比B，<前缀>+维度 —— 逗号后常带「概率/胜率/幅度」这类修饰再落到维度词
   // （81 拍语料「慢慢死，比一把死，概率高得多」）。必须有逗号，B 段边界才明确；
   // 维度仍必须由 DIM_SEED 命中，宁缺毋滥。
-  { id: "compare-bi-comma", re: new RegExp(`(${SEG})[，,]?(?:比起|比)较?(${SEG})[，,].{0,6}?(${DIM_SEED})`), negated: false, dimGroup: 3 },
+  // aBoundary：A 段必须起于句首或句读之后。SEG 不含空格，遇到英文/数字（「TLS 1.3
+  // 只需要 1 个往返」）会从空格后截出「个往返」这种碎片，必须拦下。
+  { id: "compare-bi-comma", re: new RegExp(`(${SEG})[，,]?(?:比起|比)较?(${SEG})[，,].{0,6}?(${DIM_SEED})`), negated: false, dimGroup: 3, aBoundary: true },
 ];
 
 /** 音译词/复合词陷阱：「比」是词内字符而不是比较标记。实测定格的三类：
@@ -212,6 +212,12 @@ export function extractComparisonEvent(text: string, cueId: number): SemanticEve
       // 本规则抓不到正确所指，弃掉这个候选（宁缺毋滥，别把「往往」画上画面）。
       if (!subjRawClean || !refRaw || subjRawClean !== subjRaw && subjRawClean.length < 2) continue;
       if (ADVERBS.includes(subjRawClean) || ADVERBS.includes(refRaw)) continue;
+      // A 段起点守卫（compare-bi-comma）：SEG 不含空格，遇英文/数字会从空格后截碎片
+      // （「TLS 1.3 只需要 1 个往返」→「个往返」）。要求 A 段起于句首或句读之后。
+      if (rule.aBoundary) {
+        const aStartRaw = msi + ms.indexOf(g1Raw);
+        if (aStartRaw > 0 && !/[，。；：、！？,.!?;:]/.test(src[aStartRaw - 1] ?? "")) continue;
+      }
 
       // 证据区间按**匹配位置**算，不能拿 indexOf 在全句里再找一遍：
       // 「比」字在实体里也出现时（阿拉比卡），indexOf 会把起点定位到错误的那一次。
@@ -575,21 +581,23 @@ export function extractNegationEvent(text: string, cueId: number): SemanticEvent
 
 /**
  * 「不是A，而是B」：转折否定（药方 §11 case 6）。三组捕获，不能走 extractMarkedPair
- * （它只读 m[1]/m[2]）。语义上 A 是被否定的旧说法、B 是要确证的新说法 ——
+ * （它只读 m[1]/m[2]）。结构：m[1]=「不是」前的引导语（常为空）、m[2]=被否定的 A、
+ * m[3]=「而是」后要确证的 B。语义上 A 是被否定的旧说法、B 是新说法 ——
  * 与 negation-bushi 的「不是X」把前半段当 affirm 相反，所以独立成族，排在否定族之前。
+ * A 段允许为空（「不是速度，而是方向」没有前导语），用 `(${SEG}|)` 容空。
  */
-const NOT_BUT_RE = new RegExp(`(${SEG})[，,]?不是(${SEG_G})[，,]?(?:而是|反而是|是)(${SEG_G})`);
+const NOT_BUT_RE = new RegExp(`(${SEG}|)[，,]?不是(${SEG_G})[，,]?(?:而是|反而是|是)(${SEG_G})`);
 function extractNotButEvent(text: string, cueId: number): SemanticEvent | null {
   const src = text.trim();
   if (!src) return null;
   const m = NOT_BUT_RE.exec(src);
   if (!m) return null;
-  const negated = clampName(m[1] ?? "");
+  const negated = clampName(m[2] ?? "");
   const affirm = clampName(m[3] ?? "");
   if (!negated || !affirm || ADVERBS.includes(negated) || ADVERBS.includes(affirm)) return null;
-  // 证据区间按匹配位置算：A 起点在匹配串内 m[1] 处，B 起点在「而是」之后
+  // 证据区间按匹配位置算：A 起点在「不是」之后，B 起点在「而是」之后
   const marker = m[0].indexOf("而是") >= 0 ? m[0].indexOf("而是") : m[0].indexOf(m[2]!);
-  const aStart = m.index + m[0].indexOf(m[1]!);
+  const aStart = m.index + m[0].indexOf(m[2]!);
   const bStart = m.index + m[0].indexOf(m[3]!, marker);
   const entities: EntityRef[] = [
     { id: "ent-negated", name: negated, role: "negated", evidence: { cueId, startChar: Math.max(0, aStart), endChar: Math.max(0, aStart) + negated.length, text: negated } },
