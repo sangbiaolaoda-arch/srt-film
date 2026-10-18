@@ -111,15 +111,21 @@ const SEG = "[^，。；！？、\\n…\\s]{1,12}?";
  *  枚举不全 = 漏抽（安全，走 statement），绝不代表「抽到的都判得准」。 */
 const DIM_SEED = [...EVAL_GOOD, ...EVAL_BAD, ...MEASURABLE].sort((a, b) => b.length - a.length).join("|");
 const COMPARE_RULES: Array<{ id: string; re: RegExp; negated: boolean; verdict?: "subject" | "reference"; dimGroup?: number; swapped?: boolean }> = [
+  // 标记前后允许一个可选逗号：真实语料常写「慢慢死，比一把死，概率高得多」。
+  // 这不破坏硬约束①（A/B 段内 SEG 仍不跨句读），只是容忍句间的自然停顿。
   // A 并不比 B —— 否定作用域覆盖整个比较结论
-  { id: "compare-negated", re: new RegExp(`(${SEG})并不比(${SEG})(?:更|还|比较|有点|要)?(${DIM_SEED})`), negated: true, dimGroup: 3 },
+  { id: "compare-negated", re: new RegExp(`(${SEG})[，,]?并不比(${SEG})[，,]?(?:更|还|比较|有点|要)?(${DIM_SEED})`), negated: true, dimGroup: 3 },
   // 相比 A，B 更 DIM —— 参照在前、主体在后（11 语料「相比光，声音慢了 88 万倍」）
-  { id: "compare-xiangbi", re: new RegExp(`相比(${SEG})[，,]?(${SEG})(?:更|还|比较|有点|要)?(${DIM_SEED})`), negated: false, dimGroup: 3, swapped: true },
+  { id: "compare-xiangbi", re: new RegExp(`相比(${SEG})[，,]?(${SEG})[，,]?(?:更|还|比较|有点|要)?(${DIM_SEED})`), negated: false, dimGroup: 3, swapped: true },
   // A 不如 B —— 主体落败，方向明确（"不如" 本身就是比较标记，不需要额外维度）
-  { id: "compare-not-as-good", re: new RegExp(`(${SEG})不如(${SEG})`), negated: false, verdict: "reference" },
+  { id: "compare-not-as-good", re: new RegExp(`(${SEG})[，,]?不如(${SEG})`), negated: false, verdict: "reference" },
   // A 比/比起 B + 维度 —— 方向由维度类别决定（比起 在前：交替按顺序匹配，否则
   // 「比起」会被拆成「比」+「起」，"起" 就成了 B 实体的首字）
-  { id: "compare-bi", re: new RegExp(`(${SEG})(?:比起|比)较?(${SEG})(?:更|还|比较|有点|要)?(${DIM_SEED})`), negated: false, dimGroup: 3 },
+  { id: "compare-bi", re: new RegExp(`(${SEG})[，,]?(?:比起|比)较?(${SEG})[，,]?(?:更|还|比较|有点|要)?(${DIM_SEED})`), negated: false, dimGroup: 3 },
+  // A，比 B，<前缀>+维度 —— 逗号后常带「概率/胜率/幅度」这类修饰再落到维度词
+  // （81 拍语料「慢慢死，比一把死，概率高得多」）。必须有逗号，B 段边界才明确；
+  // 维度仍必须由 DIM_SEED 命中，宁缺毋滥。
+  { id: "compare-bi-comma", re: new RegExp(`(${SEG})[，,]?(?:比起|比)较?(${SEG})[，,].{0,6}?(${DIM_SEED})`), negated: false, dimGroup: 3 },
 ];
 
 /** 音译词/复合词陷阱：「比」是词内字符而不是比较标记。实测定格的三类：
@@ -311,6 +317,7 @@ export function extractComparisonEvent(text: string, cueId: number): SemanticEve
 const EXTRACTORS: Array<{ label: string; extract: (text: string, cueId: number) => SemanticEvent | null }> = [
   { label: "比较族", extract: extractComparisonEvent },
   { label: "因果族", extract: extractCausalEvent },
+  { label: "不是而是族", extract: extractNotButEvent },
   { label: "否定族", extract: extractNegationEvent },
   { label: "转折族", extract: extractContrastEvent },
   { label: "变化族", extract: extractChangeEvent },
@@ -454,8 +461,9 @@ const NEGATION_RULES: PairRule[] = [
   { id: "negation-bingbushi", re: new RegExp(`(${SEG})[，,]?并不是(${SEG_G})`) },
   { id: "negation-bingfei", re: new RegExp(`(${SEG})[，,]?并非(${SEG_G})`) },
   { id: "negation-weibi", re: new RegExp(`(${SEG})[，,]?未必(?:是)?(${SEG_G})`) },
-  // 「要不是…」是虚拟条件不是否定 —— 标记前一字是要/若就跳过
-  { id: "negation-bushi", re: new RegExp(`(${SEG})[，,]?不是(${SEG_G})`), guardBefore: ["要", "若"] },
+  // 「要不是…」是虚拟条件不是否定；「也不是/又不是」是双重否定或递进，
+  // 都不该拆成 X不是Y —— 标记前一字是 要/若/也/又/并 就跳过
+  { id: "negation-bushi", re: new RegExp(`(${SEG})[，,]?不是(${SEG_G})`), guardBefore: ["要", "若", "也", "又", "并"] },
 ];
 
 const CONTRAST_RULES: PairRule[] = [
@@ -466,7 +474,9 @@ const CONTRAST_RULES: PairRule[] = [
 ];
 
 const CHANGE_RULES: PairRule[] = [
-  { id: "change-biancheng", re: new RegExp(`(${SEG})[，,]?(?:变成了?|变为|化为|成了)(${SEG_G})`) },
+  // 标记词吸收紧贴的前置情态动词（「五十块想变成一百块」→ before=五十块 而不是 五十块想）；
+  // 只在情态词后紧跟变成类标记时才吸收，「理想/思想」这类名词不受影响
+  { id: "change-biancheng", re: new RegExp(`(${SEG})[，,]?(?:想|要|会|能)?(?:变成了?|变为|化为|成了)(${SEG_G})`) },
 ];
 
 interface PairFamily {
@@ -561,6 +571,46 @@ export function extractNegationEvent(text: string, cueId: number): SemanticEvent
     roles: ["affirm", "negated"],
     negated: true,
   });
+}
+
+/**
+ * 「不是A，而是B」：转折否定（药方 §11 case 6）。三组捕获，不能走 extractMarkedPair
+ * （它只读 m[1]/m[2]）。语义上 A 是被否定的旧说法、B 是要确证的新说法 ——
+ * 与 negation-bushi 的「不是X」把前半段当 affirm 相反，所以独立成族，排在否定族之前。
+ */
+const NOT_BUT_RE = new RegExp(`(${SEG})[，,]?不是(${SEG_G})[，,]?(?:而是|反而是|是)(${SEG_G})`);
+function extractNotButEvent(text: string, cueId: number): SemanticEvent | null {
+  const src = text.trim();
+  if (!src) return null;
+  const m = NOT_BUT_RE.exec(src);
+  if (!m) return null;
+  const negated = clampName(m[1] ?? "");
+  const affirm = clampName(m[3] ?? "");
+  if (!negated || !affirm || ADVERBS.includes(negated) || ADVERBS.includes(affirm)) return null;
+  // 证据区间按匹配位置算：A 起点在匹配串内 m[1] 处，B 起点在「而是」之后
+  const marker = m[0].indexOf("而是") >= 0 ? m[0].indexOf("而是") : m[0].indexOf(m[2]!);
+  const aStart = m.index + m[0].indexOf(m[1]!);
+  const bStart = m.index + m[0].indexOf(m[3]!, marker);
+  const entities: EntityRef[] = [
+    { id: "ent-negated", name: negated, role: "negated", evidence: { cueId, startChar: Math.max(0, aStart), endChar: Math.max(0, aStart) + negated.length, text: negated } },
+    { id: "ent-affirm", name: affirm, role: "affirm", evidence: { cueId, startChar: Math.max(0, bStart), endChar: Math.max(0, bStart) + affirm.length, text: affirm } },
+  ];
+  return {
+    id: `ev-${cueId}-negation-not-but`,
+    type: "negation",
+    entities,
+    participants: [
+      { entityId: "ent-negated", role: "negated" },
+      { entityId: "ent-affirm", role: "affirm" },
+    ],
+    dimension: undefined,
+    dimensionKind: "unknown",
+    polarity: "unknown",
+    negated: true,
+    confidence: 0.9,
+    evidence: entities.map((e) => e.evidence),
+    rule: "negation-not-but",
+  };
 }
 
 /** 转折事件：让步方(A) vs 转折方(B)。画面上 B 更大、是话锋落点。 */

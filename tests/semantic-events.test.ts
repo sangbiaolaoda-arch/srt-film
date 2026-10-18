@@ -93,6 +93,15 @@ describe("比较事件抽取", () => {
     expect(extractComparisonEvent("常见两个品种，阿拉比卡和罗布斯塔", 3)).toBeNull();
   });
 
+  it("逗号容忍正例：A，比B，概率+维度 —— 真实语料 81 拍补的规则", () => {
+    // 「慢慢死，比一把死，概率高得多」：维度词「高」前有「概率」修饰，compare-bi
+    // 要求维度紧跟 B 段而漏抓；compare-bi-comma 在逗号后容忍最多 6 字前缀。
+    const ev = extractComparisonEvent("慢慢死，比一把死，概率高得多", 4)!;
+    expect(ev.type).toBe("compare");
+    expect(ev.entities.map((e) => e.name).sort()).toEqual(["一把死", "慢慢死"]);
+    expect(ev.dimension).toBe("高");
+  });
+
   it("置信度阈值常量：降级线是可读的常量", () => {
     expect(CONFIDENCE_MIN).toBeGreaterThan(0.5);
     expect(CONFIDENCE_MIN).toBeLessThan(1);
@@ -120,5 +129,27 @@ describe("Phase 3 剩余三族（否定/转折/变化）冒烟", () => {
     const ev = evs.find((e) => e.type === "change")!;
     expect(ev.rule).toBe("change-biancheng");
     expect(ev.entities.map((e) => e.role).sort()).toEqual(["after", "before"]);
+  });
+});
+
+describe("药方 §11 基准语料回归（否定两缺陷）", () => {
+  it("正例：不是A，而是B → negation-not-but，A 是被否定方、B 是确证方", () => {
+    const evs = extractEvents("不是速度，而是方向。", 30);
+    const ev = evs.find((e) => e.type === "negation")!;
+    expect(ev.rule).toBe("negation-not-but");
+    const negated = ev.entities.find((e) => e.role === "negated")!;
+    const affirm = ev.entities.find((e) => e.role === "affirm")!;
+    expect(negated.name).toBe("速度");
+    expect(affirm.name).toBe("方向");
+  });
+
+  it("反例：双重否定「也不是不值得」不得当 X不是Y 拆，affirm 不得是垃圾「或者说也」", () => {
+    const s = "不是便宜的，而是值得的，或者说也不是不值得";
+    const evs = extractEvents(s, 31);
+    const ev = evs.find((e) => e.type === "negation")!;
+    // 应命中 negation-not-but（而不是被 negation-bushi 拆到「也不是不值得」上）
+    expect(ev.rule).toBe("negation-not-but");
+    expect(ev.entities.find((e) => e.role === "affirm")!.name).toBe("值得的");
+    expect(ev.entities.find((e) => e.role === "negated")!.name).toBe("便宜的");
   });
 });

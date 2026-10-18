@@ -45,15 +45,24 @@ try {
     console.log(`片长 ${dur.toFixed(1)}s，点击「导出 MP4」…`);
     await b.eval("document.getElementById('btn-export').click();");
     // 等导出完成：按钮文案恢复，或出现导出完成日志
-    const dl3 = Date.now() + 180000;
+    // 长片（>1min 素材）光栅化可能超过默认 3 分钟，用 EXPORT_TIMEOUT_MS 覆盖（毫秒）
+    const timeoutMs = Number(process.env.EXPORT_TIMEOUT_MS ?? 180000);
+    const dl3 = Date.now() + timeoutMs;
     let done = false;
     while (Date.now() < dl3) {
       const txt = await b.eval("return document.getElementById('btn-export')?.textContent;");
-      if (txt === "导出 MP4") { done = true; break; }
+      if (txt === "导出 MP4") {
+        // 页内失败也会把按钮复位成「导出 MP4」（finally 块），必须查日志面板区分成败
+        const logs = await b.eval("return document.getElementById('status-log')?.innerText ?? '';");
+        const failLine = logs.split("\\n").find((l) => l.includes("导出失败"));
+        if (failLine) throw new Error(`页内导出失败：${failLine.trim()}`);
+        done = true;
+        break;
+      }
       if (txt.includes("失败")) { throw new Error("导出按钮显示失败状态"); }
       await new Promise((r) => setTimeout(r, 1000));
     }
-    if (!done) throw new Error("导出未在 3min 内完成");
+    if (!done) throw new Error(`导出未在 ${Math.round(timeoutMs / 60000)}min 内完成`);
     // 等 Chrome 把下载写完（.crdownload 消失，出现 .mp4）
     const dl4 = Date.now() + 60000;
     let mp4;

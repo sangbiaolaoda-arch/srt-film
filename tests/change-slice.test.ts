@@ -40,6 +40,13 @@ describe("变化抽取", () => {
     expect(ev?.entities.find((e) => e.id === "ent-after")!.name).toBe("春水");
   });
 
+  it("情态动词紧贴标记词：归标记不归实体（真实语料「五十块想变成一百块」）", () => {
+    const ev = extractChangeEvent("五十块想变成一百块，一次押完", 5);
+    expect(ev?.type).toBe("change");
+    expect(ev?.entities.find((e) => e.id === "ent-before")!.name).toBe("五十块");
+    expect(ev?.entities.find((e) => e.id === "ent-after")!.name).toBe("一百块");
+  });
+
   it("「从 A 到 B」是纯区间，没有变化标记 → 不画成变化", () => {
     const evs = extractEvents("从北京到上海，要飞两个小时。", 5);
     expect(evs.find((e) => e.type === "change")).toBeFalsy();
