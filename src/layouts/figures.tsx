@@ -35,6 +35,7 @@ export type FigureKind =
   | "fig-clash"        // 价格向前 vs 止损闸
   | "fig-question"     // 设问：大问号 + 分叉轴 + 未选中的两端
   | "fig-path-end"     // 路走到尽头：透视路径 + 终点标记
+  | "fig-book"         // 一本书：书脊 + 封面 + 页口 + 书签（具体名词，可拆部件）
   | "fig-quote-frame"; // 引语：成对的大引号 + 引用范围框
 
 export const FIGURE_KINDS: FigureKind[] = [
@@ -42,7 +43,7 @@ export const FIGURE_KINDS: FigureKind[] = [
   "fig-curve-pain", "fig-fork", "fig-balance", "fig-checklist", "fig-corridor",
   "fig-dim", "fig-scurve", "fig-weigh-bars", "fig-converge", "fig-receipt",
   "fig-flatline", "fig-door", "fig-clash",
-  "fig-question", "fig-path-end", "fig-quote-frame",
+  "fig-question", "fig-path-end", "fig-quote-frame", "fig-book",
 ];
 
 interface Palette {
@@ -778,6 +779,59 @@ function figQuoteFrame(c: FigCtx): JSX.Element {
   );
 }
 
+// ───────────────────────── 17 一本书 ─────────────────────────
+// 语义：基准语料第 1/2 条（「我很喜欢一本书。」「A 书比 B 书好。」）的实体本体。
+// 画法：竖立的书 —— 书脊 + 封面页口 + 书签带。所有部件都带 data-part（可被拆开单独动），
+// 颜色只从风格档取（ink/dim/accent），不引入第二种墨色。
+// 这不是「泛化的矩形」：书脊在左、页口在右、封面略宽于书脊，读者一眼认出是书。
+function figBook(c: FigCtx): JSX.Element {
+  const { w, h, ink, dim, accent } = c;
+  const cx = w * 0.5;
+  const bw = w * 0.5;          // 封面宽
+  const bh = h * 0.62;         // 封面高
+  const y0 = h * 0.18;
+  const spineW = bw * 0.2;     // 书脊宽
+  const lw = c.lw * 2;
+
+  // 封面外框（略呈书形：上下略窄）
+  const cover = [
+    `M${cx - bw / 2} ${y0 + bh * 0.02}`,
+    `L${cx + bw / 2 - bw * 0.06} ${y0}`,
+    `L${cx + bw / 2 - bw * 0.06} ${y0 + bh}`,
+    `L${cx - bw / 2} ${y0 + bh * 0.98} Z`,
+  ].join(" ");
+  // 页口：右侧 3 条平行细线（页叠的侧面）
+  const pageLines = [0.3, 0.5, 0.7].map((t, i) => (
+    <line key={i} x1={cx + bw / 2 - bw * 0.06} y1={y0 + bh * t} x2={cx + bw * 0.16} y2={y0 + bh * (t + 0.06)} stroke={hairlineOf(c)} strokeWidth={lw * 0.8} data-part="" />
+  ));
+  // 书签带：从封面顶部垂下的一小段
+  const ribbonX = cx + bw * 0.22;
+  return (
+    <g>
+      <path d={cover} fill="none" stroke={ink} strokeWidth={lw * 1.4} strokeLinejoin="round" data-part="cover" />
+      {/* 书脊：封面左边内侧一条更粗的线 —— 立着放的书，书脊靠近读者 */}
+      <line x1={cx - bw / 2 + spineW} y1={y0 + bh * 0.05} x2={cx - bw / 2 + spineW} y2={y0 + bh * 0.95} stroke={ink} strokeWidth={lw * 1.6} data-part="spine" />
+      {/* 页口区：右侧一段浅色填充，与封面纸面区分 */}
+      <path
+        d={`M${cx + bw * 0.1} ${y0 + bh * 0.05} L${cx + bw / 2 - bw * 0.06} ${y0 + bh * 0.04} L${cx + bw / 2 - bw * 0.06} ${y0 + bh * 0.96} L${cx + bw * 0.1} ${y0 + bh * 0.97} Z`}
+        fill={dim}
+        opacity={0.35}
+        data-part="pages"
+      />
+      {pageLines}
+      {/* 书签带 */}
+      <rect x={ribbonX} y={y0 - h * 0.02} width={bw * 0.1} height={bh * 0.28} fill={accent} data-part="ribbon" />
+      {/* 底部阴影线：书落在平面上的感觉 */}
+      <line x1={cx - bw * 0.5} y1={y0 + bh * 1.06} x2={cx + bw * 0.5} y2={y0 + bh * 1.06} stroke={ink} strokeWidth={lw} opacity={0.25} data-part="base" />
+    </g>
+  );
+}
+
+/** 图形发丝线：随槽位尺寸缩放。figBook 内部用它，避免把 hairline 传进 ctx。 */
+function hairlineOf(c: FigCtx): string {
+  return c.hairline;
+}
+
 function render(c: FigCtx, kind: FigureKind): JSX.Element {
   switch (kind) {
     case "fig-halftone-fade": return figHalftoneFade(c);
@@ -800,6 +854,7 @@ function render(c: FigCtx, kind: FigureKind): JSX.Element {
     case "fig-question": return figQuestion(c);
     case "fig-path-end": return figPathEnd(c);
     case "fig-quote-frame": return figQuoteFrame(c);
+    case "fig-book": return figBook(c);
   }
 }
 

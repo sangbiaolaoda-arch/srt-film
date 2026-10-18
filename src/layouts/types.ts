@@ -75,8 +75,25 @@ export const TEXT_SLOT_KINDS: ReadonlySet<SlotKind> = new Set<SlotKind>([
   "bullets", "listnum", "checklist", "tags", "pills",
 ]);
 
+/**
+ * 槽位组（方案 §3.3 / Phase 1）：属于同一语义实体的一组槽（图形 + 标签 + 标注）。
+ * 组是**位移的唯一来源** —— 子槽保持最终位置的绝对坐标，组变换叠加其上。
+ * 存在于 Layout 而不是渲染器里，因为三个消费方要同一份事实：
+ * 渲染器（包装 <g data-group>）、运动编译（组级 MovePlan 找 DOM）、几何验算（元素图）。
+ */
+export interface SlotGroup {
+  id: string;
+  /** 绑定的语义实体 id（EntityRef.id）；纯构图组可缺省 */
+  entityId?: string;
+  role: "primary" | "secondary" | "annotation" | "background";
+  /** 变换原点（画面坐标 1280×720）。缩放绕它进行，不交给浏览器隐式选中心 */
+  anchor: [number, number];
+}
+
 /** 内容槽位。box = 归一化网格区域 [x, y, w, h]，网格 cols×rows（默认 12×8）。 */
 export interface Slot {
+  /** 属于哪个槽位组（见 SlotGroup）。组内槽不吃槽位级入场动效 */
+  group?: string;
   k: SlotKind;
   box: [number, number, number, number];
   size?: SizeCode;
@@ -181,6 +198,8 @@ export interface Layout {
    * 缺省开启 —— 纯色底是「一眼假」的主因之一。专属场景（custom）自动关闭。
    */
   wash?: boolean;
+  /** 槽位组清单（语义实体分组）。空 = 传统「每个槽各自入场」的版式 */
+  groups?: SlotGroup[];
   slots: Slot[];
 }
 

@@ -503,6 +503,19 @@ export function LayoutLayer({
   const ctx: Ctx = { content, layout, numericIndex: 0 };
   const C = colorsOf(layout.style);
   const cutouts = photoCutouts(layout);
+  // 槽位分组（方案 §3.3）：同组槽被包进一个 <g data-group>，组变换是它们唯一的位置来源。
+  // 先渲染未分组槽，再按 Layout.groups 的声明顺序渲染各组 —— 组内容压在结构件之上。
+  const grouped = new Map<string, JSX.Element[]>();
+  const loose: JSX.Element[] = [];
+  layout.slots.forEach((slot, i) => {
+    const node = <SlotNode key={i} slot={slot} ctx={ctx} index={i} />;
+    if (!slot.group) {
+      loose.push(node);
+      return;
+    }
+    grouped.set(slot.group, [...(grouped.get(slot.group) ?? []), node]);
+  });
+  const groupOrder = layout.groups?.map((g) => g.id) ?? [...grouped.keys()];
   return (
     <g data-layout={layout.id}>
       {layout.wash !== false && (
@@ -511,9 +524,17 @@ export function LayoutLayer({
       {layout.bg && (
         <BgLayer kind={layout.bg} seed={content.beat} colorDim={C.dim} colorHairline={C.hairline} accent={C.accent} cutouts={cutouts} />
       )}
-      {layout.slots.map((slot, i) => (
-        <SlotNode key={i} slot={slot} ctx={ctx} index={i} />
-      ))}
+      {loose}
+      {groupOrder.map((gid) => {
+        const kids = grouped.get(gid);
+        if (!kids || kids.length === 0) return null;
+        const def = layout.groups?.find((g) => g.id === gid);
+        return (
+          <g key={gid} data-group={gid} data-entity={def?.entityId ?? ""} data-group-anchor={def ? def.anchor.join(" ") : ""}>
+            {kids}
+          </g>
+        );
+      })}
     </g>
   );
 }

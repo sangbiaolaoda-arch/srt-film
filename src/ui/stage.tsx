@@ -9,6 +9,8 @@ import gsap from "gsap";
 import { BeatMark, LayoutLayer } from "../layouts/render";
 import { DecorLayer } from "../layouts/decor";
 import { applyMotion } from "../motion/apply";
+import { applyElementMoves } from "../motion/element-apply";
+import { compareMoves } from "../semantics/compare-slice";
 import { buildMotionSchedule, slotTweens } from "../motion/schedule";
 import type { Shot } from "../core/shot";
 import { STAGE_FPS, STAGE_H, STAGE_W, renderFrame } from "../render/frame";
@@ -144,16 +146,29 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
     // 槽位入场 / 槽级 mx / 拍级 emphasis：全部由 slotTweens 统一排期（见 schedule.ts 的注释）。
     // 这里只读 DOM 上声明的 intent（data-motion / data-mx）喂进去，不再自己算时间。
     const slots = Array.from(layer.querySelectorAll<SVGGElement>("[data-anim]"));
+    // 组内子槽不吃槽位级 tween：它们的位置唯一来源是组的变换（方案 §3.3 第 2 条）。
+    // 父子各拿一条 tween 就是「父子重复位移」—— 那正是反向夹具要抓的错。
+    const freeSlots = slots.filter((el) => !el.closest("[data-group]"));
     // 叙事错峰：先按「叙事重要性」给槽排序（标题→副文→列表→图形/结构），
     // 再按排序后的序号分配错峰偏移 —— 标题先落、图形最后到，观众视线被带着走，
     // 不再是所有元素齐刷刷一起动。
-    const ordered = slots
+    const ordered = freeSlots
       .map((el) => ({ el, kind: el.getAttribute("data-kind") }))
       .sort((a, b) => slotPriority(a.kind) - slotPriority(b.kind));
     ordered.forEach(({ el }, k) => {
       const tws = slotTweens(plan, k, { m: el.getAttribute("data-motion"), mx: el.getAttribute("data-mx") });
       for (const tw of tws) applyMotion(tw.motion, { tl, el, at: tw.at, dur: tw.dur });
     });
+
+    // 组级运动（Phase 1 语义切片）：MovePlan 已是绝对时间，直接编译进同一条时间轴。
+    // 组内子槽没有自己的 tween —— 组是唯一位移来源。
+    if (shot.compare) {
+      const moves = compareMoves(shot.compare, plan.at, plan.dur);
+      const res = applyElementMoves({ tl, scope: layer, graph: shot.compare.graph, moves });
+      if (res.missingTargets.length > 0) {
+        console.warn(`[motion] 拍 ${shot.content.beat}：元素图里的组在渲染层不存在（${res.missingTargets.join("、")}）—— 组级运动没有落点`);
+      }
+    }
 
     // 环境动效：贯穿整拍图层（schedule 保证总长不超出拍长）
     if (plan.ambient) {

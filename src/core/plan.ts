@@ -17,6 +17,9 @@ import { MOTION_BY_ID, validateMotionSet } from "../motion/catalog";
 import { buildMotionSchedule } from "../motion/schedule";
 import { describeConflict, slotConflicts } from "../motion/conflict";
 import { pickPhoto, type PhotoId } from "../assets/photos";
+import { extractEvents } from "../semantics/events";
+import { planComparison } from "../semantics/visual-plan";
+import { buildCompareSlice, type CompareSlice } from "../semantics/compare-slice";
 
 export interface PlanResult {
   shots: Shot[];
@@ -85,9 +88,24 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
     if (ovr?.layoutId && !ovr.layout && !layout) {
       problems.push(`拍 ${beat.index}：覆写的版式 id「${ovr.layoutId}」不存在`);
     }
+    // Phase 1 语义层：先抽事件（每个事件都带 cue 内的字符区间）。
+    // 命中「可执行的比较事件」且本拍没有版式覆写时，用语义模板生成的版式替掉自动挑选 ——
+    // 它仍是一个普通 Layout，走同一条渲染 / 门禁 / 导出通路，不是平行系统（方案 §0 原则 A）。
+    const events = extractEvents(beat.text, beat.cues[0]?.id ?? beat.index);
+    let compare: CompareSlice | undefined;
+    const appliedRules: string[] = [];
+    if (!ovr?.layout && !ovr?.layoutId) {
+      const cmp = events.find((e) => e.type === "compare");
+      const vplan = cmp ? planComparison(cmp) : null;
+      if (cmp && vplan) {
+        compare = buildCompareSlice(vplan, `shot-${beat.index}`, { hasCaption: !!content.caption });
+        layout = compare.plan.layout;
+        appliedRules.push(`semantic:${vplan.templateId}`, `event:${cmp.id}`, ...vplan.assertions.map((a) => `assert:${a}`));
+      }
+    }
+
     layout = layout ?? pickLayout(content, decision.style, prevLayout, { used, total: prepared.length }, photo?.id);
     bump(layout.group);
-
     // 风格档灌进 layout：底色 / 图形调色板 / 特效路径全部由 layout.style 驱动。
     // decision.style 已是最终值（自动判定或导演覆写，见 decideStyle/planStyles），
     // 无条件同步 —— 否则自动判定的图表风/扁平风拍会用错 profile 渲染。
@@ -179,7 +197,19 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
       if (!MOTION_BY_ID.has(id)) problems.push(`拍 ${beat.index}：版式引用了未知动效 ${id}`);
     }
 
-    out.push({ layout, content, start: beat.start, end: beat.end, cueIds: beat.cues.map((c) => c.id), narrative, continuity, photo: usesPhoto ? photo?.id : undefined });
+    out.push({
+      layout,
+      content,
+      start: beat.start,
+      end: beat.end,
+      cueIds: beat.cues.map((c) => c.id),
+      narrative,
+      continuity,
+      photo: usesPhoto ? photo?.id : undefined,
+      events,
+      compare,
+      appliedRules: appliedRules.length ? appliedRules : undefined,
+    });
   });
 
   // 第四遍：槽级动效冲突门禁（baseline-audit 缺陷 5）。
