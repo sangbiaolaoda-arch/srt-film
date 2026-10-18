@@ -54,6 +54,16 @@ const mp = sched.plans[raw.shotIndex]!;
 const moves = movesFor(shot.semantic, mp.at, mp.dur);
 
 /**
+ * 机位补偿口径（重要，实测 14px 级假偏差的来源，已在采集侧解决）：
+ * DOM 的 getBoundingClientRect 是**经过机位变换之后**的世界坐标；IR 图的 bounds 是
+ * 预相机坐标。decideCamera 对 evidence/definition/consequence 角色给 scale 1.0→1.05 的
+ * 缓推（绕 640,360，power2.inOut 贯穿整拍）。这里不在预测侧做补偿——
+ * 补偿要猜锚点偏移 A（DOM=640+s·(IR+A−640)，实测 A≈98.7px，随 s 变化不抵消）。
+ * 正确做法在采集侧：用图层自身宽度反解 camScale，把 DOM 逆相机回本地坐标，
+ * 锚点偏移于是变成常量，位移增量比对自动抵消。
+ */
+
+/**
  * 比对口径（实测后确定的，重要）：
  * DOM 的 getBoundingClientRect 读的是**可见内容盒**（图形在槽位内的实际画法、
  * 文字的居中位置），IR 的 bounds 是**槽位框**。两者差一个常数偏移（实测 +99~104px），

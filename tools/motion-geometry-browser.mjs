@@ -32,8 +32,12 @@ mkdirSync(OUT, { recursive: true });
 const DEV_PORT = 5198;
 const PORT = Number(process.env.MGB_CDP_PORT ?? 9338);
 
-/** 被采集的语料（argv[2]，缺省 = 比较基准切片）。 */
+/** 被采集的语料（argv[2]，缺省 = 比较基准切片）；--shot N 选第 N 个语义拍（缺省 0）。 */
 const SRT_FILE = process.argv[2] ?? "examples/13-compare-book.srt";
+const SHOT_ARG = (() => {
+  const i = process.argv.indexOf("--shot");
+  return i >= 0 && process.argv[i + 1] ? Number(process.argv[i + 1]) : 0;
+})();
 const SRT = readFileSync(resolve(ROOT, SRT_FILE), "utf8");
 
 /** 采样时点：覆盖 compare（落位 1.9）与 causal（落位 1.55）两套模板的
@@ -104,22 +108,34 @@ async function warm(port) {
 /** 页面内探针：量语义拍图层里所有 [data-group] 的世界包围盒（逻辑坐标）。 */
 const PROBE = `
 window.__mgb = {
-  /** 找到第一个带 semantic 的拍号；没有返回 -1 */
-  semanticIndex: () => window.__stage.shots.findIndex((s) => s.semantic),
-  /** 该拍图层内全部组的包围盒，按 data-group id 归键 */
+  /** 全部带 semantic 的拍号（升序）；--shot N 选其中第 N 个 */
+  semanticIndices: () => window.__stage.shots.map((s, i) => (s.semantic ? i : -1)).filter((i) => i >= 0),
+  /** 组的世界包围盒，按 data-group id 归键；同时给出该拍图层的实际缩放（退相机用）。 */
   groups: (idx) => {
     const layer = window.__stage.svg.querySelector('[data-layer="' + idx + '"]');
     if (!layer) return null;
     const svg = window.__stage.svg;
     const r = svg.getBoundingClientRect();
     const sx = 1280 / r.width, sy = 720 / r.height;
+    const lr = layer.getBoundingClientRect();
+    // 图层自身宽度 ÷ 1280 = 机位缩放（相机作用于整层，逐帧一致）—— 用它把世界坐标
+    // 还原成图层本地坐标，比对才不受机位影响（相机是独立的第二层变换，不该算编排漂移）。
+    const camScale = Math.min(2, Math.max(0.1, (lr.width * sx) / 1280));
     const out = {};
     for (const el of layer.querySelectorAll('[data-group]')) {
       const b = el.getBoundingClientRect();
       if (b.width === 0 && b.height === 0) continue;
-      out[el.getAttribute('data-group')] = { x: (b.left - r.left) * sx, y: (b.top - r.top) * sy, w: b.width * sx, h: b.height * sy };
+      const x = (b.left - r.left) * sx, y = (b.top - r.top) * sy;
+      const w = b.width * sx, h = b.height * sy;
+      // 逆相机：绕 (640,360) 缩放。锚点偏移在本地坐标里是常数，位移增量比对自动抵消。
+      out[el.getAttribute('data-group')] = {
+        x: 640 + (x - 640) / camScale,
+        y: 360 + (y - 360) / camScale,
+        w: w / camScale,
+        h: h / camScale,
+      };
     }
-    return out;
+    return { camScale, groups: out };
   },
 };
 "ok";
@@ -166,24 +182,40 @@ try {
       throw new Error("无舞台");
     }
     await b.eval(PROBE);
-    const semIdx = await b.eval(`return window.__mgb.semanticIndex();`);
-    if (semIdx < 0) {
+    const semList = await b.eval(`return window.__mgb.semanticIndices();`);
+    if (!semList || semList.length === 0) {
       console.error(`✗ ${SRT_FILE} 里没有语义接管拍（plan 没产 semantic 切片）—— 层 B 无从比对`);
       throw new Error("无语义拍");
     }
+    if (SHOT_ARG >= semList.length) {
+      console.error(`✗ --shot ${SHOT_ARG} 越界：本语料只有 ${semList.length} 个语义拍（索引 0..${semList.length - 1}）`);
+      throw new Error("shot 参数越界");
+    }
+    const semIdx = semList[SHOT_ARG];
     const meta = await b.eval(`
       return (() => {
         const s = window.__stage.shots[${semIdx}];
-        return JSON.stringify({ layoutId: s.layout.id, kind: s.semantic.kind, template: s.semantic.plan.templateId, at: s.tlStart ?? s.start, end: s.end });
+        const mp = { at: s.tlStart ?? s.start, dur: Math.max(s.end - s.start, 1.2) };
+        // 图层级退场起点：IR 只建模语义编排（moves），不含 enter/exit 图层 tween ——
+        // 采样必须停在 exit 之前，否则把「图层滑出」当成编排漂移。
+        const exitAt = s.plan?.exit?.at ?? mp.at + mp.dur;
+        return JSON.stringify({ layoutId: s.layout.id, kind: s.semantic.kind, template: s.semantic.plan.templateId, settle: s.semantic.settleOffset, exitRel: Number((exitAt - mp.at).toFixed(4)), ...mp });
       })()
     `);
     const m = JSON.parse(meta);
-    console.log(`✓ 语义拍 #${semIdx}：${m.layoutId}（${m.kind}/${m.template}）· ${gate.shots} 拍`);
+    console.log(`✓ 语义拍 #${semIdx}（第 ${SHOT_ARG + 1}/${semList.length} 个）：${m.layoutId}（${m.kind}/${m.template}）· at=${m.at.toFixed(2)}s dur=${m.dur.toFixed(2)}s · ${gate.shots} 拍`);
 
     const shotDir = resolve(OUT, "frames");
     mkdirSync(shotDir, { recursive: true });
+    // 采样点 = 编排相对时点 × compress 系数（与各切片 compress(dur, base) 同一公式；
+    // base 从计划读 settleOffset）。线性缩放会把样点错开编排节点，短拍尤其明显。
+    const k = Math.min(1, Math.max(0.8, Math.min(m.dur - 0.3, 2.2)) / m.settle);
+    const maxRel = Math.max(0.02, m.exitRel - 0.05); // 退场前停采，留 0.05s 缓冲
     const rows = [];
-    for (const t of TIMES) {
+    for (const rt of TIMES) {
+      const rel = rt * k;
+      if (rel >= maxRel) break;
+      const t = Number((m.at + rel).toFixed(4));
       const boxes = await b.eval(`
         return (() => {
           const s = window.__stage;
@@ -193,12 +225,12 @@ try {
         })()
       `);
       const parsed = JSON.parse(boxes);
-      rows.push({ t, boxes: parsed });
-      const ids = Object.keys(parsed);
+      rows.push({ t, boxes: parsed.groups, camScale: parsed.camScale });
+      const ids = Object.keys(parsed.groups);
       console.log(
-        `  t=${String(t).padStart(5)}s  ` + ids.map((id) => `${id} x=${parsed[id].x.toFixed(1)}`).join("  "),
+        `  t=${String(t).padStart(6)}s cam=${parsed.camScale.toFixed(4)}  ` + ids.map((id) => `${id} x=${parsed.groups[id].x.toFixed(1)}`).join("  "),
       );
-      if (SHOT_TIMES.has(t)) {
+      if (SHOT_TIMES.has(rt)) {
         // 等舞台的 rAF 循环把 seek 后的画面画进可见 canvas（seek 只置 dirty）
         await b.eval(`return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(r, 120))));`);
         const rectJson = await b.eval(`
@@ -206,13 +238,13 @@ try {
         `);
         const rect = JSON.parse(rectJson);
         const png = await b.shot({ x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 1 });
-        writeFileSync(resolve(shotDir, `${m.kind}-t-${String(t).replace(".", "_")}.png`), Buffer.from(png, "base64"));
+        writeFileSync(resolve(shotDir, `${m.kind}-t-${String(rt).replace(".", "_")}.png`), Buffer.from(png, "base64"));
       }
     }
 
     writeFileSync(
       resolve(OUT, "browser-frames.json"),
-      JSON.stringify({ srtFile: SRT_FILE, srt: SRT, shotIndex: semIdx, fps: 30, times: TIMES, rows }, null, 2),
+      JSON.stringify({ srtFile: SRT_FILE, srt: SRT, shotIndex: semIdx, fps: 30, times: rows.map((r) => r.t), rows }, null, 2),
     );
     console.log(`\n  采集完成 → .tmp/motion-audit/browser-frames.json（下一步由 motion-ir-predict.ts 比对）`);
   }, { port: PORT });
