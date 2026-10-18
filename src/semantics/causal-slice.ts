@@ -10,10 +10,10 @@
 // 只是 NODE 契约、几何与关系不同 —— 这正是「逻辑验算与浏览器实测各司其职」能成立的前提。
 
 import type { Layout, Slot } from "../layouts/types";
-import type { ElementNode, MovePlan, RelationConstraint, Box } from "../motion/elements";
+import type { ElementNode, MovePlan, RelationConstraint } from "../motion/elements";
 import { resolveProfile } from "../styles/style-system";
 import { figureFor } from "./compare-slice";
-import { stripPunct } from "../core/text";
+import { px, union, center, LEFT, RIGHT_EQUAL, CONN, labelOf, LABEL_MAX_UNITS } from "./slice-geom";
 import { CONFIDENCE_MIN, type SemanticEvent } from "./events";
 import type { SemanticSlice } from "./types";
 
@@ -46,44 +46,7 @@ export interface CausalSlice extends SemanticSlice {
   plan: CausalPlan & { layout: Layout };
 }
 
-/* ── 归一化网格 → 画面坐标（与 compare-slice 同一套数学）────────────────────── */
-const COLS = 12;
-const ROWS = 8;
-const W = 1280;
-const H = 720;
-
-function px(box: [number, number, number, number]): Box {
-  const [gx, gy, gw, gh] = box;
-  return { x: (gx / COLS) * W, y: (gy / ROWS) * H, w: (gw / COLS) * W, h: (gh / ROWS) * H };
-}
-function union(a: Box, b: Box): Box {
-  const x = Math.min(a.x, b.x);
-  const y = Math.min(a.y, b.y);
-  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
-}
-function center(b: Box): { x: number; y: number } {
-  return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
-}
-function widthOf(text: string): number {
-  let n = 0;
-  for (const ch of text) n += ch.codePointAt(0)! > 0xff ? 1 : 0.5;
-  return n;
-}
-
-const LEFT = {
-  figure: [1.6, 2.6, 2.7, 2.4] as [number, number, number, number],
-  label: [1.35, 5.12, 3.2, 0.62] as [number, number, number, number],
-};
-const RIGHT_EQUAL = {
-  figure: [7.6, 2.6, 2.7, 2.4] as [number, number, number, number],
-  label: [7.35, 5.12, 3.2, 0.62] as [number, number, number, number],
-};
-/** 连线：桥接原因右缘(~4.55 格)与结果左缘(~7.35 格)，垂直居中对齐图形中心(~342px)。
- *  右端收在 7.25 格(773px)，与结果组左缘(784px)留 10px 净空 —— 初版伸到 7.6 格会与结果标签重叠。 */
-const CONN = [4.8, 3.75, 2.45, 0.12] as [number, number, number, number];
-
-const LABEL_MAX_UNITS = 10;
-export { LABEL_MAX_UNITS };
+/* ── 归一化网格 → 画面坐标与双侧几何模板见 slice-geom.ts（两族共用一份，防漂移）── */
 
 export function buildCausalSlice(plan: CausalPlan, shotId: string, opts: { hasCaption?: boolean } = {}): CausalSlice {
   const notes: string[] = [];
@@ -268,21 +231,6 @@ export function causalRelations(slice: CausalSlice, at: number, dur: number, sty
   return rels;
 }
 
-/** 标签安全截断（不改写原文，截断记进 degraded）。 */
-export function causalLabel(name: string): { label: string; truncated: boolean } {
-  const clean = stripPunct(name);
-  if (widthOf(clean) <= LABEL_MAX_UNITS) return { label: clean, truncated: false };
-  let out = "";
-  let u = 0;
-  for (const ch of clean) {
-    const w = ch.codePointAt(0)! > 0xff ? 1 : 0.5;
-    if (u + w > LABEL_MAX_UNITS) break;
-    out += ch;
-    u += w;
-  }
-  return { label: out, truncated: true };
-}
-
 /**
  * 因果事件 → 视觉计划（与 planComparison 同一纪律：模板参数驱动断言，不写死方向）。
  * 语义不足（置信度低）返回 null，调用方降级为普通版式。
@@ -293,8 +241,8 @@ export function planCausal(ev: SemanticEvent): CausalPlan | null {
   const effect = ev.entities.find((e) => e.id === "ent-effect");
   if (!cause || !effect) return null;
 
-  const cl = causalLabel(cause.name);
-  const el = causalLabel(effect.name);
+  const cl = labelOf(cause.name);
+  const el = labelOf(effect.name);
   const degraded: string[] = [];
   if (ev.degraded) degraded.push(ev.degraded);
   if (cl.truncated) degraded.push(`原因标签「${cause.name}」超 ${LABEL_MAX_UNITS} 字宽，截断为「${cl.label}」`);

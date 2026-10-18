@@ -59,9 +59,13 @@ describe("比较事件抽取", () => {
     const evs = extractEvents("我很喜欢一本书。", 1);
     expect(evs).toHaveLength(1);
     expect(evs[0]!.type).toBe("statement");
-    // Phase 3 起抽取顺序是 比较族 → 因果族 → 显式 statement，故降级信息会列出两族均未命中。
+    // Phase 3 起抽取顺序是 比较 → 因果 → 否定 → 转折 → 变化 → 显式 statement，
+    // 降级信息会列出全族均未命中（方便逐族排查漏抽）。
     expect(evs[0]!.degraded).toContain("未命中比较族规则");
     expect(evs[0]!.degraded).toContain("也未命中因果族规则");
+    expect(evs[0]!.degraded).toContain("也未命中否定族规则");
+    expect(evs[0]!.degraded).toContain("也未命中转折族规则");
+    expect(evs[0]!.degraded).toContain("也未命中变化族规则");
   });
 
   it("长句例：比较在句中也抽得出（前导上下文在 12 字宽以内）", () => {
@@ -92,5 +96,29 @@ describe("比较事件抽取", () => {
   it("置信度阈值常量：降级线是可读的常量", () => {
     expect(CONFIDENCE_MIN).toBeGreaterThan(0.5);
     expect(CONFIDENCE_MIN).toBeLessThan(1);
+  });
+});
+
+describe("Phase 3 剩余三族（否定/转折/变化）冒烟", () => {
+  it("否定族：A 并不是 B → negation 事件，两实体角色齐全", () => {
+    const evs = extractEvents("鲸鱼并不是鱼。", 21);
+    const ev = evs.find((e) => e.type === "negation")!;
+    expect(ev.rule).toBe("negation-bingbushi");
+    expect(ev.negated).toBe(true);
+    expect(ev.entities.map((e) => e.role).sort()).toEqual(["affirm", "negated"]);
+  });
+
+  it("转折族：虽然 A 但是 B → contrast 事件", () => {
+    const evs = extractEvents("虽然天很冷，但是大家都来了。", 22);
+    const ev = evs.find((e) => e.type === "contrast")!;
+    expect(ev.rule).toBe("contrast-suiran");
+    expect(ev.entities.map((e) => e.role).sort()).toEqual(["concession", "turn"]);
+  });
+
+  it("变化族：A 变成 B → change 事件", () => {
+    const evs = extractEvents("毛毛虫变成了蝴蝶。", 23);
+    const ev = evs.find((e) => e.type === "change")!;
+    expect(ev.rule).toBe("change-biancheng");
+    expect(ev.entities.map((e) => e.role).sort()).toEqual(["after", "before"]);
   });
 });

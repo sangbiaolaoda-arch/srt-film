@@ -18,9 +18,7 @@ import { buildMotionSchedule } from "../motion/schedule";
 import { describeConflict, slotConflicts } from "../motion/conflict";
 import { pickPhoto, type PhotoId } from "../assets/photos";
 import { extractEvents } from "../semantics/events";
-import { planComparison } from "../semantics/visual-plan";
-import { buildCompareSlice } from "../semantics/compare-slice";
-import { planCausal, buildCausalSlice } from "../semantics/causal-slice";
+import { buildSemanticSlice } from "../semantics/dispatch";
 import type { SemanticSlice } from "../semantics/types";
 
 export interface PlanResult {
@@ -93,27 +91,17 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
     // Phase 1/3 语义层：先抽事件（每个事件都带 cue 内的字符区间）。
     // 命中「可执行的语义事件」且本拍没有版式覆写时，用语义模板生成的版式替掉自动挑选 ——
     // 它仍是一个普通 Layout，走同一条渲染 / 门禁 / 导出通路，不是平行系统（方案 §0 原则 A）。
+    // 依族尝试顺序（比较→因果→否定→转折→变化）在 dispatch.buildSemanticSlice 里，
+    // 每加一个 Phase 3 事件只有 dispatch 需要跟着改。
     const events = extractEvents(beat.text, beat.cues[0]?.id ?? beat.index);
     let semantic: SemanticSlice | undefined;
     const appliedRules: string[] = [];
     if (!ovr?.layout && !ovr?.layoutId) {
-      const cmp = events.find((e) => e.type === "compare");
-      const vplan = cmp ? planComparison(cmp) : null;
-      if (cmp && vplan) {
-        const slice = buildCompareSlice(vplan, `shot-${beat.index}`, { hasCaption: !!content.caption });
-        semantic = slice;
-        layout = slice.plan.layout;
-        appliedRules.push(`semantic:${vplan.templateId}`, `event:${cmp.id}`, ...vplan.assertions.map((a) => `assert:${a}`));
-      } else {
-        // Phase 3 因果：比较没命中再试因果（两者规则不冲突）
-        const cau = events.find((e) => e.type === "cause_effect");
-        const cplan = cau ? planCausal(cau) : null;
-        if (cau && cplan) {
-          const slice = buildCausalSlice(cplan, `shot-${beat.index}`, { hasCaption: !!content.caption });
-          semantic = slice;
-          layout = slice.plan.layout;
-          appliedRules.push(`semantic:${cplan.templateId}`, `event:${cau.id}`, ...cplan.assertions.map((a) => `assert:${a}`));
-        }
+      const hit = buildSemanticSlice(events, `shot-${beat.index}`, !!content.caption);
+      if (hit) {
+        semantic = hit.slice;
+        layout = hit.slice.layout;
+        appliedRules.push(`semantic:${hit.templateId}`, `event:${hit.eventId}`, ...hit.assertions.map((a) => `assert:${a}`));
       }
     }
 

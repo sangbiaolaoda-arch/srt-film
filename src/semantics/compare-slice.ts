@@ -18,6 +18,7 @@ import type { ElementGraph, ElementNode, MovePlan, RelationConstraint, Box } fro
 import { resolveProfile } from "../styles/style-system";
 import type { VisualPlan } from "./visual-plan";
 import type { SemanticSlice } from "./types";
+import { px, union, center, LEFT, RIGHT_BIG, RIGHT_EQUAL } from "./slice-geom";
 
 export const COMPARE_LAYOUT_ID = "sem-compare-group-v1";
 
@@ -37,47 +38,7 @@ export interface CompareSlice extends SemanticSlice {
   plan: VisualPlan & { layout: Layout };
 }
 
-/* ── 归一化网格 → 画面坐标（与 constraints.ts slotBox 同一套数学）────────────── */
-const COLS = 12;
-const ROWS = 8;
-const W = 1280;
-const H = 720;
-
-function px(box: [number, number, number, number]): Box {
-  const [gx, gy, gw, gh] = box;
-  return { x: (gx / COLS) * W, y: (gy / ROWS) * H, w: (gw / COLS) * W, h: (gh / ROWS) * H };
-}
-
-function union(a: Box, b: Box): Box {
-  const x = Math.min(a.x, b.x);
-  const y = Math.min(a.y, b.y);
-  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
-}
-
-function center(b: Box): { x: number; y: number } {
-  return { x: b.x + b.w / 2, y: b.y + b.h / 2 };
-}
-
-/* ── 几何模板：左/右两个位置。哪个实体去哪一侧由 VisualPlan 决定，不在这里写死 ──
- * 净空口径（rel-clearance-groups 要求 ≥40px）：两个组的**包围盒**间距必须够 ——
- * 组盒是图形盒与标签盒的并集，标签盒比图形盒宽（视觉上居中于图形之下），
- * 所以左右两组之间最接近的是「右侧标签左边界 vs 左侧标签右边界」。
- * 初版把图形放在 [1.4..4.5] 而标签放在 [1.15..4.75]，两标签只差 36px，运动中还会互相叠 13px
- * （实测报错）—— 这里把整体内收：图形 [1.6..4.3]、标签 [1.35..4.55]，
- * 于是两组标签之间净空 40px，图形之间净空远超 40px。 */
-const LEFT = {
-  figure: [1.6, 2.6, 2.7, 2.4] as [number, number, number, number],
-  label: [1.35, 5.12, 3.2, 0.62] as [number, number, number, number],
-};
-const RIGHT_BIG = {
-  // 主体位：更大（primaryScaleGreater 的几何来源），label 也宽一档
-  figure: [7.7, 2.45, 2.9, 2.7] as [number, number, number, number],
-  label: [7.45, 5.3, 3.5, 0.68] as [number, number, number, number],
-};
-const RIGHT_EQUAL = {
-  figure: [7.6, 2.6, 2.7, 2.4] as [number, number, number, number],
-  label: [7.35, 5.12, 3.2, 0.62] as [number, number, number, number],
-};
+/* ── 归一化网格 → 画面坐标与双侧几何模板见 slice-geom.ts（两族共用一份，防漂移）── */
 
 /** 名词 → 具体图形（方案 §8.2 的一级回退；未命中记 unmapped，用中性几何代替）。 */
 const FIGURE_WORDS: Array<{ re: RegExp; kind: FigureKind }> = [

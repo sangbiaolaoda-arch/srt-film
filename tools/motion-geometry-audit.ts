@@ -23,8 +23,29 @@ import {
   buildCausalSlice,
   causalMoves,
   causalRelations,
-  NODE as CASUAL_NODE,
+  NODE as CAUSAL_NODE,
 } from "../src/semantics/causal-slice.ts";
+import {
+  planNegation,
+  buildNegationSlice,
+  negationMoves,
+  negationRelations,
+  NODE as NEGATION_NODE,
+} from "../src/semantics/negation-slice.ts";
+import {
+  planContrast,
+  buildContrastSlice,
+  contrastMoves,
+  contrastRelations,
+  NODE as CONTRAST_NODE,
+} from "../src/semantics/contrast-slice.ts";
+import {
+  planChange,
+  buildChangeSlice,
+  changeMoves,
+  changeRelations,
+  NODE as CHANGE_NODE,
+} from "../src/semantics/change-slice.ts";
 import { auditMotionGeometry, type ElementGraph, type MovePlan, type RelationConstraint } from "../src/motion/elements.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -35,13 +56,31 @@ mkdirSync(OUT, { recursive: true });
 const AT = 1.0;
 const DUR = 4.0;
 
-function build(text: string, kind: "compare" | "causal" = "compare") {
+function build(text: string, kind: "compare" | "causal" | "negation" | "contrast" | "change" = "compare") {
   const evs = extractEvents(text, 7);
   if (kind === "causal") {
     const cau = evs.find((e) => e.type === "cause_effect")!;
     const plan = planCausal(cau)!;
     const slice = buildCausalSlice(plan, "shot-audit", { hasCaption: true });
     return { graph: slice.graph, moves: causalMoves(slice, AT, DUR), relations: causalRelations(slice, AT, DUR, "editorial") };
+  }
+  if (kind === "negation") {
+    const neg = evs.find((e) => e.type === "negation")!;
+    const plan = planNegation(neg)!;
+    const slice = buildNegationSlice(plan, "shot-audit", { hasCaption: true });
+    return { graph: slice.graph, moves: negationMoves(slice, AT, DUR), relations: negationRelations(slice, AT, DUR, "editorial") };
+  }
+  if (kind === "contrast") {
+    const con = evs.find((e) => e.type === "contrast")!;
+    const plan = planContrast(con)!;
+    const slice = buildContrastSlice(plan, "shot-audit", { hasCaption: true });
+    return { graph: slice.graph, moves: contrastMoves(slice, AT, DUR), relations: contrastRelations(slice, AT, DUR, "editorial") };
+  }
+  if (kind === "change") {
+    const chg = evs.find((e) => e.type === "change")!;
+    const plan = planChange(chg)!;
+    const slice = buildChangeSlice(plan, "shot-audit", { hasCaption: true });
+    return { graph: slice.graph, moves: changeMoves(slice, AT, DUR), relations: changeRelations(slice, AT, DUR, "editorial") };
   }
   const cmp = evs.find((e) => e.type === "compare")!;
   const plan = planComparison(cmp)!;
@@ -52,7 +91,7 @@ function build(text: string, kind: "compare" | "causal" = "compare") {
 interface Case {
   id: string;
   text: string;
-  kind?: "compare" | "causal";
+  kind?: "compare" | "causal" | "negation" | "contrast" | "change";
   /** 反向夹具：对合法产物做一处破坏，必须被报告抓到 */
   break?: (g: { graph: ElementGraph; moves: MovePlan[]; relations: RelationConstraint[] }) => void;
 }
@@ -158,9 +197,9 @@ const CAUSAL_CASES: Case[] = [
     kind: "causal",
     // 反向：把结果组整体搬到原因组位置 → 净空报错
     break: ({ graph }) => {
-      const target = graph.nodes.find((n) => n.id === CASUAL_NODE.grpCause)!.bounds;
-      const shift = target.x - graph.nodes.find((n) => n.id === CASUAL_NODE.grpEffect)!.bounds.x;
-      for (const n of graph.nodes) if (n.id === CASUAL_NODE.grpEffect || n.parentId === CASUAL_NODE.grpEffect) n.bounds = { ...n.bounds, x: n.bounds.x + shift };
+      const target = graph.nodes.find((n) => n.id === CAUSAL_NODE.grpCause)!.bounds;
+      const shift = target.x - graph.nodes.find((n) => n.id === CAUSAL_NODE.grpEffect)!.bounds.x;
+      for (const n of graph.nodes) if (n.id === CAUSAL_NODE.grpEffect || n.parentId === CAUSAL_NODE.grpEffect) n.bounds = { ...n.bounds, x: n.bounds.x + shift };
     },
   },
   {
@@ -169,8 +208,110 @@ const CAUSAL_CASES: Case[] = [
     kind: "causal",
     // 反向：结果画到左边 → 原因必须在左的关系报错
     break: ({ graph }) => {
-      for (const n of graph.nodes) if (n.parentId === CASUAL_NODE.grpEffect) n.bounds = { ...n.bounds, x: 128 };
-      for (const n of graph.nodes) if (n.id === CASUAL_NODE.grpEffect) n.bounds = { ...n.bounds, x: 128 };
+      for (const n of graph.nodes) if (n.parentId === CAUSAL_NODE.grpEffect) n.bounds = { ...n.bounds, x: 128 };
+      for (const n of graph.nodes) if (n.id === CAUSAL_NODE.grpEffect) n.bounds = { ...n.bounds, x: 128 };
+    },
+  },
+];
+
+const NEGATION_CASES: Case[] = [
+  { id: "legal-negation", text: "鲸鱼并不是鱼。", kind: "negation" },
+  {
+    id: "illegal-negation-affirm-early",
+    text: "鲸鱼并不是鱼。",
+    kind: "negation",
+    // 反向：确证方在删除线完成前就入场（删除线 0.55–0.95，这里让它 0.3 开始）→ revealAfter 必须抓
+    break: ({ moves }) => {
+      for (const m of moves) if (m.id === "mv-affirm-enter") { m.start = AT + 0.3; m.duration = 0.5; }
+    },
+  },
+  {
+    id: "illegal-negation-overlap",
+    text: "鲸鱼并不是鱼。",
+    kind: "negation",
+    // 反向：把确证组整体搬到被否定组位置 → 净空报错
+    break: ({ graph }) => {
+      const target = graph.nodes.find((n) => n.id === NEGATION_NODE.grpNegated)!.bounds;
+      const shift = target.x - graph.nodes.find((n) => n.id === NEGATION_NODE.grpAffirm)!.bounds.x;
+      for (const n of graph.nodes) if (n.id === NEGATION_NODE.grpAffirm || n.parentId === NEGATION_NODE.grpAffirm) n.bounds = { ...n.bounds, x: n.bounds.x + shift };
+    },
+  },
+  {
+    id: "illegal-negation-direction-flip",
+    text: "鲸鱼并不是鱼。",
+    kind: "negation",
+    // 反向：确证方画到左边 → 被否定必须在左的关系报错
+    break: ({ graph }) => {
+      for (const n of graph.nodes) if (n.parentId === NEGATION_NODE.grpAffirm) n.bounds = { ...n.bounds, x: 128 };
+      for (const n of graph.nodes) if (n.id === NEGATION_NODE.grpAffirm) n.bounds = { ...n.bounds, x: 128 };
+    },
+  },
+];
+
+const CONTRAST_CASES: Case[] = [
+  { id: "legal-contrast", text: "虽然天很冷，但是大家都来了。", kind: "contrast" },
+  {
+    id: "illegal-contrast-turn-early",
+    text: "虽然天很冷，但是大家都来了。",
+    kind: "contrast",
+    // 反向：转折方在标记完成前就入场（标记 0.55–0.95，这里让它 0.3 开始）→ revealAfter 必须抓
+    break: ({ moves }) => {
+      for (const m of moves) if (m.id === "mv-turn-enter") { m.start = AT + 0.3; m.duration = 0.5; }
+    },
+  },
+  {
+    id: "illegal-contrast-overlap",
+    text: "虽然天很冷，但是大家都来了。",
+    kind: "contrast",
+    // 反向：把转折组整体搬到让步组位置 → 净空报错
+    break: ({ graph }) => {
+      const target = graph.nodes.find((n) => n.id === CONTRAST_NODE.grpConcession)!.bounds;
+      const shift = target.x - graph.nodes.find((n) => n.id === CONTRAST_NODE.grpTurn)!.bounds.x;
+      for (const n of graph.nodes) if (n.id === CONTRAST_NODE.grpTurn || n.parentId === CONTRAST_NODE.grpTurn) n.bounds = { ...n.bounds, x: n.bounds.x + shift };
+    },
+  },
+  {
+    id: "illegal-contrast-direction-flip",
+    text: "虽然天很冷，但是大家都来了。",
+    kind: "contrast",
+    // 反向：转折方画到左边 → 让步必须在左的关系报错
+    break: ({ graph }) => {
+      for (const n of graph.nodes) if (n.parentId === CONTRAST_NODE.grpTurn) n.bounds = { ...n.bounds, x: 128 };
+      for (const n of graph.nodes) if (n.id === CONTRAST_NODE.grpTurn) n.bounds = { ...n.bounds, x: 128 };
+    },
+  },
+];
+
+const CHANGE_CASES: Case[] = [
+  { id: "legal-change", text: "毛毛虫变成了蝴蝶。", kind: "change" },
+  {
+    id: "illegal-change-after-early",
+    text: "毛毛虫变成了蝴蝶。",
+    kind: "change",
+    // 反向：之后方在变化连线完成前就入场（连线 0.55–0.95，这里让它 0.3 开始）→ revealAfter 必须抓
+    break: ({ moves }) => {
+      for (const m of moves) if (m.id === "mv-after-enter") { m.start = AT + 0.3; m.duration = 0.5; }
+    },
+  },
+  {
+    id: "illegal-change-overlap",
+    text: "毛毛虫变成了蝴蝶。",
+    kind: "change",
+    // 反向：把之后组整体搬到之前组位置 → 净空报错
+    break: ({ graph }) => {
+      const target = graph.nodes.find((n) => n.id === CHANGE_NODE.grpBefore)!.bounds;
+      const shift = target.x - graph.nodes.find((n) => n.id === CHANGE_NODE.grpAfter)!.bounds.x;
+      for (const n of graph.nodes) if (n.id === CHANGE_NODE.grpAfter || n.parentId === CHANGE_NODE.grpAfter) n.bounds = { ...n.bounds, x: n.bounds.x + shift };
+    },
+  },
+  {
+    id: "illegal-change-direction-flip",
+    text: "毛毛虫变成了蝴蝶。",
+    kind: "change",
+    // 反向：之后方画到左边 → 之前必须在左的关系报错
+    break: ({ graph }) => {
+      for (const n of graph.nodes) if (n.parentId === CHANGE_NODE.grpAfter) n.bounds = { ...n.bounds, x: 128 };
+      for (const n of graph.nodes) if (n.id === CHANGE_NODE.grpAfter) n.bounds = { ...n.bounds, x: 128 };
     },
   },
 ];
@@ -178,7 +319,7 @@ const CAUSAL_CASES: Case[] = [
 let failures = 0;
 const summary: Array<{ id: string; expect: "pass" | "fail"; got: string }> = [];
 
-for (const c of [...CASES, ...CAUSAL_CASES]) {
+for (const c of [...CASES, ...CAUSAL_CASES, ...NEGATION_CASES, ...CONTRAST_CASES, ...CHANGE_CASES]) {
   const { graph, moves, relations } = build(c.text, c.kind ?? "compare");
   c.break?.({ graph, moves, relations });
   const rep = auditMotionGeometry(graph, moves, relations, { from: AT, to: AT + DUR, fps: 30 });

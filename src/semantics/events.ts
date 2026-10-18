@@ -11,8 +11,8 @@
 //
 // 纯函数、无 DOM、无随机 —— 同一段文本永远得到同一个事件（可测、可断言）。
 
-/** 事件类型。Phase 1 实现 compare；Phase 3 逐步加 cause_effect / negation / contrast / change。 */
-export type EventType = "compare" | "cause_effect" | "statement";
+/** 事件类型。Phase 1 实现 compare；Phase 3 加齐 cause_effect / negation / contrast / change。 */
+export type EventType = "compare" | "cause_effect" | "negation" | "contrast" | "change" | "statement";
 
 /** 证据片段：cue 内的字符区间。startChar/endChar 是**半开区间** [start, end)。 */
 export interface EvidenceSpan {
@@ -28,8 +28,9 @@ export interface EntityRef {
   id: string;
   /** 原文表面串，未改写、未润色（画面上要能与旁白对上） */
   name: string;
-  /** 实体在事件里的角色：比较用 subject/reference，因果用 cause/effect，其余事件自定 */
-  role: "subject" | "reference" | "cause" | "effect";
+  /** 实体在事件里的角色：比较用 subject/reference，因果用 cause/effect，
+   *  否定用 affirm（确证方）/negated（被否定方），转折用 concession/turn，变化用 before/after */
+  role: "subject" | "reference" | "cause" | "effect" | "affirm" | "negated" | "concession" | "turn" | "before" | "after";
   evidence: EvidenceSpan;
 }
 
@@ -305,12 +306,26 @@ export function extractComparisonEvent(text: string, cueId: number): SemanticEve
   return null;
 }
 
-/** 本拍的全部事件。识别不出比较 → 显式 statement（带原因），而不是「没有事件」。 */
+/** 五族抽取器的派发表：顺序 = 特异度从高到低（比较 → 因果 → 否定 → 转折 → 变化）。
+ *  命中任一族即返回；全不命中才落 statement（降级信息列全族，方便逐族排查漏抽）。 */
+const EXTRACTORS: Array<{ label: string; extract: (text: string, cueId: number) => SemanticEvent | null }> = [
+  { label: "比较族", extract: extractComparisonEvent },
+  { label: "因果族", extract: extractCausalEvent },
+  { label: "否定族", extract: extractNegationEvent },
+  { label: "转折族", extract: extractContrastEvent },
+  { label: "变化族", extract: extractChangeEvent },
+];
+
+/** 本拍的全部事件。识别不出任何已知事件 → 显式 statement（带原因），而不是「没有事件」。 */
 export function extractEvents(text: string, cueId: number): SemanticEvent[] {
-  const cmp = extractComparisonEvent(text, cueId);
-  if (cmp) return [{ ...cmp, type: cmp.confidence < CONFIDENCE_MIN ? "statement" : "compare", degraded: cmp.confidence < CONFIDENCE_MIN ? `${cmp.degraded ? `${cmp.degraded}；` : ""}置信度 ${cmp.confidence} < ${CONFIDENCE_MIN}，降级为陈述` : cmp.degraded }];
-  const cau = extractCausalEvent(text, cueId);
-  if (cau) return [{ ...cau, type: cau.confidence < CONFIDENCE_MIN ? "statement" : "cause_effect", degraded: cau.confidence < CONFIDENCE_MIN ? `${cau.degraded ? `${cau.degraded}；` : ""}置信度 ${cau.confidence} < ${CONFIDENCE_MIN}，降级为陈述` : cau.degraded }];
+  for (const x of EXTRACTORS) {
+    const ev = x.extract(text, cueId);
+    if (!ev) continue;
+    if (ev.confidence < CONFIDENCE_MIN) {
+      return [{ ...ev, type: "statement", degraded: `${ev.degraded ? `${ev.degraded}；` : ""}置信度 ${ev.confidence} < ${CONFIDENCE_MIN}，降级为陈述` }];
+    }
+    return [ev];
+  }
   return [
     {
       id: `ev-${cueId}-statement`,
@@ -322,7 +337,7 @@ export function extractEvents(text: string, cueId: number): SemanticEvent[] {
       confidence: 1,
       evidence: [{ cueId, startChar: 0, endChar: text.length, text }],
       rule: "fallback-statement",
-      degraded: "未命中比较族规则，也未命中因果族规则",
+      degraded: EXTRACTORS.map((x, i) => (i === 0 ? `未命中${x.label}规则` : `也未命中${x.label}规则`)).join("，"),
     },
   ];
 }
@@ -415,4 +430,157 @@ export function entitiesOf(ev: SemanticEvent): { subject: EntityRef; reference: 
   const subject = ev.entities.find((e) => e.role === "subject");
   const reference = ev.entities.find((e) => e.role === "reference");
   return subject && reference ? { subject, reference } : null;
+}
+
+/* ══ Phase 3 剩余三族：否定 / 转折 / 变化 ═══════════════════════════════════════
+ * 三族共用同一副「双实体 + 显式标记」骨架（extractMarkedPair）：
+ *   必须有显式标记词（并不是 / 虽然…但是 / 变成），与因果族同一纪律 ——
+ *   没有标记证据就不画对应关系，宁可降级 statement。
+ *   降级条件与 compare/causal 完全一致：不确定语气 / 代词 / 实体过长 / 疑问句。
+ *   first = 标记前实体，second = 标记后实体（画面左右位置由切片模板决定，不在这里定）：
+ *     否定  first=确证方(A)  second=被否定方(B)   ——「鲸鱼并不是鱼」
+ *     转折  first=让步方(A)  second=转折方(B)     ——「虽然 A，但是 B」
+ *     变化  first=之前(A)    second=之后(B)       ——「A 变成 B」 */
+
+interface PairRule {
+  id: string;
+  re: RegExp;
+  /** 伪标记守卫：标记首字符的前一个字符命中这里就跳过（要不是 / 不但）。 */
+  guardBefore?: string[];
+}
+
+/** 长标记必须排在短标记前面（并不是 先于 不是，否则非贪婪的左段会把「并」吞进实体）。 */
+const NEGATION_RULES: PairRule[] = [
+  { id: "negation-bingbushi", re: new RegExp(`(${SEG})[，,]?并不是(${SEG_G})`) },
+  { id: "negation-bingfei", re: new RegExp(`(${SEG})[，,]?并非(${SEG_G})`) },
+  { id: "negation-weibi", re: new RegExp(`(${SEG})[，,]?未必(?:是)?(${SEG_G})`) },
+  // 「要不是…」是虚拟条件不是否定 —— 标记前一字是要/若就跳过
+  { id: "negation-bushi", re: new RegExp(`(${SEG})[，,]?不是(${SEG_G})`), guardBefore: ["要", "若"] },
+];
+
+const CONTRAST_RULES: PairRule[] = [
+  { id: "contrast-suiran", re: new RegExp(`虽然(${SEG})[，,]?(?:但是|可是|不过|却|但)(${SEG_G})`) },
+  { id: "contrast-jinguan", re: new RegExp(`尽管(${SEG})[，,]?(?:但是|可是|不过|却|但)(${SEG_G})`) },
+  // 「不但 A 而且 B」是递进不是转折 —— 标记前一字是 不/非 就跳过
+  { id: "contrast-danshi", re: new RegExp(`(${SEG})[，,]?(?:然而|但是|不过|但)(${SEG_G})`), guardBefore: ["不", "非"] },
+];
+
+const CHANGE_RULES: PairRule[] = [
+  { id: "change-biancheng", re: new RegExp(`(${SEG})[，,]?(?:变成了?|变为|化为|成了)(${SEG_G})`) },
+];
+
+interface PairFamily {
+  type: EventType;
+  rules: PairRule[];
+  /** [标记前实体, 标记后实体] 的 id 与角色 */
+  ids: [string, string];
+  roles: [EntityRef["role"], EntityRef["role"]];
+  negated: boolean;
+}
+
+/**
+ * 双实体标记句的共用抽取。与 causal 同一纪律：
+ * 证据区间按匹配位置算（不靠 indexOf 在全句再找一遍）、降级条件四件套一致。
+ */
+function extractMarkedPair(text: string, cueId: number, family: PairFamily): SemanticEvent | null {
+  const src = text.trim();
+  if (!src) return null;
+
+  for (const rule of family.rules) {
+    const m = rule.re.exec(src);
+    if (!m) continue;
+    const firstRaw = clampName(m[1] ?? "");
+    const secondRaw = clampName(m[2] ?? "");
+    if (!firstRaw || !secondRaw) continue;
+    const first = stripAdverbs(firstRaw);
+    const second = stripAdverbs(secondRaw);
+    if (!first || !second) continue;
+    if (ADVERBS.includes(first) || ADVERBS.includes(second)) continue;
+
+    // 伪标记守卫：定位标记首字符（跳过可选逗号），看它前一个字
+    const firstAt = m.index + m[0].indexOf(m[1]!);
+    let markerAt = firstAt + m[1]!.length;
+    if (src[markerAt] === "，" || src[markerAt] === ",") markerAt += 1;
+    if (rule.guardBefore?.includes(src[markerAt - 1] ?? "")) continue;
+
+    // 标记后实体的证据起点：从 first 结束处在匹配串里向后找（与 causal 同式）
+    const secondAt = m.index + m[0].indexOf(m[2]!, m[0].indexOf(m[1]!) + m[1]!.length);
+
+    const entities: EntityRef[] = [
+      { id: family.ids[0], name: first, role: family.roles[0], evidence: { cueId, startChar: Math.max(0, firstAt), endChar: Math.max(0, firstAt) + first.length, text: first } },
+      { id: family.ids[1], name: second, role: family.roles[1], evidence: { cueId, startChar: Math.max(0, secondAt), endChar: Math.max(0, secondAt) + second.length, text: second } },
+    ];
+    const evidence: EvidenceSpan[] = entities.map((e) => e.evidence);
+
+    let confidence = 0.9;
+    const degrade: string[] = [];
+    if (HEDGES.some((h) => src.includes(h))) {
+      confidence -= 0.35;
+      degrade.push(`含不确定语气（${HEDGES.filter((h) => src.includes(h)).join("/")}）`);
+    }
+    if (PRONOUNS.some((p) => first === p || second === p)) {
+      confidence -= 0.4;
+      degrade.push("实体是指代词，画面上没有确定所指");
+    }
+    if (units(first) > 8 || units(second) > 8) {
+      confidence -= 0.25;
+      degrade.push("实体过长（>8 字宽），无法稳定绑定到单个画面对象");
+    }
+    if (/[？?]/.test(src)) {
+      confidence -= 0.5;
+      degrade.push("整句是疑问，不能当作断言");
+    }
+
+    return {
+      id: `ev-${cueId}-${rule.id}`,
+      type: family.type,
+      entities,
+      participants: [
+        { entityId: family.ids[0], role: family.roles[0] },
+        { entityId: family.ids[1], role: family.roles[1] },
+      ],
+      dimension: undefined,
+      dimensionKind: "unknown",
+      polarity: "unknown",
+      negated: family.negated,
+      confidence: Math.max(0.05, Math.min(0.99, Number(confidence.toFixed(2)))),
+      evidence,
+      rule: rule.id,
+      degraded: degrade.length ? degrade.join("；") : undefined,
+    };
+  }
+  return null;
+}
+
+/** 否定事件：确证方(A) vs 被否定方(B)。画面上 B 带删除线、A 更大。 */
+export function extractNegationEvent(text: string, cueId: number): SemanticEvent | null {
+  return extractMarkedPair(text, cueId, {
+    type: "negation",
+    rules: NEGATION_RULES,
+    ids: ["ent-affirm", "ent-negated"],
+    roles: ["affirm", "negated"],
+    negated: true,
+  });
+}
+
+/** 转折事件：让步方(A) vs 转折方(B)。画面上 B 更大、是话锋落点。 */
+export function extractContrastEvent(text: string, cueId: number): SemanticEvent | null {
+  return extractMarkedPair(text, cueId, {
+    type: "contrast",
+    rules: CONTRAST_RULES,
+    ids: ["ent-concession", "ent-turn"],
+    roles: ["concession", "turn"],
+    negated: false,
+  });
+}
+
+/** 变化事件：之前(A) vs 之后(B)。画面上 B 更大更亮，是变化的结果。 */
+export function extractChangeEvent(text: string, cueId: number): SemanticEvent | null {
+  return extractMarkedPair(text, cueId, {
+    type: "change",
+    rules: CHANGE_RULES,
+    ids: ["ent-before", "ent-after"],
+    roles: ["before", "after"],
+    negated: false,
+  });
 }
