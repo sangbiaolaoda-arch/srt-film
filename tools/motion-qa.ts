@@ -54,27 +54,35 @@ interface ShotResult {
 
 /**
  * 破坏注入（self-test）：对**真实语料的真实计划**做破坏，而不是对夹具做破坏。
- * 每个语义拍注入一种它自己结构上必然存在的错：
- *   · compare：主体标签脱离组（follows 必炸）
- *   · causal：结果组入场提前到连线完成前（revealAfter 必炸）
- * 返回新的 graph/moves/relations（深拷贝，不污染原计划）。
+ * 策略由计划自己派生（不按 kind 硬编码）—— 以后新增事件类型，自检零改动：
+ *   · 有 revealAfter 关系 → 把它的目标组入场提前到 gate 之前且 opacity=1
+ *     （「结果/确证方早于前置完成就显现」—— 因果倒置的通用形态）；
+ *   · 否则（compare 类）→ 把首个 label-* 子节点摘出组（follows 必炸）。
+ * 返回新的 graph/moves（深拷贝，不污染原计划）与期望报错的关系 id。
  */
-function injectBreak(kind: string, graph: ElementGraph, moves: MovePlan[], relations: RelationConstraint[]) {
+function injectBreak(graph: ElementGraph, moves: MovePlan[], relations: RelationConstraint[]) {
   const g: ElementGraph = JSON.parse(JSON.stringify(graph));
   const mv: MovePlan[] = JSON.parse(JSON.stringify(moves));
-  if (kind === "compare") {
-    for (const n of g.nodes) if (n.id === "label-primary") n.parentId = undefined;
-    return { g, mv, name: "主体标签脱离组", expectRelation: "rel-follow-label-primary" };
-  }
-  if (kind === "causal") {
-    // 把结果入场提前到 t=连线完成之前：revealAfter 断言「结果不得早于因果连接完成」
-    const eff = mv.find((m) => m.id === "mv-effect-enter");
-    if (eff) {
-      eff.start = Math.max(0, eff.start - 1.2);
-      eff.from = { ...eff.from, opacity: 1 };
-      eff.to = { ...eff.to, opacity: 1 };
+  const reveal = relations.find((r) => r.type === "revealAfter");
+  if (reveal) {
+    const targetId = reveal.sourceIds[0]!;
+    const gateAt = Number(reveal.params.gateAt ?? 0);
+    const enter = mv.find((m) => m.targetId === targetId && "opacity" in m.from);
+    if (enter) {
+      // from.opacity=1 就足矣：IR 口径下入场前元素已按 from 置位（与编译层 tl.set 同口径），
+      // gate 之前整段都是「已显现」。起点再提前 0.5s 只是让画面语义也倒置（双保险）。
+      enter.start = Math.max(0, gateAt - 0.5);
+      enter.from = { ...enter.from, opacity: 1 };
+      enter.to = { ...enter.to, opacity: 1 };
+      return { g, mv, name: `${targetId} 早于 gate(${gateAt.toFixed(2)}s) 就显现`, expectRelation: reveal.id };
     }
-    return { g, mv, name: "结果早于连线完成就显现", expectRelation: "rel-causal-order" };
+  }
+  // 无 revealAfter（compare）：摘掉第一个「label-*」子节点的 parentId → follows 必炸
+  const label = g.nodes.find((n) => n.id.startsWith("label-") && n.parentId);
+  if (label) {
+    const expectRelation = relations.find((r) => r.type === "follows" && r.sourceIds.includes(label.id))?.id ?? "";
+    label.parentId = undefined;
+    return { g, mv, name: `${label.id} 脱离所属组`, expectRelation };
   }
   return null;
 }
@@ -137,9 +145,9 @@ for (const file of files) {
     // 门禁自检：对真实计划注入一处破坏，必须被对应关系抓到。
     // 空检查器（注入破坏也不报错）比漏检更危险 —— 方案 §4.5 的原话。
     if (selfTest) {
-      const inj = injectBreak(shot.semantic!.kind, shot.semantic!.graph, moves, relations);
-      if (!inj) {
-        console.log(`      ⚠ self-test：kind=${shot.semantic!.kind} 没有对应注入策略`);
+      const inj = injectBreak(shot.semantic!.graph, moves, relations);
+      if (!inj || !inj.expectRelation) {
+        console.log(`      ⚠ self-test：kind=${shot.semantic!.kind} 的计划结构派生不出注入策略`);
         exitCode = 1;
       } else {
         const bad = auditMotionGeometry(inj.g, inj.mv, relations, { from: mp.at, to: mp.at + mp.dur, fps: 30, maxViolationsPerRelation: 2 });
