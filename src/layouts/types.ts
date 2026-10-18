@@ -8,7 +8,7 @@ import type { NumToken } from "../core/trace";
 
 export type Group =
   // 编辑风（纸白 + 朱红）
-  | "statement" | "number" | "compare" | "process" | "list"
+  | "statement" | "number" | "compare" | "causal" | "process" | "list"
   | "chart" | "image" | "quote" | "timeline" | "bookend" | "figure"
   // 扁平矢量叙事风（明亮平涂 + 粗描边 + 圆角），只在 style === "flat-vector" 时被选中
   | "poster-focus" | "poster-field" | "poster-geo" | "poster-nest";

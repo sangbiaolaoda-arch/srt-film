@@ -79,7 +79,8 @@ export type RelationType =
   | "largerThan"
   | "contrastAtLeast"
   | "clearanceAtLeast"
-  | "insideSafeArea";
+  | "insideSafeArea"
+  | "revealAfter";
 
 export interface RelationConstraint {
   id: string;
@@ -268,6 +269,9 @@ export function evaluateMotionPlan(graph: ElementGraph, moves: MovePlan[], t: nu
 /* ── 关系验算（方案 §4.2 层 A）────────────────────────────────────────────── */
 
 export type CheckType = RelationType | "move-conflict" | "easing-unsupported";
+
+/** revealAfter 的生效门限：连接完成前目标不透明度必须低于此值（视为「尚未显现」）。 */
+export const REVEAL_GATE_OPACITY = 0.01;
 
 export interface GeometryViolation {
   relationId: string;
@@ -529,6 +533,20 @@ export function auditMotionGeometry(
             }
             metrics.minContrast = Math.min(metrics.minContrast, ratio);
             if (ratio < min) push(`${id} 对比度 ${ratio.toFixed(2)}:1 < ${min}:1（fg=${fg} bg=${bg} 不透明度 ${get(id).opacity.toFixed(2)}）`);
+          }
+          break;
+        }
+        case "revealAfter": {
+          // 因果顺序专用：在 gateAt 之前，目标必须保持「未显现」（不透明度低于门限）。
+          // 一旦它早于连线/前置条件完成就露脸，就是「把先后当成因果」或「因果倒置」——
+          // 方案 §5.3/§11 case 5 明确禁止「只有时间先后、没有因果证据就画成因果」。
+          const gateAt = Number(r.params.gateAt ?? 0);
+          if (t < gateAt - 1e-9 && r.sourceIds.length > 0) {
+            const id = r.sourceIds[0]!;
+            const op = get(id).opacity;
+            if (op > REVEAL_GATE_OPACITY) {
+              push(`${id} 在因果连接完成前（${gateAt.toFixed(2)}s）就显现了（不透明度 ${op.toFixed(2)}）—— 因果顺序错误`, "revealAfter");
+            }
           }
           break;
         }

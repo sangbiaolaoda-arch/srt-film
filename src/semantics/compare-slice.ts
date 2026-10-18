@@ -17,6 +17,7 @@ import type { FigureKind } from "../layouts/figures";
 import type { ElementGraph, ElementNode, MovePlan, RelationConstraint, Box } from "../motion/elements";
 import { resolveProfile } from "../styles/style-system";
 import type { VisualPlan } from "./visual-plan";
+import type { SemanticSlice } from "./types";
 
 export const COMPARE_LAYOUT_ID = "sem-compare-group-v1";
 
@@ -31,18 +32,9 @@ export const NODE = {
   labelSecondary: "label-secondary",
 } as const;
 
-export interface CompareSlice {
+export interface CompareSlice extends SemanticSlice {
+  kind: "compare";
   plan: VisualPlan & { layout: Layout };
-  /** 与本拍 shot 绑定的元素图（最终几何，画面坐标） */
-  graph: ElementGraph;
-  /** 组 id → 组锚点（画面坐标），渲染层写进 data-group，验算层用作缩放原点 */
-  anchors: Record<string, { x: number; y: number }>;
-  /** 保持窗口相对于拍首的起点（秒）—— holds/contrast/order 都从这里开始算 */
-  holdOffset: number;
-  /** 主体入场结束的相对时间（秒）—— final-order / primary-larger 的生效点 */
-  settleOffset: number;
-  /** 语义降级/资产未命中的记录（进报告） */
-  notes: string[];
 }
 
 /* ── 归一化网格 → 画面坐标（与 constraints.ts slotBox 同一套数学）────────────── */
@@ -96,6 +88,9 @@ function figureFor(name: string): { kind: FigureKind; note?: string } {
   for (const f of FIGURE_WORDS) if (f.re.test(name)) return { kind: f.kind };
   return { kind: "fig-book", note: `「${name}」未命中具体图形资产，退回中性几何（unmapped）` };
 }
+
+/** 名词 → 具体图形（Phase 3 各切片复用；Phase 5 才扩资产库）。 */
+export { figureFor };
 
 interface SideSpec {
   side: "left" | "right";
@@ -214,7 +209,9 @@ export function buildCompareSlice(plan: VisualPlan, shotId: string, opts: { hasC
 
   const settleOffset = baseOf(plan);
   return {
+    kind: "compare",
     plan: { ...plan, layout },
+    layout,
     graph: { shotId, nodes },
     anchors,
     holdOffset: settleOffset,

@@ -59,7 +59,9 @@ describe("比较事件抽取", () => {
     const evs = extractEvents("我很喜欢一本书。", 1);
     expect(evs).toHaveLength(1);
     expect(evs[0]!.type).toBe("statement");
-    expect(evs[0]!.degraded).toBe("未命中比较族规则");
+    // Phase 3 起抽取顺序是 比较族 → 因果族 → 显式 statement，故降级信息会列出两族均未命中。
+    expect(evs[0]!.degraded).toContain("未命中比较族规则");
+    expect(evs[0]!.degraded).toContain("也未命中因果族规则");
   });
 
   it("长句例：比较在句中也抽得出（前导上下文在 12 字宽以内）", () => {

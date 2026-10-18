@@ -10,7 +10,7 @@ import { BeatMark, LayoutLayer } from "../layouts/render";
 import { DecorLayer } from "../layouts/decor";
 import { applyMotion } from "../motion/apply";
 import { applyElementMoves } from "../motion/element-apply";
-import { compareMoves } from "../semantics/compare-slice";
+import { movesFor } from "../semantics/dispatch";
 import { buildMotionSchedule, slotTweens } from "../motion/schedule";
 import type { Shot } from "../core/shot";
 import { STAGE_FPS, STAGE_H, STAGE_W, renderFrame } from "../render/frame";
@@ -160,11 +160,11 @@ export function buildStage(root: HTMLElement, shots: Shot[]): StageHandle {
       for (const tw of tws) applyMotion(tw.motion, { tl, el, at: tw.at, dur: tw.dur });
     });
 
-    // 组级运动（Phase 1 语义切片）：MovePlan 已是绝对时间，直接编译进同一条时间轴。
-    // 组内子槽没有自己的 tween —— 组是唯一位移来源。
-    if (shot.compare) {
-      const moves = compareMoves(shot.compare, plan.at, plan.dur);
-      const res = applyElementMoves({ tl, scope: layer, graph: shot.compare.graph, moves });
+    // 组级运动（Phase 1/3 语义切片）：MovePlan 已是绝对时间，直接编译进同一条时间轴。
+    // 组内子槽没有自己的 tween —— 组是唯一位移来源。派发键是 slice.kind。
+    if (shot.semantic) {
+      const moves = movesFor(shot.semantic, plan.at, plan.dur);
+      const res = applyElementMoves({ tl, scope: layer, graph: shot.semantic.graph, moves });
       if (res.missingTargets.length > 0) {
         console.warn(`[motion] 拍 ${shot.content.beat}：元素图里的组在渲染层不存在（${res.missingTargets.join("、")}）—— 组级运动没有落点`);
       }

@@ -19,7 +19,9 @@ import { describeConflict, slotConflicts } from "../motion/conflict";
 import { pickPhoto, type PhotoId } from "../assets/photos";
 import { extractEvents } from "../semantics/events";
 import { planComparison } from "../semantics/visual-plan";
-import { buildCompareSlice, type CompareSlice } from "../semantics/compare-slice";
+import { buildCompareSlice } from "../semantics/compare-slice";
+import { planCausal, buildCausalSlice } from "../semantics/causal-slice";
+import type { SemanticSlice } from "../semantics/types";
 
 export interface PlanResult {
   shots: Shot[];
@@ -88,19 +90,30 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
     if (ovr?.layoutId && !ovr.layout && !layout) {
       problems.push(`拍 ${beat.index}：覆写的版式 id「${ovr.layoutId}」不存在`);
     }
-    // Phase 1 语义层：先抽事件（每个事件都带 cue 内的字符区间）。
-    // 命中「可执行的比较事件」且本拍没有版式覆写时，用语义模板生成的版式替掉自动挑选 ——
+    // Phase 1/3 语义层：先抽事件（每个事件都带 cue 内的字符区间）。
+    // 命中「可执行的语义事件」且本拍没有版式覆写时，用语义模板生成的版式替掉自动挑选 ——
     // 它仍是一个普通 Layout，走同一条渲染 / 门禁 / 导出通路，不是平行系统（方案 §0 原则 A）。
     const events = extractEvents(beat.text, beat.cues[0]?.id ?? beat.index);
-    let compare: CompareSlice | undefined;
+    let semantic: SemanticSlice | undefined;
     const appliedRules: string[] = [];
     if (!ovr?.layout && !ovr?.layoutId) {
       const cmp = events.find((e) => e.type === "compare");
       const vplan = cmp ? planComparison(cmp) : null;
       if (cmp && vplan) {
-        compare = buildCompareSlice(vplan, `shot-${beat.index}`, { hasCaption: !!content.caption });
-        layout = compare.plan.layout;
+        const slice = buildCompareSlice(vplan, `shot-${beat.index}`, { hasCaption: !!content.caption });
+        semantic = slice;
+        layout = slice.plan.layout;
         appliedRules.push(`semantic:${vplan.templateId}`, `event:${cmp.id}`, ...vplan.assertions.map((a) => `assert:${a}`));
+      } else {
+        // Phase 3 因果：比较没命中再试因果（两者规则不冲突）
+        const cau = events.find((e) => e.type === "cause_effect");
+        const cplan = cau ? planCausal(cau) : null;
+        if (cau && cplan) {
+          const slice = buildCausalSlice(cplan, `shot-${beat.index}`, { hasCaption: !!content.caption });
+          semantic = slice;
+          layout = slice.plan.layout;
+          appliedRules.push(`semantic:${cplan.templateId}`, `event:${cau.id}`, ...cplan.assertions.map((a) => `assert:${a}`));
+        }
       }
     }
 
@@ -207,7 +220,7 @@ export function plan(srt: string, ovRaw = ""): PlanResult {
       continuity,
       photo: usesPhoto ? photo?.id : undefined,
       events,
-      compare,
+      semantic,
       appliedRules: appliedRules.length ? appliedRules : undefined,
     });
   });

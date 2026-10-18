@@ -2,7 +2,7 @@ import type { Layout, RenderContent, CameraMove } from "../layouts/types";
 import type { NarrativeRole } from "./compose";
 import type { PhotoId } from "../assets/photos";
 import type { SemanticEvent } from "../semantics/events";
-import type { CompareSlice } from "../semantics/compare-slice";
+import type { SemanticSlice } from "../semantics/types";
 
 /** 一拍：版式 + 内容 + 时间区间。
  *  start/end 是 SRT 的绝对秒；tlStart 是它在 GSAP 时间轴上的起点
@@ -28,9 +28,10 @@ export interface Shot {
   camera?: CameraMove;
   /** Phase 1 语义层：本拍抽到的事件（每个都能回到 cue 的字符区间） */
   events?: SemanticEvent[];
-  /** Phase 1 语义切片：比较对照的布局 / 元素图 / 编排。
-   *  存在 = 本拍走**组级运动**（渲染层因此有 <g data-group>，stage 按 MovePlan 编译）。 */
-  compare?: CompareSlice;
+  /** Phase 1/3 语义切片：本拍的语义布局 / 元素图 / 编排（比较、因果……统一一个字段）。
+   *  存在 = 本拍走**组级运动**（渲染层因此有 <g data-group>，stage 按 MovePlan 编译）。
+   *  派发键是 kind（阶段 tsx 的 movesFor / relationsFor 按它选编译逻辑）。 */
+  semantic?: SemanticSlice;
   /** 规划记录（方案 §10.4）：本拍声明应用了哪些规则/模板/断言。
    *  这只是「声明证据」，是否真的生效由几何验算与浏览器校准证明。 */
   appliedRules?: string[];

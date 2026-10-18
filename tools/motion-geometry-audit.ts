@@ -18,6 +18,13 @@ import {
   compareRelations,
   NODE,
 } from "../src/semantics/compare-slice.ts";
+import {
+  planCausal,
+  buildCausalSlice,
+  causalMoves,
+  causalRelations,
+  NODE as CASUAL_NODE,
+} from "../src/semantics/causal-slice.ts";
 import { auditMotionGeometry, type ElementGraph, type MovePlan, type RelationConstraint } from "../src/motion/elements.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -28,8 +35,14 @@ mkdirSync(OUT, { recursive: true });
 const AT = 1.0;
 const DUR = 4.0;
 
-function build(text: string) {
+function build(text: string, kind: "compare" | "causal" = "compare") {
   const evs = extractEvents(text, 7);
+  if (kind === "causal") {
+    const cau = evs.find((e) => e.type === "cause_effect")!;
+    const plan = planCausal(cau)!;
+    const slice = buildCausalSlice(plan, "shot-audit", { hasCaption: true });
+    return { graph: slice.graph, moves: causalMoves(slice, AT, DUR), relations: causalRelations(slice, AT, DUR, "editorial") };
+  }
   const cmp = evs.find((e) => e.type === "compare")!;
   const plan = planComparison(cmp)!;
   const slice = buildCompareSlice(plan, "shot-audit", { hasCaption: true });
@@ -39,6 +52,7 @@ function build(text: string) {
 interface Case {
   id: string;
   text: string;
+  kind?: "compare" | "causal";
   /** 反向夹具：对合法产物做一处破坏，必须被报告抓到 */
   break?: (g: { graph: ElementGraph; moves: MovePlan[]; relations: RelationConstraint[] }) => void;
 }
@@ -127,11 +141,45 @@ const CASES: Case[] = [
   },
 ];
 
+const CAUSAL_CASES: Case[] = [
+  { id: "legal-causal", text: "因为温度上升，所以冰川融化。", kind: "causal" },
+  {
+    id: "illegal-causal-effect-early",
+    text: "因为温度上升，所以冰川融化。",
+    kind: "causal",
+    // 反向：结果在连线完成前就入场（连线 0.55–0.95，这里让它 0.3 开始）→ revealAfter 必须抓
+    break: ({ moves }) => {
+      for (const m of moves) if (m.id === "mv-effect-enter") { m.start = AT + 0.3; m.duration = 0.5; }
+    },
+  },
+  {
+    id: "illegal-causal-overlap",
+    text: "因为温度上升，所以冰川融化。",
+    kind: "causal",
+    // 反向：把结果组整体搬到原因组位置 → 净空报错
+    break: ({ graph }) => {
+      const target = graph.nodes.find((n) => n.id === CASUAL_NODE.grpCause)!.bounds;
+      const shift = target.x - graph.nodes.find((n) => n.id === CASUAL_NODE.grpEffect)!.bounds.x;
+      for (const n of graph.nodes) if (n.id === CASUAL_NODE.grpEffect || n.parentId === CASUAL_NODE.grpEffect) n.bounds = { ...n.bounds, x: n.bounds.x + shift };
+    },
+  },
+  {
+    id: "illegal-causal-direction-flip",
+    text: "因为温度上升，所以冰川融化。",
+    kind: "causal",
+    // 反向：结果画到左边 → 原因必须在左的关系报错
+    break: ({ graph }) => {
+      for (const n of graph.nodes) if (n.parentId === CASUAL_NODE.grpEffect) n.bounds = { ...n.bounds, x: 128 };
+      for (const n of graph.nodes) if (n.id === CASUAL_NODE.grpEffect) n.bounds = { ...n.bounds, x: 128 };
+    },
+  },
+];
+
 let failures = 0;
 const summary: Array<{ id: string; expect: "pass" | "fail"; got: string }> = [];
 
-for (const c of CASES) {
-  const { graph, moves, relations } = build(c.text);
+for (const c of [...CASES, ...CAUSAL_CASES]) {
+  const { graph, moves, relations } = build(c.text, c.kind ?? "compare");
   c.break?.({ graph, moves, relations });
   const rep = auditMotionGeometry(graph, moves, relations, { from: AT, to: AT + DUR, fps: 30 });
   const expectFail = !!c.break;

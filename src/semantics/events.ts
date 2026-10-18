@@ -11,8 +11,8 @@
 //
 // 纯函数、无 DOM、无随机 —— 同一段文本永远得到同一个事件（可测、可断言）。
 
-/** 事件类型。Phase 1 只实现 compare 与 statement；其余留给 Phase 3（因果/否定/转折/变化）。 */
-export type EventType = "compare" | "statement";
+/** 事件类型。Phase 1 实现 compare；Phase 3 逐步加 cause_effect / negation / contrast / change。 */
+export type EventType = "compare" | "cause_effect" | "statement";
 
 /** 证据片段：cue 内的字符区间。startChar/endChar 是**半开区间** [start, end)。 */
 export interface EvidenceSpan {
@@ -24,12 +24,12 @@ export interface EvidenceSpan {
 
 /** 实体引用：画面上的一个「可被指称的东西」，不是一段任意文字。 */
 export interface EntityRef {
-  /** 拍内唯一 id（`ent-a` / `ent-b`），供 ElementGraph 绑定 */
+  /** 拍内唯一 id（`ent-a` / `ent-b` / `ent-cause` / `ent-effect` …），供 ElementGraph 绑定 */
   id: string;
   /** 原文表面串，未改写、未润色（画面上要能与旁白对上） */
   name: string;
-  /** subject = 句子主语；reference = 被比较的一方 */
-  role: "subject" | "reference";
+  /** 实体在事件里的角色：比较用 subject/reference，因果用 cause/effect，其余事件自定 */
+  role: "subject" | "reference" | "cause" | "effect";
   evidence: EvidenceSpan;
 }
 
@@ -309,6 +309,8 @@ export function extractComparisonEvent(text: string, cueId: number): SemanticEve
 export function extractEvents(text: string, cueId: number): SemanticEvent[] {
   const cmp = extractComparisonEvent(text, cueId);
   if (cmp) return [{ ...cmp, type: cmp.confidence < CONFIDENCE_MIN ? "statement" : "compare", degraded: cmp.confidence < CONFIDENCE_MIN ? `${cmp.degraded ? `${cmp.degraded}；` : ""}置信度 ${cmp.confidence} < ${CONFIDENCE_MIN}，降级为陈述` : cmp.degraded }];
+  const cau = extractCausalEvent(text, cueId);
+  if (cau) return [{ ...cau, type: cau.confidence < CONFIDENCE_MIN ? "statement" : "cause_effect", degraded: cau.confidence < CONFIDENCE_MIN ? `${cau.degraded ? `${cau.degraded}；` : ""}置信度 ${cau.confidence} < ${CONFIDENCE_MIN}，降级为陈述` : cau.degraded }];
   return [
     {
       id: `ev-${cueId}-statement`,
@@ -320,9 +322,92 @@ export function extractEvents(text: string, cueId: number): SemanticEvent[] {
       confidence: 1,
       evidence: [{ cueId, startChar: 0, endChar: text.length, text }],
       rule: "fallback-statement",
-      degraded: "未命中比较族规则",
+      degraded: "未命中比较族规则，也未命中因果族规则",
     },
   ];
+}
+
+/** 因果族规则。必须带**显式因果标记**（因为/所以/导致/使得/由于/因此/因而/故）——
+ *  只有时间先后（「先 A 后 B」「A 发生后 B 也发生」）不算因果，落到 statement，
+ *  由调用方决定是否做中性序列呈现 —— 这是方案 §5.3 / §11 case 5 明确禁止的
+ *  「只有时间先后、没有因果证据就画成因果」。
+ *  cause 组在标记之前用非贪婪（截到标记为止）；effect 组在标记之后用贪心
+ *  （吃到句末/句读为止，否则非贪婪只抓 1 字）。 */
+const SEG_G = "[^，。；！？、\\n…\\s]{1,12}"; // 贪心版（effect 组用）
+const CAUSAL_RULES: Array<{ id: string; re: RegExp; causeGroup: number; effectGroup: number }> = [
+  { id: "causal-yinwei", re: new RegExp(`因为(${SEG})[，,]?(?:所以|因此|因而|故)(${SEG_G})`), causeGroup: 1, effectGroup: 2 },
+  { id: "causal-daozhi", re: new RegExp(`(${SEG})导致(${SEG_G})`), causeGroup: 1, effectGroup: 2 },
+  { id: "causal-shide", re: new RegExp(`(${SEG})使得(${SEG_G})`), causeGroup: 1, effectGroup: 2 },
+  { id: "causal-youyu", re: new RegExp(`由于(${SEG})[，,]?(${SEG_G})`), causeGroup: 1, effectGroup: 2 },
+];
+
+/**
+ * 因果事件抽取：原因 → 结果，二者之间有方向连线。
+ * 与 compare 同样的降级纪律：实体过长/代词/疑问 → 降级；识别不出因果标记 → 返回 null。
+ */
+export function extractCausalEvent(text: string, cueId: number): SemanticEvent | null {
+  const src = text.trim();
+  if (!src) return null;
+
+  for (const rule of CAUSAL_RULES) {
+    const m = rule.re.exec(src);
+    if (!m) continue;
+    const causeRaw = clampName(m[rule.causeGroup] ?? "");
+    const effectRaw = clampName(m[rule.effectGroup] ?? "");
+    if (!causeRaw || !effectRaw) continue;
+    const causeClean = stripAdverbs(causeRaw);
+    const effectClean = stripAdverbs(effectRaw);
+    if (!causeClean || !effectClean) continue;
+    if (ADVERBS.includes(causeClean) || ADVERBS.includes(effectClean)) continue;
+
+    // 证据区间按匹配位置算（与 compare 同一纪律：不靠 indexOf 全句再找）
+    const cAt = m.index + m[0].indexOf(m[rule.causeGroup]!);
+    const eAt = m.index + m[0].indexOf(m[rule.effectGroup]!, m[0].indexOf(m[rule.causeGroup]!) + m[rule.causeGroup]!.length);
+
+    const entities: EntityRef[] = [
+      { id: "ent-cause", name: causeClean, role: "cause", evidence: { cueId, startChar: Math.max(0, cAt), endChar: Math.max(0, cAt) + causeClean.length, text: causeClean } },
+      { id: "ent-effect", name: effectClean, role: "effect", evidence: { cueId, startChar: Math.max(0, eAt), endChar: Math.max(0, eAt) + effectClean.length, text: effectClean } },
+    ];
+    const evidence: EvidenceSpan[] = entities.map((e) => e.evidence);
+
+    let confidence = 0.9;
+    const degrade: string[] = [];
+    if (HEDGES.some((h) => src.includes(h))) {
+      confidence -= 0.35;
+      degrade.push(`含不确定语气（${HEDGES.filter((h) => src.includes(h)).join("/")}）`);
+    }
+    if (PRONOUNS.some((p) => causeClean === p || effectClean === p)) {
+      confidence -= 0.4;
+      degrade.push("实体是指代词，画面上没有确定所指");
+    }
+    if (units(causeClean) > 8 || units(effectClean) > 8) {
+      confidence -= 0.25;
+      degrade.push("实体过长（>8 字宽），无法稳定绑定到单个画面对象");
+    }
+    if (/[？?]/.test(src)) {
+      confidence -= 0.5;
+      degrade.push("整句是疑问，不能当作断言");
+    }
+
+    return {
+      id: `ev-${cueId}-${rule.id}`,
+      type: "cause_effect",
+      entities,
+      participants: [
+        { entityId: "ent-cause", role: "cause" },
+        { entityId: "ent-effect", role: "effect" },
+      ],
+      dimension: undefined,
+      dimensionKind: "unknown",
+      polarity: "unknown",
+      negated: false,
+      confidence: Math.max(0.05, Math.min(0.99, Number(confidence.toFixed(2)))),
+      evidence,
+      rule: rule.id,
+      degraded: degrade.length ? degrade.join("；") : undefined,
+    };
+  }
+  return null;
 }
 
 /** 取事件的两个实体（顺序：subject, reference）。缺失返回 null —— 调用方必须降级。 */
