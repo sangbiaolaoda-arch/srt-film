@@ -135,7 +135,9 @@ try {
   await warm(DEV_PORT);
 
   await run(async (b) => {
-    await b.open(`http://127.0.0.1:${DEV_PORT}/`);
+    // 180s：本机可能同时有渲染类重任务（remotion/ffmpeg）抢 CPU，vite 冷启动
+    // 建模块图 + 浏览器拉依赖会远超 60s（实测挂起过）。load 慢不等于坏。
+    await b.open(`http://127.0.0.1:${DEV_PORT}/`, 180000);
     await b.eval(`
       for (let i = 0; i < 100; i++) {
         if (document.getElementById('btn-load')) break;
