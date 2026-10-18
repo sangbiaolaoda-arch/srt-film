@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 // verify-v2.mjs — endowment-v2 的机器验收（CDP，零依赖）
 //
-// 四道门禁（都是「肉眼很难发现、但成片一定翻车」的项）：
+// 五道门禁（都是「肉眼很难发现、但成片一定翻车」的项）：
 //   1. 布局碰撞：window.__layoutReport() 必须 0 问题（组×组、主体×字幕带/标题/安全边）
 //   2. 出血：所有 <text> 的包围盒必须落在 1280×720 内（排字越界是最常见的返工）
 //   3. 字幕带：字幕元素必须整条落在 ZONES.caption 内
 //   4. 确定性：同一时刻 seek 两次，序列化 SVG 必须逐字节一致（逐帧导出可复现）
+//   5. 幕中点不空场（借鉴 20261018_jensen_process delay_audit 判据 v2）：
+//      每幕 seek 到中点，数「可见元素」（opacity≥0.3 且有包围盒）——
+//      0 个 = EMPTY 必须修；1 个且该幕 ≥3 组 = THIN 只报不拦（排布问题，压延迟没用）
 //
 // 用法：node tools/verify-v2.mjs [--json <报告路径>]
 
@@ -103,6 +106,35 @@ try {
       return a === b ? 'same' : 'diff:' + Math.abs(a.length - b.length);
     `);
     check("确定性（同 t 两次序列化一致）", det === "same", det);
+
+    // 5. 幕中点不空场（jensen delay_audit 判据 v2：中点可见度）
+    const mid = await b.eval(`
+      const out = [];
+      const scenes = window.__scenesInfo || [];
+      const typo = document.getElementById('typoLayer');
+      const visOf = (g) => {
+        const o = +getComputedStyle(g).opacity;
+        const r = g.getBoundingClientRect();
+        return o >= 0.3 && r.width > 4 && r.height > 4;
+      };
+      for (const s of scenes) {
+        const half = (s.start + s.end) / 2;
+        window.__tl.seek(half);
+        if (window.__updateOverlay) window.__updateOverlay(half);
+        let vis = 0, total = 0;
+        const layer = document.querySelector('.sceneLayer[data-scene="' + s.key + '"]');
+        if (layer) layer.querySelectorAll('[data-key]').forEach((g) => { total++; if (visOf(g)) vis++; });
+        if (typo) typo.querySelectorAll('g').forEach((g) => { if (visOf(g)) vis++; });
+        if (vis === 0) out.push({ scene: s.key, kind: 'EMPTY' });
+        else if (vis === 1 && total >= 3) out.push({ scene: s.key, kind: 'THIN', vis });
+      }
+      return JSON.stringify(out);
+    `);
+    const midIssues = JSON.parse(mid || "[]");
+    const empty = midIssues.filter((x) => x.kind === "EMPTY");
+    const thin = midIssues.filter((x) => x.kind === "THIN");
+    check("幕中点不空场", empty.length === 0,
+      empty.length ? JSON.stringify(empty) : (thin.length ? `0 EMPTY · THIN ${JSON.stringify(thin)}（只报不拦）` : "33 幕全过"));
 
     report = { at: new Date().toISOString(), duration: await b.eval("return window.__duration;"), results };
   }, { port: 9363 });
